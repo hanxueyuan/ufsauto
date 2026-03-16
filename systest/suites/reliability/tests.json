@@ -2,7 +2,7 @@
   "description": "可靠性测试套件 - 长期稳定性验证",
   "tests": [
     {
-      "name": "t_reliability_stability_test_001",
+      "name": "t_reliability_StabilityTest_001",
       "description": "长期稳定性测试",
       "type": "reliability",
       "fio": {

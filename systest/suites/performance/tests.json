@@ -2,7 +2,7 @@
   "description": "性能测试套件 - UFS 基础性能验证",
   "tests": [
     {
-      "name": "t_performance_sequential_read_burst_001",
+      "name": "t_performance_SequentialReadBurst_001",
       "description": "顺序读带宽 (Burst)",
       "type": "bandwidth",
       "fio": {
@@ -20,7 +20,7 @@
       }
     },
     {
-      "name": "t_performance_sequential_read_sustained_002",
+      "name": "t_performance_SequentialReadSustained_002",
       "description": "顺序读带宽 (Sustained)",
       "type": "bandwidth",
       "fio": {
@@ -38,7 +38,7 @@
       }
     },
     {
-      "name": "t_performance_sequential_write_burst_003",
+      "name": "t_performance_SequentialWriteBurst_003",
       "description": "顺序写带宽 (Burst)",
       "type": "bandwidth",
       "fio": {
@@ -56,7 +56,7 @@
       }
     },
     {
-      "name": "t_performance_sequential_write_sustained_004",
+      "name": "t_performance_SequentialWriteSustained_004",
       "description": "顺序写带宽 (Sustained)",
       "type": "bandwidth",
       "fio": {
@@ -74,7 +74,7 @@
       }
     },
     {
-      "name": "t_performance_random_read_burst_005",
+      "name": "t_performance_RandomReadBurst_005",
       "description": "随机读 IOPS (Burst)",
       "type": "iops",
       "fio": {
@@ -92,7 +92,7 @@
       }
     },
     {
-      "name": "t_performance_random_read_sustained_006",
+      "name": "t_performance_RandomReadSustained_006",
       "description": "随机读 IOPS (Sustained)",
       "type": "iops",
       "fio": {
@@ -110,7 +110,7 @@
       }
     },
     {
-      "name": "t_performance_random_write_burst_007",
+      "name": "t_performance_RandomWriteBurst_007",
       "description": "随机写 IOPS (Burst)",
       "type": "iops",
       "fio": {
@@ -128,7 +128,7 @@
       }
     },
     {
-      "name": "t_performance_random_write_sustained_008",
+      "name": "t_performance_RandomWriteSustained_008",
       "description": "随机写 IOPS (Sustained)",
       "type": "iops",
       "fio": {
@@ -146,7 +146,7 @@
       }
     },
     {
-      "name": "t_performance_mixed_rw_009",
+      "name": "t_performance_MixedRw_009",
       "description": "混合读写性能",
       "type": "iops",
       "fio": {

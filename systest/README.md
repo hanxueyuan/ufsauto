@@ -27,7 +27,7 @@ python3 tests/minimal_validation.py
 python3 bin/systest run -s performance -d /dev/ufs0
 
 # 执行单个测试项
-python3 bin/systest run -t t_performance_sequential_read_burst_001 -d /dev/ufs0 -v
+python3 bin/systest run -t t_performance_SequentialReadBurst_001 -d /dev/ufs0 -v
 ```
 
 ### 4. 查看报告
@@ -134,8 +134,8 @@ systest/
     "sustained_runtime": 300    // Sustained 测试时间 (秒)
   },
   "targets": {
-    "t_performance_sequential_read_burst_001": 2100,     // 顺序读 Burst 目标 (MB/s)
-    "t_performance_sequential_write_sustained_004": 250  // 顺序写 Sustained 目标 (MB/s)
+    "t_performance_SequentialReadBurst_001": 2100,     // 顺序读 Burst 目标 (MB/s)
+    "t_performance_SequentialWriteSustained_004": 250  // 顺序写 Sustained 目标 (MB/s)
   }
 }
 ```
@@ -167,7 +167,7 @@ results/
     ├── summary.txt           # 文本摘要
     ├── analysis.md           # 失效分析报告
     └── raw/                  # 原始数据
-        ├── t_performance_sequential_read_burst_001.json
+        ├── t_performance_SequentialReadBurst_001.json
         └── ...
 ```
 

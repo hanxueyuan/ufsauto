@@ -25,7 +25,7 @@ python3 tests/minimal_validation.py
 python3 bin/systest run -s performance -d /dev/ufs0 -v
 
 # 执行单个测试项
-python3 bin/systest run -t t_performance_sequential_read_burst_001 -d /dev/ufs0 -v
+python3 bin/systest run -t t_performance_SequentialReadBurst_001 -d /dev/ufs0 -v
 
 # 执行并生成多种格式报告
 python3 bin/systest run -s performance -d /dev/ufs0 --format html,json,text
@@ -71,14 +71,14 @@ python3 bin/systest config --init
 
 | 测试项 | 目标值 | 单位 |
 |--------|--------|------|
-| t_performance_sequential_read_burst_001 | ≥2100 | MB/s |
-| t_performance_sequential_read_sustained_002 | ≥1800 | MB/s |
-| t_performance_sequential_write_burst_003 | ≥1650 | MB/s |
-| t_performance_sequential_write_sustained_004 | ≥250 | MB/s |
-| t_performance_random_read_burst_005 | ≥200 | KIOPS |
-| t_performance_random_read_sustained_006 | ≥105 | KIOPS |
-| t_performance_random_write_burst_007 | ≥330 | KIOPS |
-| t_performance_random_write_sustained_008 | ≥60 | KIOPS |
+| t_performance_SequentialReadBurst_001 | ≥2100 | MB/s |
+| t_performance_SequentialReadSustained_002 | ≥1800 | MB/s |
+| t_performance_SequentialWriteBurst_003 | ≥1650 | MB/s |
+| t_performance_SequentialWriteSustained_004 | ≥250 | MB/s |
+| t_performance_RandomReadBurst_005 | ≥200 | KIOPS |
+| t_performance_RandomReadSustained_006 | ≥105 | KIOPS |
+| t_performance_RandomWriteBurst_007 | ≥330 | KIOPS |
+| t_performance_RandomWriteSustained_008 | ≥60 | KIOPS |
 
 ---
 

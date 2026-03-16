@@ -43,12 +43,12 @@ def verify_command_building():
     
     # 测试不同测试类型的命令构建
     test_cases = [
-        ('t_performance_sequential_read_burst_001', 'bandwidth', 2100),
-        ('t_performance_sequential_write_sustained_004', 'bandwidth', 250),
-        ('t_performance_random_read_burst_005', 'iops', 200),
-        ('t_performance_random_write_burst_007', 'iops', 330),
-        ('t_qos_latency_percentile_001', 'latency', None),
-        ('t_scenario_sensor_write_001', 'scenario', 400),
+        ('t_performance_SequentialReadBurst_001', 'bandwidth', 2100),
+        ('t_performance_SequentialWriteSustained_004', 'bandwidth', 250),
+        ('t_performance_RandomReadBurst_005', 'iops', 200),
+        ('t_performance_RandomWriteBurst_007', 'iops', 330),
+        ('t_qos_LatencyPercentile_001', 'latency', None),
+        ('t_scenario_SensorWrite_001', 'scenario', 400),
     ]
     
     passed = 0
@@ -94,7 +94,7 @@ def verify_result_parsing():
     
     # 使用真实的 FIO 输出格式
     test_cases = [
-        ('t_performance_sequential_read_burst_001', {
+        ('t_performance_SequentialReadBurst_001', {
             'jobs': [{
                 'read': {
                     'bw_bytes': 2147483648,
@@ -111,7 +111,7 @@ def verify_result_parsing():
                 }
             }]
         }),
-        ('t_performance_random_write_burst_007', {
+        ('t_performance_RandomWriteBurst_007', {
             'jobs': [{
                 'write': {
                     'bw_bytes': 134217728,
@@ -128,7 +128,7 @@ def verify_result_parsing():
                 }
             }]
         }),
-        ('t_performance_mixed_rw_009', {
+        ('t_performance_MixedRw_009', {
             'jobs': [{
                 'read': {
                     'bw_bytes': 536870912,
@@ -183,14 +183,14 @@ def verify_result_validation():
     
     # 测试用例：(测试名，指标值，预期结果)
     test_cases = [
-        ('t_performance_sequential_read_burst_001', {'bandwidth': 2150.5}, 'PASS'),
-        ('t_performance_sequential_read_burst_001', {'bandwidth': 1900.0}, 'FAIL'),  # 低于目标 95%
-        ('t_performance_sequential_write_sustained_004', {'bandwidth': 260.0}, 'PASS'),
-        ('t_performance_sequential_write_sustained_004', {'bandwidth': 200.0}, 'FAIL'),
-        ('t_performance_random_read_burst_005', {'iops': 210.5}, 'PASS'),
-        ('t_performance_random_read_burst_005', {'iops': 180.0}, 'FAIL'),
-        ('t_performance_random_write_burst_007', {'iops': 340.2}, 'PASS'),
-        ('t_performance_random_write_burst_007', {'iops': 300.0}, 'FAIL'),
+        ('t_performance_SequentialReadBurst_001', {'bandwidth': 2150.5}, 'PASS'),
+        ('t_performance_SequentialReadBurst_001', {'bandwidth': 1900.0}, 'FAIL'),  # 低于目标 95%
+        ('t_performance_SequentialWriteSustained_004', {'bandwidth': 260.0}, 'PASS'),
+        ('t_performance_SequentialWriteSustained_004', {'bandwidth': 200.0}, 'FAIL'),
+        ('t_performance_RandomReadBurst_005', {'iops': 210.5}, 'PASS'),
+        ('t_performance_RandomReadBurst_005', {'iops': 180.0}, 'FAIL'),
+        ('t_performance_RandomWriteBurst_007', {'iops': 340.2}, 'PASS'),
+        ('t_performance_RandomWriteBurst_007', {'iops': 300.0}, 'FAIL'),
     ]
     
     # 从 tests.json 加载测试配置
@@ -236,17 +236,17 @@ def verify_report_generation():
             'device': '/dev/zero',
             'test_cases': [
                 {
-                    'test_name': 't_performance_sequential_read_burst_001',
+                    'test_name': 't_performance_SequentialReadBurst_001',
                     'status': 'PASS',
                     'metrics': {'bandwidth': 2150.5, 'iops': 0, 'latency_avg': 120.5}
                 },
                 {
-                    'test_name': 't_performance_sequential_write_burst_003',
+                    'test_name': 't_performance_SequentialWriteBurst_003',
                     'status': 'PASS',
                     'metrics': {'bandwidth': 1680.3, 'iops': 0, 'latency_avg': 150.2}
                 },
                 {
-                    'test_name': 't_performance_random_write_burst_007',
+                    'test_name': 't_performance_RandomWriteBurst_007',
                     'status': 'FAIL',
                     'metrics': {'bandwidth': 0, 'iops': 280.5, 'latency_avg': 200.5}
                 }
@@ -315,7 +315,7 @@ def verify_failure_analysis():
         'test_id': 'verify_slc_001',
         'test_results': {
             'test_cases': [{
-                'test_name': 't_performance_sequential_write_sustained_004',
+                'test_name': 't_performance_SequentialWriteSustained_004',
                 'status': 'FAIL',
                 'metrics': {
                     'bandwidth': 180.5,
@@ -325,7 +325,7 @@ def verify_failure_analysis():
                 }
             }]
         },
-        'config': {'targets': {'t_performance_sequential_write_sustained_004': 250}}
+        'config': {'targets': {'t_performance_SequentialWriteSustained_004': 250}}
     }
     
     analysis_1 = analyzer.analyze(fail_data_1)
@@ -342,7 +342,7 @@ def verify_failure_analysis():
         'test_id': 'verify_latency_001',
         'test_results': {
             'test_cases': [{
-                'test_name': 't_qos_latency_percentile_001',
+                'test_name': 't_qos_LatencyPercentile_001',
                 'status': 'FAIL',
                 'metrics': {
                     'latency_p50': 50.0,

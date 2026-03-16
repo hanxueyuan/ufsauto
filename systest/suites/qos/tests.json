@@ -2,7 +2,7 @@
   "description": "QoS 测试套件 - 服务质量验证",
   "tests": [
     {
-      "name": "t_qos_latency_percentile_001",
+      "name": "t_qos_LatencyPercentile_001",
       "description": "延迟百分位测试",
       "type": "latency",
       "fio": {
@@ -23,7 +23,7 @@
       }
     },
     {
-      "name": "t_qos_latency_jitter_002",
+      "name": "t_qos_LatencyJitter_002",
       "description": "延迟抖动测试",
       "type": "latency",
       "fio": {

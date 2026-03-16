@@ -124,10 +124,10 @@ systest/
 ```json
 {
   "targets": {
-    "t_performance_sequential_read_burst_001": 2100,
-    "t_performance_sequential_read_sustained_002": 1800,
-    "t_performance_sequential_write_burst_003": 1650,
-    "t_performance_sequential_write_sustained_004": 250
+    "t_performance_SequentialReadBurst_001": 2100,
+    "t_performance_SequentialReadSustained_002": 1800,
+    "t_performance_SequentialWriteBurst_003": 1650,
+    "t_performance_SequentialWriteSustained_004": 250
   }
 }
 ```
