@@ -25,13 +25,13 @@ jobs:
 
       - name: Python code formatting check
         run: |
-          black --check src/ tests/
-          isort --check src/ tests/
+          black --check systest/ --target-version py310
+          isort --check systest/
 
       - name: Python linting
         run: |
-          flake8 src/ tests/ --max-line-length=120
-          pylint src/ tests/ --disable=C0114,C0115,C0116 --fail-under=8.0
+          flake8 systest/ --max-line-length=120
+          pylint systest/ --disable=C0114,C0115,C0116 --fail-under=8.0
 
       - name: Bash script linting
         uses: ludeeus/action-shellcheck@master
@@ -56,7 +56,7 @@ jobs:
 
       - name: Run unit tests
         run: |
-          python -m pytest tests/ -v --cov=src --cov-report=xml
+          python -m pytest systest/tests/ -v --cov=systest --cov-report=xml
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
@@ -72,7 +72,7 @@ jobs:
       - name: Python security scan
         uses: PyCQA/bandit-action@v1
         with:
-          path: src/
+          path: systest/
           level: high
           confidence: medium
 
@@ -91,7 +91,9 @@ jobs:
         uses: gaurav-nelson/github-action-markdown-link-check@v1
         with:
           use-quiet-mode: 'yes'
-          folder-path: 'docs/'
+          folder-path: |
+            docs/
+            systest/docs/
 
   build-test-package:
     name: Build Test Package
