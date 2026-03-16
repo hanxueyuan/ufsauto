@@ -1,5 +1,6 @@
 # SysTest CI/CD Workflow
-# 模拟 ARM 开发板环境：Debian 12 + Python 11
+# UFS 3.1 车规级系统测试框架 - 自动化测试流程
+# 环境：Debian 12 + Python 3.11 + FIO 3.33
 
 name: SysTest CI/CD
 
@@ -8,6 +9,10 @@ on:
     paths:
       - 'systest/**'
       - '.github/workflows/systest-ci.yml'
+    branches:
+      - main
+      - master
+      - develop
   pull_request:
     paths:
       - 'systest/**'
