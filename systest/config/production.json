@@ -1,0 +1,70 @@
+{
+  "description": "生产模式配置 - 用于正式测试",
+  "mode": "production",
+  
+  "device": {
+    "default_path": "/dev/ufs0",
+    "timeout": 90000
+  },
+  
+  "execution": {
+    "default_runtime": 60,
+    "sustained_runtime": 300,
+    "retry_count": 3,
+    "parallel_jobs": 1,
+    "loop_count": 3
+  },
+  
+  "output": {
+    "base_dir": "./results/prod",
+    "formats": ["html", "json", "text"],
+    "keep_logs": true,
+    "keep_raw_data": true
+  },
+  
+  "precondition": {
+    "check_enabled": true,
+    "mode": "production",
+    "fail_on_error": true
+  },
+  
+  "targets": {
+    "t_performance_SequentialReadBurst_001": 2100,
+    "t_performance_SequentialReadSustained_002": 1800,
+    "t_performance_SequentialWriteBurst_003": 1650,
+    "t_performance_SequentialWriteSustained_004": 250,
+    "t_performance_RandomReadBurst_005": 200,
+    "t_performance_RandomReadSustained_006": 105,
+    "t_performance_RandomWriteBurst_007": 330,
+    "t_performance_RandomWriteSustained_008": 60,
+    "t_performance_MixedRw_009": 150,
+    "t_qos_LatencyPercentile_001": {
+      "p50": 200,
+      "p99": 1000,
+      "p999": 5000,
+      "p9999": 10000
+    },
+    "t_qos_LatencyJitter_002": {
+      "stddev": 500
+    },
+    "t_reliability_StabilityTest_001": {
+      "duration": 86400,
+      "max_errors": 0,
+      "max_performance_drop": 0.20
+    },
+    "t_scenario_SensorWrite_001": {
+      "total_bandwidth": 400
+    },
+    "t_scenario_ModelLoad_002": {
+      "read_bandwidth": 1500
+    }
+  },
+  
+  "notes": [
+    "生产模式使用标准测试时间，符合车规级测试要求",
+    "循环次数为 3，每个测试执行 3 次取平均值",
+    "Precondition 检查失败会立即停止测试（Stop on fail）",
+    "适合正式测试和生产环境使用",
+    "可靠性测试运行 24 小时（86400 秒）"
+  ]
+}

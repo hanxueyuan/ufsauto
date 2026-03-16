@@ -1,0 +1,69 @@
+{
+  "description": "开发模式配置 - 用于开发调试",
+  "mode": "development",
+  
+  "device": {
+    "default_path": "/dev/ufs0",
+    "timeout": 300
+  },
+  
+  "execution": {
+    "default_runtime": 10,
+    "sustained_runtime": 60,
+    "retry_count": 1,
+    "parallel_jobs": 1,
+    "loop_count": 1
+  },
+  
+  "output": {
+    "base_dir": "./results/dev",
+    "formats": ["html", "json"],
+    "keep_logs": true,
+    "keep_raw_data": true
+  },
+  
+  "precondition": {
+    "check_enabled": true,
+    "mode": "development",
+    "fail_on_error": false
+  },
+  
+  "targets": {
+    "t_performance_SequentialReadBurst_001": 2100,
+    "t_performance_SequentialReadSustained_002": 1800,
+    "t_performance_SequentialWriteBurst_003": 1650,
+    "t_performance_SequentialWriteSustained_004": 250,
+    "t_performance_RandomReadBurst_005": 200,
+    "t_performance_RandomReadSustained_006": 105,
+    "t_performance_RandomWriteBurst_007": 330,
+    "t_performance_RandomWriteSustained_008": 60,
+    "t_performance_MixedRw_009": 150,
+    "t_qos_LatencyPercentile_001": {
+      "p50": 200,
+      "p99": 1000,
+      "p999": 5000,
+      "p9999": 10000
+    },
+    "t_qos_LatencyJitter_002": {
+      "stddev": 500
+    },
+    "t_reliability_StabilityTest_001": {
+      "duration": 300,
+      "max_errors": 0,
+      "max_performance_drop": 0.20
+    },
+    "t_scenario_SensorWrite_001": {
+      "total_bandwidth": 400
+    },
+    "t_scenario_ModelLoad_002": {
+      "read_bandwidth": 1500
+    }
+  },
+  
+  "notes": [
+    "开发模式使用较短的测试时间，便于快速验证",
+    "循环次数为 1，只执行一次测试",
+    "Precondition 检查只记录问题，不阻止测试",
+    "适合开发调试阶段使用"
+  ]
+}
