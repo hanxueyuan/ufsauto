@@ -9,13 +9,13 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from analyzer import FailureAnalyzer
-from collector import ResultCollector
-from reporter import ReportGenerator
-
 # 添加核心模块路径
 core_dir = Path(__file__).parent.parent / "core"
 sys.path.insert(0, str(core_dir))
+
+from analyzer import FailureAnalyzer
+from collector import ResultCollector
+from reporter import ReportGenerator
 
 
 def generate_mock_results(pass_scenario=True):

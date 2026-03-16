@@ -11,10 +11,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-from runner import TestRunner
-
 # 添加 core 模块路径
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
+
+from runner import TestRunner
 
 print("🔍 SysTest FIO 集成验证")
 print("=" * 70)

@@ -7,10 +7,10 @@ Precondition 检查功能测试脚本
 import sys
 from pathlib import Path
 
-from precondition_checker import PreconditionChecker
-
 # 添加 core 模块路径
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
+
+from precondition_checker import PreconditionChecker
 
 
 def test_precondition_checker():
