@@ -284,6 +284,9 @@ class PreconditionChecker:
             self._add_warning('health 配置为空，跳过检查')
             return
         
+        # 收集更多器件信息
+        self._collect_device_details(device)
+        
         # 检查 SMART 状态
         smart_status = health.get('smart', '')
         if smart_status:
@@ -343,6 +346,60 @@ class PreconditionChecker:
             )
             if not passed:
                 self._add_error(f'存在历史错误：{actual_errors}')
+    
+    def _collect_device_details(self, device):
+        """收集更多器件详细信息"""
+        if self.verbose:
+            print(f"\n📋 收集器件详细信息...")
+            
+            # 设备序列号
+            serial = self._get_device_serial(device)
+            print(f"  序列号：{serial}")
+            
+            # 固件版本
+            firmware = self._get_device_firmware(device)
+            print(f"  固件版本：{firmware}")
+            
+            # 设备容量
+            capacity = self._get_device_capacity(device)
+            print(f"  设备容量：{capacity}")
+            
+            # 写入总量（TBW）
+            tbw = self._get_total_bytes_written(device)
+            if tbw:
+                print(f"  写入总量：{tbw} TB")
+            
+            # 通电时间
+            power_on_hours = self._get_power_on_hours(device)
+            if power_on_hours:
+                print(f"  通电时间：{power_on_hours} 小时")
+            
+            # 通电次数
+            power_cycle_count = self._get_power_cycle_count(device)
+            if power_cycle_count:
+                print(f"  通电次数：{power_cycle_count}")
+            
+            # 坏块信息
+            bad_blocks = self._get_bad_block_count(device)
+            if bad_blocks:
+                print(f"  坏块数量：{bad_blocks}")
+            
+            # UFS 版本
+            ufs_version = self._get_ufs_version(device)
+            if ufs_version:
+                print(f"  UFS 版本：{ufs_version}")
+            
+            # 厂商信息
+            vendor = self._get_device_vendor(device)
+            if vendor:
+                print(f"  厂商：{vendor}")
+            
+            # 磨损均衡计数
+            wear_leveling = self._get_wear_leveling_count(device)
+            if wear_leveling:
+                print(f"  磨损均衡计数：{wear_leveling}")
+            
+            print()
     
     # ========== 6. 前置条件验证 ==========
     
@@ -533,6 +590,132 @@ class PreconditionChecker:
             match = re.search(r'>?(\d+)%', text)
             if match:
                 return float(match.group(1))
+        except:
+            pass
+        return None
+    
+    # ========== 器件详细信息收集方法 ==========
+    
+    def _get_device_serial(self, device):
+        """获取设备序列号"""
+        try:
+            result = subprocess.run(['smartctl', '-i', device], capture_output=True, text=True)
+            for line in result.stdout.split('\n'):
+                if 'Serial Number' in line:
+                    return line.split(':')[1].strip()
+        except:
+            pass
+        return 'unknown'
+    
+    def _get_device_firmware(self, device):
+        """获取固件版本"""
+        try:
+            result = subprocess.run(['smartctl', '-i', device], capture_output=True, text=True)
+            for line in result.stdout.split('\n'):
+                if 'Firmware Version' in line or 'Version' in line:
+                    return line.split(':')[1].strip()
+        except:
+            pass
+        return 'unknown'
+    
+    def _get_device_capacity(self, device):
+        """获取设备容量"""
+        try:
+            result = subprocess.run(['smartctl', '-i', device], capture_output=True, text=True)
+            for line in result.stdout.split('\n'):
+                if 'User Capacity' in line:
+                    # 解析 "User Capacity: 128,259,596,288 bytes [128 GB]"
+                    return line.split(':')[1].strip()
+        except:
+            pass
+        return 'unknown'
+    
+    def _get_total_bytes_written(self, device):
+        """获取写入总量（TBW）"""
+        try:
+            result = subprocess.run(['smartctl', '-A', device], capture_output=True, text=True)
+            for line in result.stdout.split('\n'):
+                if 'Total LBAs Written' in line or 'Host_Writes_32MiB' in line:
+                    # 解析 SMART 属性值
+                    parts = line.split()
+                    if len(parts) >= 10:
+                        sectors = int(parts[9])
+                        tb = (sectors * 512) / (1024**4)  # 转换为 TB
+                        return f"{tb:.2f}"
+        except:
+            pass
+        return None
+    
+    def _get_power_on_hours(self, device):
+        """获取通电时间（小时）"""
+        try:
+            result = subprocess.run(['smartctl', '-A', device], capture_output=True, text=True)
+            for line in result.stdout.split('\n'):
+                if 'Power_On_Hours' in line:
+                    parts = line.split()
+                    if len(parts) >= 10:
+                        return int(parts[9])
+        except:
+            pass
+        return None
+    
+    def _get_power_cycle_count(self, device):
+        """获取通电次数"""
+        try:
+            result = subprocess.run(['smartctl', '-A', device], capture_output=True, text=True)
+            for line in result.stdout.split('\n'):
+                if 'Power_Cycle_Count' in line:
+                    parts = line.split()
+                    if len(parts) >= 10:
+                        return int(parts[9])
+        except:
+            pass
+        return None
+    
+    def _get_bad_block_count(self, device):
+        """获取坏块数量"""
+        try:
+            result = subprocess.run(['smartctl', '-A', device], capture_output=True, text=True)
+            for line in result.stdout.split('\n'):
+                if 'Reallocated_Sector_Ct' in line or 'Bad_Block' in line:
+                    parts = line.split()
+                    if len(parts) >= 10:
+                        return int(parts[9])
+        except:
+            pass
+        return None
+    
+    def _get_ufs_version(self, device):
+        """获取 UFS 版本"""
+        try:
+            result = subprocess.run(['smartctl', '-i', device], capture_output=True, text=True)
+            for line in result.stdout.split('\n'):
+                if 'UFS' in line and 'Version' in line:
+                    return line.split(':')[1].strip()
+        except:
+            pass
+        return None
+    
+    def _get_device_vendor(self, device):
+        """获取厂商信息"""
+        try:
+            result = subprocess.run(['smartctl', '-i', device], capture_output=True, text=True)
+            for line in result.stdout.split('\n'):
+                if 'Vendor' in line:
+                    return line.split(':')[1].strip()
+        except:
+            pass
+        return None
+    
+    def _get_wear_leveling_count(self, device):
+        """获取磨损均衡计数"""
+        try:
+            result = subprocess.run(['smartctl', '-A', device], capture_output=True, text=True)
+            for line in result.stdout.split('\n'):
+                if 'Wear_Leveling' in line or 'Wearout' in line:
+                    parts = line.split()
+                    if len(parts) >= 10:
+                        return int(parts[9])
         except:
             pass
         return None
