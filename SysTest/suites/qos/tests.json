@@ -1,0 +1,44 @@
+{
+  "description": "QoS 测试套件 - 服务质量验证",
+  "tests": [
+    {
+      "name": "latency_percentile",
+      "description": "延迟百分位测试",
+      "type": "latency",
+      "fio": {
+        "rw": "randread",
+        "bs": "4k",
+        "iodepth": 32,
+        "numjobs": 1,
+        "runtime": 300,
+        "time_based": true,
+        "lat_percentiles": 1
+      },
+      "target": {
+        "p50": 200,
+        "p99": 1000,
+        "p999": 5000,
+        "p9999": 10000,
+        "unit": "μs"
+      }
+    },
+    {
+      "name": "latency_jitter",
+      "description": "延迟抖动测试",
+      "type": "latency",
+      "fio": {
+        "rw": "randread",
+        "bs": "4k",
+        "iodepth": 16,
+        "numjobs": 4,
+        "runtime": 300,
+        "time_based": true,
+        "lat_percentiles": 1
+      },
+      "target": {
+        "stddev": 500,
+        "unit": "μs"
+      }
+    }
+  ]
+}

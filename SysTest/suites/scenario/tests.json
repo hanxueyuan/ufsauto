@@ -1,0 +1,48 @@
+{
+  "description": "场景测试套件 - 真实应用场景验证",
+  "tests": [
+    {
+      "name": "sensor_write",
+      "description": "传感器数据写入",
+      "type": "scenario",
+      "scenario": "autonomous_driving_sensors",
+      "fio": {
+        "rw": "write",
+        "bs": "64k",
+        "iodepth": 8,
+        "numjobs": 8,
+        "rate": "50M",
+        "runtime": 300,
+        "time_based": true
+      },
+      "target": {
+        "total_bandwidth": 400,
+        "latency_p99": 1000,
+        "packet_loss": 0,
+        "unit": "MB/s"
+      },
+      "notes": "模拟 8 路摄像头 + 激光雷达 + IMU/GPS 持续写入"
+    },
+    {
+      "name": "model_load",
+      "description": "算法模型加载",
+      "type": "scenario",
+      "scenario": "ai_model_inference",
+      "fio": {
+        "rw": "randrw",
+        "rwmixread": 70,
+        "bs": "128k",
+        "iodepth": 16,
+        "numjobs": 4,
+        "runtime": 300,
+        "time_based": true
+      },
+      "target": {
+        "read_bandwidth": 1500,
+        "load_time": 5,
+        "unit": "MB/s"
+      },
+      "notes": "模拟 AI 模型权重加载 + 推理并发"
+    }
+  ]
+}

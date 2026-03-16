@@ -1,0 +1,30 @@
+{
+  "description": "可靠性测试套件 - 长期稳定性验证",
+  "tests": [
+    {
+      "name": "stability_test",
+      "description": "长期稳定性测试",
+      "type": "reliability",
+      "fio": {
+        "rw": "randrw",
+        "rwmixread": 70,
+        "bs": "4k",
+        "iodepth": 32,
+        "numjobs": 2,
+        "runtime": 86400,
+        "time_based": true,
+        "verify": 0
+      },
+      "target": {
+        "duration": 86400,
+        "unit": "seconds",
+        "max_errors": 0,
+        "max_performance_drop": 0.20
+      },
+      "monitoring": {
+        "interval": 300,
+        "metrics": ["bandwidth", "iops", "latency", "temperature"]
+      }
+    }
+  ]
+}

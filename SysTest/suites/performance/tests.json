@@ -1,0 +1,168 @@
+{
+  "description": "性能测试套件 - UFS 基础性能验证",
+  "tests": [
+    {
+      "name": "seq_read_burst",
+      "description": "顺序读带宽 (Burst)",
+      "type": "bandwidth",
+      "fio": {
+        "rw": "read",
+        "bs": "128k",
+        "iodepth": 32,
+        "numjobs": 1,
+        "runtime": 60,
+        "time_based": true
+      },
+      "target": {
+        "value": 2100,
+        "unit": "MB/s",
+        "tolerance": 0.95
+      }
+    },
+    {
+      "name": "seq_read_sustained",
+      "description": "顺序读带宽 (Sustained)",
+      "type": "bandwidth",
+      "fio": {
+        "rw": "read",
+        "bs": "128k",
+        "iodepth": 32,
+        "numjobs": 1,
+        "runtime": 300,
+        "time_based": true
+      },
+      "target": {
+        "value": 1800,
+        "unit": "MB/s",
+        "tolerance": 0.95
+      }
+    },
+    {
+      "name": "seq_write_burst",
+      "description": "顺序写带宽 (Burst)",
+      "type": "bandwidth",
+      "fio": {
+        "rw": "write",
+        "bs": "128k",
+        "iodepth": 32,
+        "numjobs": 1,
+        "runtime": 60,
+        "time_based": true
+      },
+      "target": {
+        "value": 1650,
+        "unit": "MB/s",
+        "tolerance": 0.95
+      }
+    },
+    {
+      "name": "seq_write_sustained",
+      "description": "顺序写带宽 (Sustained)",
+      "type": "bandwidth",
+      "fio": {
+        "rw": "write",
+        "bs": "128k",
+        "iodepth": 32,
+        "numjobs": 1,
+        "runtime": 300,
+        "time_based": true
+      },
+      "target": {
+        "value": 250,
+        "unit": "MB/s",
+        "tolerance": 0.95
+      }
+    },
+    {
+      "name": "rand_read_burst",
+      "description": "随机读 IOPS (Burst)",
+      "type": "iops",
+      "fio": {
+        "rw": "randread",
+        "bs": "4k",
+        "iodepth": 32,
+        "numjobs": 1,
+        "runtime": 60,
+        "time_based": true
+      },
+      "target": {
+        "value": 200,
+        "unit": "KIOPS",
+        "tolerance": 0.95
+      }
+    },
+    {
+      "name": "rand_read_sustained",
+      "description": "随机读 IOPS (Sustained)",
+      "type": "iops",
+      "fio": {
+        "rw": "randread",
+        "bs": "4k",
+        "iodepth": 32,
+        "numjobs": 1,
+        "runtime": 300,
+        "time_based": true
+      },
+      "target": {
+        "value": 105,
+        "unit": "KIOPS",
+        "tolerance": 0.95
+      }
+    },
+    {
+      "name": "rand_write_burst",
+      "description": "随机写 IOPS (Burst)",
+      "type": "iops",
+      "fio": {
+        "rw": "randwrite",
+        "bs": "4k",
+        "iodepth": 32,
+        "numjobs": 1,
+        "runtime": 60,
+        "time_based": true
+      },
+      "target": {
+        "value": 330,
+        "unit": "KIOPS",
+        "tolerance": 0.95
+      }
+    },
+    {
+      "name": "rand_write_sustained",
+      "description": "随机写 IOPS (Sustained)",
+      "type": "iops",
+      "fio": {
+        "rw": "randwrite",
+        "bs": "4k",
+        "iodepth": 32,
+        "numjobs": 1,
+        "runtime": 300,
+        "time_based": true
+      },
+      "target": {
+        "value": 60,
+        "unit": "KIOPS",
+        "tolerance": 0.95
+      }
+    },
+    {
+      "name": "mixed_rw",
+      "description": "混合读写性能",
+      "type": "iops",
+      "fio": {
+        "rw": "rw",
+        "rwmixread": 70,
+        "bs": "4k",
+        "iodepth": 16,
+        "numjobs": 1,
+        "runtime": 60,
+        "time_based": true
+      },
+      "target": {
+        "value": 150,
+        "unit": "KIOPS",
+        "tolerance": 0.95
+      }
+    }
+  ]
+}
