@@ -45,7 +45,7 @@ def verify_command_building():
     test_cases = [
         ('t_performance_sequential_read_burst_001', 'bandwidth', 2100),
         ('t_performance_sequential_write_sustained_004', 'bandwidth', 250),
-        ('rand_read_burst', 'iops', 200),
+        ('t_performance_random_read_burst_005', 'iops', 200),
         ('t_performance_random_write_burst_007', 'iops', 330),
         ('t_qos_latency_percentile_001', 'latency', None),
         ('t_scenario_sensor_write_001', 'scenario', 400),
@@ -179,14 +179,7 @@ def verify_result_validation():
     sys.path.insert(0, str(Path(__file__).parent.parent / 'core'))
     from runner import TestRunner
     
-    runner = TestRunner(config={
-        'targets': {
-            't_performance_sequential_read_burst_001': 2100,
-            't_performance_sequential_write_sustained_004': 250,
-            'rand_read_burst': 200,
-            't_performance_random_write_burst_007': 330
-        }
-    })
+    runner = TestRunner()
     
     # 测试用例：(测试名，指标值，预期结果)
     test_cases = [
@@ -194,16 +187,26 @@ def verify_result_validation():
         ('t_performance_sequential_read_burst_001', {'bandwidth': 1900.0}, 'FAIL'),  # 低于目标 95%
         ('t_performance_sequential_write_sustained_004', {'bandwidth': 260.0}, 'PASS'),
         ('t_performance_sequential_write_sustained_004', {'bandwidth': 200.0}, 'FAIL'),
-        ('rand_read_burst', {'iops': 210.5}, 'PASS'),
-        ('rand_read_burst', {'iops': 180.0}, 'FAIL'),
+        ('t_performance_random_read_burst_005', {'iops': 210.5}, 'PASS'),
+        ('t_performance_random_read_burst_005', {'iops': 180.0}, 'FAIL'),
         ('t_performance_random_write_burst_007', {'iops': 340.2}, 'PASS'),
         ('t_performance_random_write_burst_007', {'iops': 300.0}, 'FAIL'),
     ]
     
+    # 从 tests.json 加载测试配置
+    import json
+    perf_tests_file = Path(__file__).parent.parent / 'suites' / 'performance' / 'tests.json'
+    with open(perf_tests_file, 'r') as f:
+        perf_tests = json.load(f)
+    
+    # 构建测试名到配置的映射
+    test_config_map = {test['name']: test for test in perf_tests.get('tests', [])}
+    
     passed = 0
     for test_name, metrics, expected in test_cases:
         result = {'status': 'PASS', 'metrics': metrics}
-        status = runner._validate_result(result, test_name)
+        test_info = test_config_map.get(test_name, {})
+        status = runner._validate_result(result, test_name, test_info)
         
         if status == expected:
             print_success(f"{test_name}: 验证正确 ({metrics} → {status})")
@@ -238,7 +241,7 @@ def verify_report_generation():
                     'metrics': {'bandwidth': 2150.5, 'iops': 0, 'latency_avg': 120.5}
                 },
                 {
-                    'test_name': 'seq_write_burst',
+                    'test_name': 't_performance_sequential_write_burst_003',
                     'status': 'PASS',
                     'metrics': {'bandwidth': 1680.3, 'iops': 0, 'latency_avg': 150.2}
                 },

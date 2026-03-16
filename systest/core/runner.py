@@ -363,7 +363,7 @@ class TestRunner:
         
         metrics = result.get('metrics', {})
         
-        # 优先使用测试配置中的验收目标
+        # 优先使用测试配置中的验收目标（从 tests.json 读取）
         if test_info and 'target' in test_info:
             target_config = test_info['target']
             test_type = test_info.get('type', 'bandwidth')
@@ -431,6 +431,9 @@ class TestRunner:
         
         # 向后兼容：使用全局配置
         targets = self.config.get('targets', {})
+        
+        # 新命名规则的测试用例从 test_info 中获取目标值
+        # 旧命名的测试用例使用以下映射
         target_map = {
             'seq_read_burst': targets.get('seq_read_burst', 2100),
             'seq_read_sustained': targets.get('seq_read_sustained', 1800),
