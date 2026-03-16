@@ -32,7 +32,7 @@ class PreconditionChecker:
             device: 测试设备路径
             mode: 模式 ('development' | 'production')
                 - development: 只记录问题，不阻止测试（开发调试阶段）
-                - production: 严格检查，不满足则跳过测试（生产环境）
+                - production: 严格检查，Stop on fail（生产环境）
             
         Returns:
             dict: 检查结果
@@ -72,7 +72,7 @@ class PreconditionChecker:
                 self.check_results['errors'] = []
             self.check_results['passed'] = True  # 开发模式下总是通过
         
-        # 生产模式下严格检查
+        # 生产模式下严格检查，Stop on fail
         elif self.check_results['errors']:
             self.check_results['passed'] = False
         
@@ -109,13 +109,14 @@ class PreconditionChecker:
             self._add_warning(message)
             return
         
-        # 生产模式下作为 error 处理
+        # 生产模式下作为 error 处理，立即停止
         self.check_results['errors'].append({
             'message': message,
             'timestamp': datetime.now().isoformat()
         })
         if self.verbose:
             print(f"  ❌ 错误：{message}")
+            print(f"  ⛔ 生产模式：Stop on fail，停止检查")
     
     # ========== 1. 系统环境检查 ==========
     
@@ -185,7 +186,10 @@ class PreconditionChecker:
                 if self.mode == 'development':
                     self._add_warning(f'未发现 UFS 设备：{device}，请确认硬件连接')
                 else:
-                    self._add_error(f'设备 {device} 不存在')
+                    # 生产模式下立即报错并停止
+                    self._add_error(f'设备不存在：{device}')
+                    # 生产模式 Stop on fail，不再继续检查
+                    return
         
         # 检查可用空间
         available_space = device_info.get('available_space', '')

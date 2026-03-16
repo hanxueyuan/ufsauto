@@ -137,15 +137,14 @@ class TestRunner:
             if self.mode == 'development':
                 if precondition_result['warnings']:
                     print(f"⚠️  发现 {len(precondition_result['warnings'])} 个问题，继续执行测试（开发模式）")
-            # 生产模式下如果检查失败，跳过测试
+            # 生产模式下如果检查失败，抛出异常停止测试
             elif not precondition_result['passed']:
-                print(f"⚠️  Precondition 检查失败，跳过测试：{test_name}")
-                return {
-                    'test_name': test_name,
-                    'status': 'SKIPPED',
-                    'reason': 'Precondition 检查失败',
-                    'precondition_result': precondition_result
-                }
+                error_msg = f"Precondition 检查失败：{test_name}\n"
+                if precondition_result['errors']:
+                    error_msg += "\n错误列表:\n"
+                    for error in precondition_result['errors']:
+                        error_msg += f"  - {error['message']}\n"
+                raise RuntimeError(error_msg)
         
         # 执行测试
         if self.verbose:
@@ -196,16 +195,14 @@ class TestRunner:
                 if self.mode == 'development':
                     if precondition_result['warnings']:
                         print(f"  ⚠️  发现 {len(precondition_result['warnings'])} 个问题，继续执行测试（开发模式）")
-                # 生产模式下如果检查失败，跳过测试
+                # 生产模式下如果检查失败，抛出异常停止测试
                 elif not precondition_result['passed']:
-                    print(f"  ⚠️  Precondition 检查失败，跳过测试")
-                    results['test_cases'].append({
-                        'test_name': test['name'],
-                        'status': 'SKIPPED',
-                        'reason': 'Precondition 检查失败',
-                        'precondition_result': precondition_result
-                    })
-                    continue
+                    error_msg = f"Precondition 检查失败：{test['name']}\n"
+                    if precondition_result['errors']:
+                        error_msg += "\n错误列表:\n"
+                        for error in precondition_result['errors']:
+                            error_msg += f"  - {error['message']}\n"
+                    raise RuntimeError(error_msg)
             
             try:
                 result = self._execute_test(test['name'], test)
