@@ -1,4 +1,4 @@
-# SysTest 验证方案更新报告
+# systest 验证方案更新报告
 
 **版本**: v1.1.0  
 **更新日期**: 2026-03-16  
@@ -43,7 +43,7 @@
 
 ### 1. 移除干跑参数
 
-**文件**: `bin/SysTest`
+**文件**: `bin/systest`
 
 ```python
 # 已移除
@@ -108,7 +108,7 @@ $ python3 tests/minimal_validation.py
 ## 📁 文件变更清单
 
 ### 已删除
-- ❌ `bin/SysTest` 中的 `--dry-run` 参数及相关逻辑（约 150 行）
+- ❌ `bin/systest` 中的 `--dry-run` 参数及相关逻辑（约 150 行）
 
 ### 已新增
 - ✅ `tests/minimal_validation.py` - 最小化验证脚本（14.7KB）
@@ -146,12 +146,12 @@ $ python3 tests/minimal_validation.py
 
 ```bash
 # 运行最小化验证（无需 FIO，无需硬件）
-cd SysTest
+cd systest
 python3 tests/minimal_validation.py
 
 # 预期输出
 总计：7/7 验证通过
-🎉 所有验证通过！SysTest 框架可以投入使用！
+🎉 所有验证通过！systest 框架可以投入使用！
 ```
 
 **执行时间**: <10 秒  
@@ -161,10 +161,10 @@ python3 tests/minimal_validation.py
 
 ```bash
 # 执行性能测试套件
-python3 bin/SysTest run -s performance -d /dev/ufs0 -v
+python3 bin/systest run -s performance -d /dev/ufs0 -v
 
 # 执行单个测试项
-python3 bin/SysTest run -t seq_read_burst -d /dev/ufs0 -v
+python3 bin/systest run -t seq_read_burst -d /dev/ufs0 -v
 ```
 
 ---
@@ -208,7 +208,7 @@ python3 tests/minimal_validation.py
 
 ## 🎉 总结
 
-**SysTest v1.1.0 验证方案更新完成！**
+**systest v1.1.0 验证方案更新完成！**
 
 - ✅ **干跑模式已移除** - 约 150 行代码
 - ✅ **最小化验证已实施** - 7 项验证全部通过

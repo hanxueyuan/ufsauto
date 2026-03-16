@@ -1,9 +1,9 @@
-# SysTest 快速开始指南
+# systest 快速开始指南
 
 ## 1. 项目位置
 
 ```
-/home/gem/workspace/agent/workspace/SysTest/
+/home/gem/workspace/agent/workspace/systest/
 ```
 
 ## 2. 立即使用
@@ -11,21 +11,21 @@
 ### 查看帮助
 
 ```bash
-cd /home/gem/workspace/agent/workspace/SysTest
-python3 bin/SysTest --help
+cd /home/gem/workspace/agent/workspace/systest
+python3 bin/systest --help
 ```
 
 ### 列出测试
 
 ```bash
-python3 bin/SysTest list
+python3 bin/systest list
 ```
 
 ### 执行测试（干跑模式）
 
 ```bash
 # 干跑模式 - 不实际执行，只验证配置
-python3 bin/SysTest run -s performance --dry-run -v
+python3 bin/systest run -s performance --dry-run -v
 ```
 
 ### 实际执行测试
@@ -40,7 +40,7 @@ which fio
 ls -la /dev/ufs0
 
 # 执行性能测试
-python3 bin/SysTest run -s performance -d /dev/ufs0 -v
+python3 bin/systest run -s performance -d /dev/ufs0 -v
 ```
 
 ## 3. 框架代码结构
@@ -48,8 +48,8 @@ python3 bin/SysTest run -s performance -d /dev/ufs0 -v
 已创建的核心文件：
 
 ```
-SysTest/
-├── bin/SysTest              ✅ 主入口 (12.6KB)
+systest/
+├── bin/systest              ✅ 主入口 (12.6KB)
 ├── core/
 │   ├── runner.py            ✅ 测试执行引擎 (13.1KB)
 │   ├── collector.py         ✅ 结果收集器 (5.0KB)
@@ -67,20 +67,20 @@ SysTest/
 ### 立即可做（无需开发板）
 
 1. **代码审查**
-   - 阅读 `bin/SysTest` 主入口
+   - 阅读 `bin/systest` 主入口
    - 理解 `core/runner.py` 测试执行逻辑
    - 检查配置项是否完整
 
 2. **本地测试**
    ```bash
    # 干跑模式验证
-   python3 bin/SysTest run -s performance --dry-run -v
+   python3 bin/systest run -s performance --dry-run -v
    
    # 初始化配置
-   python3 bin/SysTest config --init
+   python3 bin/systest config --init
    
    # 查看配置
-   python3 bin/SysTest config --show
+   python3 bin/systest config --show
    ```
 
 3. **完善测试套件**
@@ -92,10 +92,10 @@ SysTest/
 1. **部署到开发板**
    ```bash
    # 复制整个项目到开发板
-   scp -r SysTest/ user@board:/opt/
+   scp -r systest/ user@board:/opt/
    
    # 添加执行权限
-   chmod +x /opt/SysTest/bin/SysTest
+   chmod +x /opt/systest/bin/systest
    ```
 
 2. **验证环境**
@@ -113,8 +113,8 @@ SysTest/
 
 3. **执行实际测试**
    ```bash
-   cd /opt/SysTest
-   python3 bin/SysTest run -s performance -d /dev/ufs0
+   cd /opt/systest
+   python3 bin/systest run -s performance -d /dev/ufs0
    ```
 
 ## 5. 定制配置
@@ -159,7 +159,7 @@ apt update && apt install fio
 lsblk
 
 # 使用实际设备路径
-python3 bin/SysTest run -s performance -d /dev/sda
+python3 bin/systest run -s performance -d /dev/sda
 ```
 
 ### Q: 如何修改测试时间？

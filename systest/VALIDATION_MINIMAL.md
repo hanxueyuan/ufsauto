@@ -1,4 +1,4 @@
-# SysTest 最小化验证报告
+# systest 最小化验证报告
 
 **版本**: v1.1.0  
 **验证日期**: 2026-03-16  
@@ -141,14 +141,14 @@ fio --name=test --filename=/dev/zero --rw=randwrite --bs=4k --iodepth=32 --runti
 
 ```bash
 # 运行最小化验证
-cd SysTest
+cd systest
 python3 tests/minimal_validation.py
 ```
 
 ### 验证脚本位置
 
 ```
-SysTest/tests/
+systest/tests/
 ├── minimal_validation.py    # 最小化验证脚本（新增）
 ├── mock_test.py             # 模拟测试（保留）
 └── e2e_validation.py        # 端到端验证（保留）
@@ -225,7 +225,7 @@ SysTest/tests/
 
 ## 🎉 总结
 
-**SysTest v1.1.0 最小化验证完成！**
+**systest v1.1.0 最小化验证完成！**
 
 - ✅ **7 项验证全部通过**
 - ✅ **无需 FIO，无需硬件**

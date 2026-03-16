@@ -1,4 +1,4 @@
-# SysTest 项目总结
+# systest 项目总结
 
 **版本**: v1.0.0  
 **创建时间**: 2026-03-15  
@@ -9,7 +9,7 @@
 
 ## 📊 项目概况
 
-SysTest 是一个专为 UFS 3.1 车规级存储产品设计的系统测试框架，提供：
+systest 是一个专为 UFS 3.1 车规级存储产品设计的系统测试框架，提供：
 
 - ✅ **14 个测试用例**，覆盖性能/QoS/可靠性/场景四大类
 - ✅ **15 种失效模式**自动识别和根因分析
@@ -46,9 +46,9 @@ SysTest 是一个专为 UFS 3.1 车规级存储产品设计的系统测试框架
 ## 📁 项目结构
 
 ```
-SysTest/
+systest/
 ├── bin/
-│   └── SysTest              # 主入口脚本 (20.5KB)
+│   └── systest              # 主入口脚本 (20.5KB)
 ├── core/
 │   ├── runner.py            # 测试执行引擎 (18.5KB)
 │   ├── collector.py         # 结果收集器 (5.2KB)
@@ -214,7 +214,7 @@ SysTest/
 ### ✅ 已完成 (2026-03-16)
 
 - [x] 核心框架开发
-  - [x] 主入口脚本 (bin/SysTest)
+  - [x] 主入口脚本 (bin/systest)
   - [x] 测试执行引擎 (core/runner.py)
   - [x] 结果收集器 (core/collector.py)
   - [x] 报告生成器 (core/reporter.py)
@@ -269,30 +269,30 @@ SysTest/
 
 ```bash
 # 查看帮助
-python3 bin/SysTest --help
+python3 bin/systest --help
 
 # 列出测试
-python3 bin/SysTest list
+python3 bin/systest list
 
 # 干跑验证
-python3 bin/SysTest run -s performance --dry-run -v
+python3 bin/systest run -s performance --dry-run -v
 ```
 
 ### 2. 执行测试
 
 ```bash
 # 实际执行（需要开发板）
-python3 bin/SysTest run -s performance -d /dev/ufs0 -v
+python3 bin/systest run -s performance -d /dev/ufs0 -v
 ```
 
 ### 3. 查看结果
 
 ```bash
 # 查看报告
-python3 bin/SysTest report --latest
+python3 bin/systest report --latest
 
 # 失效分析
-python3 bin/SysTest analyze --latest
+python3 bin/systest analyze --latest
 ```
 
 ---
@@ -311,7 +311,7 @@ python3 bin/SysTest analyze --latest
 
 如遇到问题，请提供：
 1. 测试设备型号和配置
-2. SysTest 版本号
+2. systest 版本号
 3. 完整的错误信息
 4. FIO 原始数据（results/*/raw/*.json）
 

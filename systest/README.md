@@ -1,4 +1,4 @@
-# SysTest - UFS 系统测试框架
+# systest - UFS 系统测试框架
 
 统一测试入口、参数化执行、自动报告、失效分析
 
@@ -7,14 +7,14 @@
 ### 1. 查看帮助
 
 ```bash
-cd /path/to/SysTest
-python3 bin/SysTest --help
+cd /path/to/systest
+python3 bin/systest --help
 ```
 
 ### 2. 列出可用测试
 
 ```bash
-python3 bin/SysTest list
+python3 bin/systest list
 ```
 
 ### 3. 验证系统可用性
@@ -24,26 +24,26 @@ python3 bin/SysTest list
 python3 tests/minimal_validation.py
 
 # 执行整个性能套件（需要 FIO 和 UFS 设备）
-python3 bin/SysTest run -s performance -d /dev/ufs0
+python3 bin/systest run -s performance -d /dev/ufs0
 
 # 执行单个测试项
-python3 bin/SysTest run -t seq_read_burst -d /dev/ufs0 -v
+python3 bin/systest run -t seq_read_burst -d /dev/ufs0 -v
 ```
 
 ### 4. 查看报告
 
 ```bash
 # 查看最新测试报告
-python3 bin/SysTest report --latest
+python3 bin/systest report --latest
 
 # 查看指定测试 ID 的报告
-python3 bin/SysTest report --id=20260315_120000
+python3 bin/systest report --id=20260315_120000
 ```
 
 ### 5. 失效分析
 
 ```bash
-python3 bin/SysTest analyze --id=20260315_120000
+python3 bin/systest analyze --id=20260315_120000
 ```
 
 ## 📋 命令参考
@@ -51,7 +51,7 @@ python3 bin/SysTest analyze --id=20260315_120000
 ### run - 执行测试
 
 ```bash
-python3 bin/SysTest run [选项]
+python3 bin/systest run [选项]
 
 选项:
   -t, --test      单个测试项名称
@@ -69,26 +69,26 @@ python3 bin/SysTest run [选项]
 ### list - 列出可用测试
 
 ```bash
-python3 bin/SysTest list [-s 套件名称]
+python3 bin/systest list [-s 套件名称]
 ```
 
 ### report - 生成/查看报告
 
 ```bash
-python3 bin/SysTest report [--id 测试 ID | --latest] [-f 格式]
+python3 bin/systest report [--id 测试 ID | --latest] [-f 格式]
 ```
 
 ### analyze - 失效分析
 
 ```bash
-python3 bin/SysTest analyze --id 测试 ID [-o 输出路径]
+python3 bin/systest analyze --id 测试 ID [-o 输出路径]
 ```
 
 ### config - 配置管理
 
 ```bash
-python3 bin/SysTest config --show   # 显示当前配置
-python3 bin/SysTest config --init   # 初始化默认配置
+python3 bin/systest config --show   # 显示当前配置
+python3 bin/systest config --init   # 初始化默认配置
 ```
 
 ## 📦 测试套件
@@ -103,9 +103,9 @@ python3 bin/SysTest config --init   # 初始化默认配置
 ## 📁 项目结构
 
 ```
-SysTest/
+systest/
 ├── bin/
-│   └── SysTest              # 主入口脚本
+│   └── systest              # 主入口脚本
 ├── core/
 │   ├── runner.py            # 测试执行引擎
 │   ├── collector.py         # 结果收集器

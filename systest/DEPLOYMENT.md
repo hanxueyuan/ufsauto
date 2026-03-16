@@ -1,6 +1,6 @@
-# SysTest 部署指南
+# systest 部署指南
 
-本文档指导如何将 SysTest 框架部署到开发板并进行实际测试。
+本文档指导如何将 systest 框架部署到开发板并进行实际测试。
 
 ## 📋 前置要求
 
@@ -49,35 +49,35 @@ ls -la /dev/sda
 cat /sys/block/sda/device/model
 ```
 
-### 3. 复制 SysTest 到开发板
+### 3. 复制 systest 到开发板
 
 ```bash
 # 方式 1: SCP 复制
-scp -r SysTest/ user@board:/opt/
+scp -r systest/ user@board:/opt/
 
 # 方式 2: Git 克隆（如果开发板能访问网络）
 cd /opt
-git clone <repository-url> SysTest
+git clone <repository-url> systest
 ```
 
 ### 4. 设置执行权限
 
 ```bash
-cd /opt/SysTest
-chmod +x bin/SysTest
+cd /opt/systest
+chmod +x bin/systest
 ```
 
 ### 5. 验证部署
 
 ```bash
 # 查看帮助
-python3 bin/SysTest --help
+python3 bin/systest --help
 
 # 列出测试
-python3 bin/SysTest list
+python3 bin/systest list
 
 # 干跑验证
-python3 bin/SysTest run -s performance --dry-run -v
+python3 bin/systest run -s performance --dry-run -v
 ```
 
 ## ⚙️ 配置调整
@@ -133,39 +133,39 @@ Burst 测试默认 60 秒，Sustained 测试默认 300 秒：
 
 ```bash
 # 性能测试（约 25 分钟）
-python3 bin/SysTest run -s performance -d /dev/sda -v
+python3 bin/systest run -s performance -d /dev/sda -v
 
 # QoS 测试（约 10 分钟）
-python3 bin/SysTest run -s qos -d /dev/sda -v
+python3 bin/systest run -s qos -d /dev/sda -v
 
 # 场景测试（约 10 分钟）
-python3 bin/SysTest run -s scenario -d /dev/sda -v
+python3 bin/systest run -s scenario -d /dev/sda -v
 ```
 
 ### 执行单个测试项
 
 ```bash
 # 顺序读 Burst 测试
-python3 bin/SysTest run -t seq_read_burst -d /dev/sda -v
+python3 bin/systest run -t seq_read_burst -d /dev/sda -v
 
 # 随机写 Sustained 测试
-python3 bin/SysTest run -t rand_write_sustained -d /dev/sda -v
+python3 bin/systest run -t rand_write_sustained -d /dev/sda -v
 ```
 
 ### 执行全部测试
 
 ```bash
 # 执行所有套件（约 45 分钟）
-python3 bin/SysTest run -s performance -d /dev/sda --format html,json
-python3 bin/SysTest run -s qos -d /dev/sda --format html,json
-python3 bin/SysTest run -s scenario -d /dev/sda --format html,json
+python3 bin/systest run -s performance -d /dev/sda --format html,json
+python3 bin/systest run -s qos -d /dev/sda --format html,json
+python3 bin/systest run -s scenario -d /dev/sda --format html,json
 ```
 
 ### 后台执行长时间测试
 
 ```bash
 # 稳定性测试（24 小时）- 后台执行
-python3 bin/SysTest run -t stability_test -d /dev/sda --background
+python3 bin/systest run -t stability_test -d /dev/sda --background
 
 # 查看进度
 tail -f results/*/summary.txt
@@ -177,23 +177,23 @@ tail -f results/*/summary.txt
 
 ```bash
 # 查看文本摘要
-python3 bin/SysTest report --latest
+python3 bin/systest report --latest
 
 # 查看 HTML 报告（如果开发板有浏览器）
 firefox results/*/report.html
 
 # 或将报告复制到本地查看
-scp -r user@board:/opt/SysTest/results/ ./
+scp -r user@board:/opt/systest/results/ ./
 ```
 
 ### 失效分析
 
 ```bash
 # 分析最新测试结果
-python3 bin/SysTest analyze --latest
+python3 bin/systest analyze --latest
 
 # 分析指定测试 ID
-python3 bin/SysTest analyze --id=20260316_090000
+python3 bin/systest analyze --id=20260316_090000
 ```
 
 ### 结果文件位置
@@ -256,7 +256,7 @@ apt update && apt install fio -y
 
 ```bash
 # 使用 root 权限
-sudo python3 bin/SysTest run -s performance -d /dev/sda
+sudo python3 bin/systest run -s performance -d /dev/sda
 
 # 或修改设备权限
 chmod 666 /dev/sda
@@ -284,7 +284,7 @@ dmesg | grep -i error
 如遇到问题，请提供以下信息：
 
 1. 测试设备型号和配置
-2. SysTest 版本号
+2. systest 版本号
 3. 完整的错误信息
 4. FIO 原始数据（results/*/raw/*.json）
 

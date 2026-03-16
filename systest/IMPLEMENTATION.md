@@ -1,4 +1,4 @@
-# SysTest 框架实现总结
+# systest 框架实现总结
 
 **创建时间**: 2026-03-15
 **版本**: v1.0.0
@@ -13,10 +13,10 @@
 
 | 测试项 | 结果 | 说明 |
 |--------|------|------|
-| 命令行帮助 | ✅ 通过 | `python3 bin/SysTest --help` |
-| 列出测试 | ✅ 通过 | `python3 bin/SysTest list` |
+| 命令行帮助 | ✅ 通过 | `python3 bin/systest --help` |
+| 列出测试 | ✅ 通过 | `python3 bin/systest list` |
 | 最小化验证 | ✅ 通过 | 7 项验证全部通过（命令构建/结果解析/报告生成等） |
-| 配置查看 | ✅ 通过 | `python3 bin/SysTest config --show` |
+| 配置查看 | ✅ 通过 | `python3 bin/systest config --show` |
 | 模拟测试 - 通过场景 | ✅ 通过 | 生成 HTML/JSON/TXT 报告 |
 | 模拟测试 - 失败场景 | ✅ 通过 | 失效分析识别 SLC Cache 耗尽 (88% 置信度) |
 | 报告统计 | ✅ 通过 | 正确显示总计/通过/失败/通过率 |
@@ -53,7 +53,7 @@
 
 | 模块 | 文件 | 大小 | 说明 |
 |------|------|------|------|
-| 主入口 | `bin/SysTest` | 12.6KB | 命令行接口，支持 run/list/report/analyze/config 命令 |
+| 主入口 | `bin/systest` | 12.6KB | 命令行接口，支持 run/list/report/analyze/config 命令 |
 | 测试执行引擎 | `core/runner.py` | 13.1KB | FIO 集成，测试用例执行，结果验证 |
 | 结果收集器 | `core/collector.py` | 5.0KB | 系统信息、设备信息收集 |
 | 报告生成器 | `core/reporter.py` | 9.7KB | HTML/JSON/TXT 报告生成 |
@@ -85,7 +85,7 @@
 ### 1. 统一入口
 
 ```bash
-SysTest <command> [options]
+systest <command> [options]
 
 命令:
   run       - 执行测试
@@ -99,13 +99,13 @@ SysTest <command> [options]
 
 ```bash
 # 执行套件
-SysTest run -s performance -d /dev/ufs0
+systest run -s performance -d /dev/ufs0
 
 # 执行单个测试
-SysTest run -t seq_read_burst -v
+systest run -t seq_read_burst -v
 
 # 干跑模式
-SysTest run -s performance --dry-run
+systest run -s performance --dry-run
 ```
 
 ### 3. 自动报告
@@ -136,7 +136,7 @@ Python 文件：5 个核心模块
 ### 代码分布
 
 ```
-bin/SysTest          ██████████████████  16.8KB  (28%)
+bin/systest          ██████████████████  16.8KB  (28%)
 core/runner.py       █████████████████   13.9KB  (23%)
 core/analyzer.py     ████████████        10.1KB  (17%)
 core/reporter.py     ███████████         10.5KB  (17%)
@@ -161,9 +161,9 @@ tests/mock_test.py   ███                  5.5KB   (6%)
 ## 📁 目录结构
 
 ```
-SysTest/
+systest/
 ├── bin/
-│   └── SysTest              # 主入口脚本 ⭐
+│   └── systest              # 主入口脚本 ⭐
 ├── core/
 │   ├── __init__.py
 │   ├── runner.py            # 测试执行引擎 ⭐
@@ -218,31 +218,31 @@ SysTest/
 
 ```bash
 # 1. 查看帮助
-cd SysTest
-python3 bin/SysTest --help
+cd systest
+python3 bin/systest --help
 
 # 2. 列出测试
-python3 bin/SysTest list
+python3 bin/systest list
 
 # 3. 干跑验证
-python3 bin/SysTest run -s performance --dry-run -v
+python3 bin/systest run -s performance --dry-run -v
 ```
 
 ### 2. 执行测试
 
 ```bash
 # 实际执行（需要开发板）
-python3 bin/SysTest run -s performance -d /dev/ufs0
+python3 bin/systest run -s performance -d /dev/ufs0
 ```
 
 ### 3. 查看结果
 
 ```bash
 # 查看报告
-python3 bin/SysTest report --latest
+python3 bin/systest report --latest
 
 # 失效分析
-python3 bin/SysTest analyze --id=20260315_xxxxx
+python3 bin/systest analyze --id=20260315_xxxxx
 ```
 
 ---
@@ -292,7 +292,7 @@ python3 bin/SysTest analyze --id=20260315_xxxxx
 
 ### 代码验证
 
-- [x] 主入口可执行 - `python3 bin/SysTest --help`
+- [x] 主入口可执行 - `python3 bin/systest --help`
 - [x] 命令行参数解析正常 - run/list/report/analyze/config 命令
 - [x] 测试套件加载正常 - 4 个套件 14 个测试项
 - [x] 配置文件加载正常 - 含验收目标和执行参数
@@ -343,4 +343,4 @@ python3 bin/SysTest analyze --id=20260315_xxxxx
 
 ---
 
-**总结**: SysTest 框架核心功能已完成并通过模拟测试验证，代码结构清晰，文档齐全。失效分析引擎可有效识别常见失效模式。下一步需要部署到开发板进行实际硬件测试验证。
+**总结**: systest 框架核心功能已完成并通过模拟测试验证，代码结构清晰，文档齐全。失效分析引擎可有效识别常见失效模式。下一步需要部署到开发板进行实际硬件测试验证。

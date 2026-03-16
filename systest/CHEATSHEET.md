@@ -1,4 +1,4 @@
-# SysTest 快速参考卡片
+# systest 快速参考卡片
 
 ## 🚀 常用命令
 
@@ -6,13 +6,13 @@
 
 ```bash
 # 查看帮助
-python3 bin/SysTest --help
+python3 bin/systest --help
 
 # 查看版本
-python3 bin/SysTest --version
+python3 bin/systest --version
 
 # 列出所有测试
-python3 bin/SysTest list
+python3 bin/systest list
 ```
 
 ### 执行测试
@@ -22,36 +22,36 @@ python3 bin/SysTest list
 python3 tests/minimal_validation.py
 
 # 执行性能测试套件
-python3 bin/SysTest run -s performance -d /dev/ufs0 -v
+python3 bin/systest run -s performance -d /dev/ufs0 -v
 
 # 执行单个测试项
-python3 bin/SysTest run -t seq_read_burst -d /dev/ufs0 -v
+python3 bin/systest run -t seq_read_burst -d /dev/ufs0 -v
 
 # 执行并生成多种格式报告
-python3 bin/SysTest run -s performance -d /dev/ufs0 --format html,json,text
+python3 bin/systest run -s performance -d /dev/ufs0 --format html,json,text
 ```
 
 ### 查看结果
 
 ```bash
 # 查看最新测试摘要
-python3 bin/SysTest report --latest
+python3 bin/systest report --latest
 
 # 查看指定测试 ID 的报告
-python3 bin/SysTest report --id=20260316_090000
+python3 bin/systest report --id=20260316_090000
 
 # 失效分析
-python3 bin/SysTest analyze --id=20260316_090000
+python3 bin/systest analyze --id=20260316_090000
 ```
 
 ### 配置管理
 
 ```bash
 # 查看当前配置
-python3 bin/SysTest config --show
+python3 bin/systest config --show
 
 # 初始化默认配置
-python3 bin/SysTest config --init
+python3 bin/systest config --init
 ```
 
 ---
@@ -125,13 +125,13 @@ results/
 python3 tests/minimal_validation.py
 
 # 2. 执行实际测试
-python3 bin/SysTest run -s performance -d /dev/ufs0 -v
+python3 bin/systest run -s performance -d /dev/ufs0 -v
 
 # 3. 查看结果
-python3 bin/SysTest report --latest
+python3 bin/systest report --latest
 
 # 4. 失效分析（如果有失败）
-python3 bin/SysTest analyze --latest
+python3 bin/systest analyze --latest
 ```
 
 ---
