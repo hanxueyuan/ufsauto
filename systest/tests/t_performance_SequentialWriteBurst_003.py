@@ -28,7 +28,7 @@ Test Steps:
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / 'core'))
+sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 
 from runner import TestRunner
 
@@ -39,45 +39,41 @@ def main():
     print("顺序写带宽 (Burst) 测试")
     print("=" * 80)
     print()
-    
+
     runner = TestRunner(
-        device='/dev/ufs0',
-        output_dir='./results/performance',
-        verbose=True,
-        check_precondition=True,
-        mode='development'
+        device="/dev/ufs0", output_dir="./results/performance", verbose=True, check_precondition=True, mode="development"
     )
-    
+
     print("开始执行测试...")
     print()
-    
-    result = runner.run_test('t_performance_SequentialWriteBurst_003')
-    
+
+    result = runner.run_test("t_performance_SequentialWriteBurst_003")
+
     print()
     print("=" * 80)
     print("测试结果")
     print("=" * 80)
-    
-    status = result.get('status', 'UNKNOWN')
-    print("✅ PASS" if status == 'PASS' else "❌ FAIL" if status == 'FAIL' else f"状态：{status}")
-    
-    metrics = result.get('metrics', {})
+
+    status = result.get("status", "UNKNOWN")
+    print("✅ PASS" if status == "PASS" else "❌ FAIL" if status == "FAIL" else f"状态：{status}")
+
+    metrics = result.get("metrics", {})
     if metrics:
         print()
         print("测试指标:")
-        bandwidth = metrics.get('bandwidth', 0)
+        bandwidth = metrics.get("bandwidth", 0)
         if bandwidth:
             print(f"  - 带宽：{bandwidth} MB/s")
-    
+
     print()
     print("验收目标:")
     print("  - ≥ 1650 MB/s (容差：95%)")
     print("  - 即 ≥ 1567.5 MB/s")
     print()
     print("=" * 80)
-    
-    return 0 if status == 'PASS' else 1
+
+    return 0 if status == "PASS" else 1
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

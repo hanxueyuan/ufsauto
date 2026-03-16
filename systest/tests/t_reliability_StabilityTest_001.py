@@ -70,7 +70,7 @@ Test Steps:
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / 'core'))
+sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 
 from runner import TestRunner
 
@@ -83,28 +83,24 @@ def main():
     print()
     print("⚠️  警告：此测试将运行 24 小时！")
     print()
-    
+
     runner = TestRunner(
-        device='/dev/ufs0',
-        output_dir='./results/reliability',
-        verbose=True,
-        check_precondition=True,
-        mode='development'
+        device="/dev/ufs0", output_dir="./results/reliability", verbose=True, check_precondition=True, mode="development"
     )
-    
+
     print("开始执行测试...")
     print()
-    
-    result = runner.run_test('t_reliability_StabilityTest_001')
-    
+
+    result = runner.run_test("t_reliability_StabilityTest_001")
+
     print()
     print("=" * 80)
     print("测试结果")
     print("=" * 80)
-    
-    status = result.get('status', 'UNKNOWN')
-    print("✅ PASS" if status == 'PASS' else "❌ FAIL" if status == 'FAIL' else f"状态：{status}")
-    
+
+    status = result.get("status", "UNKNOWN")
+    print("✅ PASS" if status == "PASS" else "❌ FAIL" if status == "FAIL" else f"状态：{status}")
+
     print()
     print("验收目标:")
     print("  - 无 IO 错误（错误计数=0）")
@@ -113,9 +109,9 @@ def main():
     print("  - 无设备掉线或重启")
     print()
     print("=" * 80)
-    
-    return 0 if status == 'PASS' else 1
+
+    return 0 if status == "PASS" else 1
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())
