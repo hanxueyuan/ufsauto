@@ -54,10 +54,10 @@ def test_basic_commands():
     print_header("测试 1: 基础命令验证")
 
     tests = [
-        ("版本检查", "python3 bin/SysTest --version"),
-        ("帮助信息", "python3 bin/SysTest --help"),
-        ("列出测试", "python3 bin/SysTest list"),
-        ("查看配置", "python3 bin/SysTest config --show"),
+        ("版本检查", "python3 bin/systest --version"),
+        ("帮助信息", "python3 bin/systest --help"),
+        ("列出测试", "python3 bin/systest list"),
+        ("查看配置", "python3 bin/systest config --show"),
     ]
 
     passed = 0
@@ -81,7 +81,7 @@ def test_dry_run_all_suites():
 
     passed = 0
     for suite in suites:
-        cmd = f"python3 bin/SysTest run -s {suite} --dry-run -v"
+        cmd = f"python3 bin/systest run -s {suite} --dry-run -v"
         success, stdout, stderr = run_command(cmd)
 
         if success and "干跑模式" in stdout:
@@ -115,7 +115,7 @@ def test_single_test_dry_run():
 
     passed = 0
     for name, test_name, unit in tests:
-        cmd = f"python3 bin/SysTest run -t {test_name} --dry-run -v"
+        cmd = f"python3 bin/systest run -t {test_name} --dry-run -v"
         success, stdout, stderr = run_command(cmd)
 
         if success and unit in stdout:
@@ -216,7 +216,7 @@ def test_failure_analysis():
     test_id = latest_dir.name
 
     # 运行失效分析（指定输出目录）
-    cmd = f"python3 bin/SysTest analyze --id={test_id} -o results/mock"
+    cmd = f"python3 bin/systest analyze --id={test_id} -o results/mock"
     success, stdout, stderr = run_command(cmd, check=False)
 
     if success:
@@ -259,7 +259,7 @@ def test_report_command():
     test_id = latest_dir.name
 
     # 测试 --latest 参数（指定输出目录）
-    cmd = "python3 bin/SysTest report --latest -o results/mock"
+    cmd = "python3 bin/systest report --latest -o results/mock"
     success, stdout, stderr = run_command(cmd, check=False)
 
     if success and ("测试摘要" in stdout or "报告" in stdout or "报告已生成" in stdout):
@@ -268,7 +268,7 @@ def test_report_command():
         print_info("报告查看 (--latest): 输出格式可能不同")
 
     # 测试 --id 参数（指定输出目录）
-    cmd = f"python3 bin/SysTest report --id={test_id} -o results/mock"
+    cmd = f"python3 bin/systest report --id={test_id} -o results/mock"
     success, stdout, stderr = run_command(cmd, check=False)
 
     if success:
@@ -304,7 +304,7 @@ def test_config_modification():
     print_success("测试配置创建：通过")
 
     # 验证配置加载
-    cmd = "python3 bin/SysTest config --show"
+    cmd = "python3 bin/systest config --show"
     success, stdout, stderr = run_command(cmd)
 
     if success and "targets" in stdout:
@@ -321,10 +321,10 @@ def test_edge_cases():
 
     # 测试无效输入的处理
     tests = [
-        ("帮助命令", "python3 bin/SysTest --help", True, None),
-        ("缺少参数", "python3 bin/SysTest run", None, "help"),  # 应该显示帮助
-        ("无效套件干跑", "python3 bin/SysTest run -s invalid_suite --dry-run", None, "未找到"),
-        ("无效测试干跑", "python3 bin/SysTest run -t invalid_test --dry-run", None, "未找到"),
+        ("帮助命令", "python3 bin/systest --help", True, None),
+        ("缺少参数", "python3 bin/systest run", None, "help"),  # 应该显示帮助
+        ("无效套件干跑", "python3 bin/systest run -s invalid_suite --dry-run", None, "未找到"),
+        ("无效测试干跑", "python3 bin/systest run -t invalid_test --dry-run", None, "未找到"),
     ]
 
     passed = 0
