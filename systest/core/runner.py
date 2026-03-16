@@ -18,19 +18,47 @@ from precondition_checker import PreconditionChecker
 class TestRunner:
     """测试执行器"""
     
-    def __init__(self, device='/dev/ufs0', output_dir='./results', config=None, verbose=False, check_precondition=True, mode='development'):
+    def __init__(self, device='/dev/ufs0', output_dir='./results', config=None, config_file=None, verbose=False, check_precondition=True, mode=None):
         self.device = device
         self.output_dir = Path(output_dir)
-        self.config = config or {}
+        
+        # 加载配置文件
+        if config_file:
+            self.config = self._load_config(config_file)
+        else:
+            self.config = config or {}
+        
+        # 如果没有指定 mode，从配置中获取
+        if mode is None:
+            self.mode = self.config.get('mode', 'development')
+        else:
+            self.mode = mode
+        
         self.verbose = verbose
         self.check_precondition = check_precondition
-        self.mode = mode  # 'development' | 'production'
+        
+        # 从配置中获取执行参数
+        exec_config = self.config.get('execution', {})
+        self.loop_count = exec_config.get('loop_count', 1)
         
         # 加载测试套件
         self.suites = self._load_suites()
         
         # 初始化 Precondition 检查器
         self.precondition_checker = PreconditionChecker(verbose=verbose)
+    
+    def _load_config(self, config_file):
+        """加载配置文件"""
+        config_path = Path(config_file)
+        if not config_path.is_absolute():
+            config_path = Path(__file__).parent.parent / config_file
+        
+        if config_path.exists():
+            with open(config_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        else:
+            print(f"⚠️  配置文件不存在：{config_path}，使用默认配置")
+            return {}
     
     def _load_suites(self):
         """加载可用的测试套件"""
@@ -124,10 +152,13 @@ class TestRunner:
             if self.verbose:
                 print(f"\n🔍 检查 Precondition...")
             
+            # 生产模式下严格检查
+            precondition_mode = 'production' if self.mode == 'production' else 'development'
+            
             precondition_result = self.precondition_checker.check_all(
                 test_info['precondition'],
                 self.device,
-                mode=self.mode
+                mode=precondition_mode
             )
             
             if self.verbose:
@@ -146,16 +177,65 @@ class TestRunner:
                         error_msg += f"  - {error['message']}\n"
                 raise RuntimeError(error_msg)
         
-        # 执行测试
-        if self.verbose:
-            print(f"  执行测试：{test_name}")
+        # 执行测试（支持循环执行）
+        results = []
+        for i in range(self.loop_count):
+            if self.verbose and self.loop_count > 1:
+                print(f"\n{'=' * 80}")
+                print(f"循环 {i+1}/{self.loop_count}")
+                print(f"{'=' * 80}")
+            
+            if self.verbose:
+                print(f"  执行测试：{test_name}")
+            
+            result = self._execute_test(test_name, test_info)
+            result['loop'] = i + 1
+            results.append(result)
         
-        result = self._execute_test(test_name, test_info)
-        result['test_id'] = test_id
-        result['test_name'] = test_name
-        result['timestamp'] = datetime.now().isoformat()
+        # 如果只执行 1 次，直接返回
+        if self.loop_count == 1:
+            result = results[0]
+            result['test_id'] = test_id
+            result['test_name'] = test_name
+            result['timestamp'] = datetime.now().isoformat()
+            return result
         
-        return result
+        # 多次执行，计算平均值
+        avg_result = self._calculate_average(results)
+        avg_result['test_id'] = test_id
+        avg_result['test_name'] = test_name
+        avg_result['timestamp'] = datetime.now().isoformat()
+        avg_result['loops'] = results
+        avg_result['loop_count'] = self.loop_count
+        
+        return avg_result
+    
+    def _calculate_average(self, results):
+        """计算多次执行的平均值"""
+        if not results:
+            return {}
+        
+        avg = {
+            'status': 'PASS',
+            'metrics': {},
+            'loop_results': []
+        }
+        
+        # 检查是否有失败
+        for result in results:
+            if result.get('status') == 'FAIL':
+                avg['status'] = 'FAIL'
+                break
+        
+        # 计算指标平均值
+        metrics_keys = ['bandwidth', 'iops', 'latency_avg', 'latency_stddev']
+        for key in metrics_keys:
+            values = [r.get('metrics', {}).get(key, 0) for r in results if r.get('metrics', {}).get(key)]
+            if values:
+                avg['metrics'][key] = round(sum(values) / len(values), 2)
+                avg['metrics'][f'{key}_loops'] = values
+        
+        return avg
     
     def run_suite(self, suite_name, test_id=None):
         """执行测试套件"""
