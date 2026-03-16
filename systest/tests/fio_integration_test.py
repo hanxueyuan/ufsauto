@@ -85,8 +85,8 @@ try:
     runner = TestRunner(device=temp_file, verbose=True)
     
     # 测试命令构建（使用 1 秒 runtime 用于验证）
-    test_info = runner._find_test('seq_read_burst')
-    fio_cmd = runner._build_fio_command('seq_read_burst', 1, test_info)
+    test_info = runner._find_test('t_performance_sequential_read_burst_001')
+    fio_cmd = runner._build_fio_command('t_performance_sequential_read_burst_001', 1, test_info)
     fio_cmd[0] = fio_path  # 使用实际 FIO 路径
     
     # 确保 runtime 为 1 秒（用于快速验证）
@@ -113,7 +113,7 @@ try:
         json_str = '\n'.join(output_lines[json_start:])
         
         # 测试结果解析
-        parsed = runner._parse_fio_result(json_str, 'seq_read_burst')
+        parsed = runner._parse_fio_result(json_str, 't_performance_sequential_read_burst_001')
         
         if 'metrics' in parsed:
             metrics = parsed['metrics']
@@ -133,8 +133,8 @@ try:
     
     # 使用真实 FIO 数据测试验证逻辑
     test_cases = [
-        ('seq_read_burst', 2150.5, 'PASS'),  # 高于目标 2100
-        ('seq_read_burst', 1900.0, 'FAIL'),  # 低于目标 95%
+        ('t_performance_sequential_read_burst_001', 2150.5, 'PASS'),  # 高于目标 2100
+        ('t_performance_sequential_read_burst_001', 1900.0, 'FAIL'),  # 低于目标 95%
         ('seq_write_burst', 1680.3, 'PASS'), # 高于目标 1650
         ('seq_write_burst', 1500.0, 'FAIL'), # 低于目标 95%
     ]
@@ -167,7 +167,7 @@ try:
         'test_results': {
             'test_cases': [
                 {
-                    'test_name': 'seq_read_burst',
+                    'test_name': 't_performance_sequential_read_burst_001',
                     'status': 'PASS',
                     'metrics': {'bandwidth': 2150.5, 'iops': 0, 'latency_avg': 115.0}
                 }
@@ -200,7 +200,7 @@ try:
         'test_id': 'fail_test_001',
         'test_results': {
             'test_cases': [{
-                'test_name': 'seq_write_sustained',
+                'test_name': 't_performance_sequential_write_sustained_004',
                 'status': 'FAIL',
                 'metrics': {
                     'bandwidth': 180.5,
@@ -210,7 +210,7 @@ try:
                 }
             }]
         },
-        'config': {'targets': {'seq_write_sustained': 250}}
+        'config': {'targets': {'t_performance_sequential_write_sustained_004': 250}}
     }
     
     analysis = analyzer.analyze(fail_data)

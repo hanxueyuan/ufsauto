@@ -4,17 +4,17 @@
 
 ## 测试项列表
 
-- `latency_percentile` - 延迟百分位测试
+- `t_qos_latency_percentile_001` - 延迟百分位测试
   - 测试 p50/p99/p99.9/p99.99 延迟
   - 验收标准：p99.99 < 10ms
   
-- `latency_jitter` - 延迟抖动测试
+- `t_qos_latency_jitter_002` - 延迟抖动测试
   - 测试延迟标准差和抖动
   - 验收标准：抖动 < 500μs
 
 ## FIO 参数配置
 
-### latency_percentile
+### t_qos_latency_percentile_001
 
 ```bash
 fio --name=lat_test \
@@ -29,7 +29,7 @@ fio --name=lat_test \
     --output-format=json
 ```
 
-### latency_jitter
+### t_qos_latency_jitter_002
 
 ```bash
 fio --name=jitter_test \
@@ -48,11 +48,11 @@ fio --name=jitter_test \
 
 | 测试项 | 指标 | 目标值 | 单位 |
 |--------|------|--------|------|
-| latency_percentile | p50 | < 200 | μs |
-| latency_percentile | p99 | < 1,000 | μs |
-| latency_percentile | p99.9 | < 5,000 | μs |
-| latency_percentile | p99.99 | < 10,000 | μs |
-| latency_jitter | stddev | < 500 | μs |
+| t_qos_latency_percentile_001 | p50 | < 200 | μs |
+| t_qos_latency_percentile_001 | p99 | < 1,000 | μs |
+| t_qos_latency_percentile_001 | p99.9 | < 5,000 | μs |
+| t_qos_latency_percentile_001 | p99.99 | < 10,000 | μs |
+| t_qos_latency_jitter_002 | stddev | < 500 | μs |
 
 ## 执行示例
 
@@ -61,7 +61,7 @@ fio --name=jitter_test \
 SysTest run -s qos -d /dev/ufs0
 
 # 执行单个测试
-SysTest run -t latency_percentile -d /dev/ufs0 -v
+SysTest run -t t_qos_latency_percentile_001 -d /dev/ufs0 -v
 ```
 
 ## 失效分析

@@ -2,7 +2,7 @@
   "description": "场景测试套件 - 真实应用场景验证",
   "tests": [
     {
-      "name": "sensor_write",
+      "name": "t_scenario_sensor_write_001",
       "description": "传感器数据写入",
       "type": "scenario",
       "scenario": "autonomous_driving_sensors",
@@ -24,7 +24,7 @@
       "notes": "模拟 8 路摄像头 + 激光雷达 + IMU/GPS 持续写入"
     },
     {
-      "name": "model_load",
+      "name": "t_scenario_model_load_002",
       "description": "算法模型加载",
       "type": "scenario",
       "scenario": "ai_model_inference",

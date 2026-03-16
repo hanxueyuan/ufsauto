@@ -4,14 +4,14 @@
 
 ## 测试项列表
 
-- `stability_test` - 长期稳定性测试
+- `t_reliability_stability_test_001` - 长期稳定性测试
   - 24 小时连续读写测试
   - 监控性能衰减和错误率
   - 验收标准：无错误，性能衰减 < 20%
 
 ## FIO 参数配置
 
-### stability_test
+### t_reliability_stability_test_001
 
 ```bash
 fio --name=stability \
@@ -55,10 +55,10 @@ fio --name=stability \
 
 ```bash
 # 执行稳定性测试 (24 小时)
-SysTest run -t stability_test -d /dev/ufs0
+SysTest run -t t_reliability_stability_test_001 -d /dev/ufs0
 
 # 后台执行
-SysTest run -t stability_test -d /dev/ufs0 --background
+SysTest run -t t_reliability_stability_test_001 -d /dev/ufs0 --background
 
 # 查看进度
 SysTest report --latest

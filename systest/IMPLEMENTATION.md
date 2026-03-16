@@ -27,7 +27,7 @@
 
 | 失效模式 | 置信度 | 触发条件 |
 |---------|--------|---------|
-| SLC Cache 耗尽 | 88% | seq_write_sustained 性能下降 |
+| SLC Cache 耗尽 | 88% | t_performance_sequential_write_sustained_004 性能下降 |
 | GC 干扰 | 82% | 延迟长尾 p99999/p50 > 100 |
 | 传感器带宽不足 | 77% | 总带宽 < 400 MB/s |
 | 带宽未达标 | 72% | 带宽 < 目标 90% |
@@ -102,7 +102,7 @@ systest <command> [options]
 systest run -s performance -d /dev/ufs0
 
 # 执行单个测试
-systest run -t seq_read_burst -v
+systest run -t t_performance_sequential_read_burst_001 -v
 
 # 干跑模式
 systest run -s performance --dry-run
@@ -196,14 +196,14 @@ systest/
 ```json
 {
   "targets": {
-    "seq_read_burst": 2100,
-    "seq_read_sustained": 1800,
-    "seq_write_burst": 1650,
-    "seq_write_sustained": 250,
-    "rand_read_burst": 200,
-    "rand_read_sustained": 105,
-    "rand_write_burst": 330,
-    "rand_write_sustained": 60
+    "t_performance_sequential_read_burst_001": 2100,
+    "t_performance_sequential_read_sustained_002": 1800,
+    "t_performance_sequential_write_burst_003": 1650,
+    "t_performance_sequential_write_sustained_004": 250,
+    "t_performance_random_read_burst_005": 200,
+    "t_performance_random_read_sustained_006": 105,
+    "t_performance_random_write_burst_007": 330,
+    "t_performance_random_write_sustained_008": 60
   }
 }
 ```

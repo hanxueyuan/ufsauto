@@ -43,12 +43,12 @@ def verify_command_building():
     
     # 测试不同测试类型的命令构建
     test_cases = [
-        ('seq_read_burst', 'bandwidth', 2100),
-        ('seq_write_sustained', 'bandwidth', 250),
+        ('t_performance_sequential_read_burst_001', 'bandwidth', 2100),
+        ('t_performance_sequential_write_sustained_004', 'bandwidth', 250),
         ('rand_read_burst', 'iops', 200),
-        ('rand_write_burst', 'iops', 330),
-        ('latency_percentile', 'latency', None),
-        ('sensor_write', 'scenario', 400),
+        ('t_performance_random_write_burst_007', 'iops', 330),
+        ('t_qos_latency_percentile_001', 'latency', None),
+        ('t_scenario_sensor_write_001', 'scenario', 400),
     ]
     
     passed = 0
@@ -94,7 +94,7 @@ def verify_result_parsing():
     
     # 使用真实的 FIO 输出格式
     test_cases = [
-        ('seq_read_burst', {
+        ('t_performance_sequential_read_burst_001', {
             'jobs': [{
                 'read': {
                     'bw_bytes': 2147483648,
@@ -111,7 +111,7 @@ def verify_result_parsing():
                 }
             }]
         }),
-        ('rand_write_burst', {
+        ('t_performance_random_write_burst_007', {
             'jobs': [{
                 'write': {
                     'bw_bytes': 134217728,
@@ -128,7 +128,7 @@ def verify_result_parsing():
                 }
             }]
         }),
-        ('mixed_rw', {
+        ('t_performance_mixed_rw_009', {
             'jobs': [{
                 'read': {
                     'bw_bytes': 536870912,
@@ -181,23 +181,23 @@ def verify_result_validation():
     
     runner = TestRunner(config={
         'targets': {
-            'seq_read_burst': 2100,
-            'seq_write_sustained': 250,
+            't_performance_sequential_read_burst_001': 2100,
+            't_performance_sequential_write_sustained_004': 250,
             'rand_read_burst': 200,
-            'rand_write_burst': 330
+            't_performance_random_write_burst_007': 330
         }
     })
     
     # 测试用例：(测试名，指标值，预期结果)
     test_cases = [
-        ('seq_read_burst', {'bandwidth': 2150.5}, 'PASS'),
-        ('seq_read_burst', {'bandwidth': 1900.0}, 'FAIL'),  # 低于目标 95%
-        ('seq_write_sustained', {'bandwidth': 260.0}, 'PASS'),
-        ('seq_write_sustained', {'bandwidth': 200.0}, 'FAIL'),
+        ('t_performance_sequential_read_burst_001', {'bandwidth': 2150.5}, 'PASS'),
+        ('t_performance_sequential_read_burst_001', {'bandwidth': 1900.0}, 'FAIL'),  # 低于目标 95%
+        ('t_performance_sequential_write_sustained_004', {'bandwidth': 260.0}, 'PASS'),
+        ('t_performance_sequential_write_sustained_004', {'bandwidth': 200.0}, 'FAIL'),
         ('rand_read_burst', {'iops': 210.5}, 'PASS'),
         ('rand_read_burst', {'iops': 180.0}, 'FAIL'),
-        ('rand_write_burst', {'iops': 340.2}, 'PASS'),
-        ('rand_write_burst', {'iops': 300.0}, 'FAIL'),
+        ('t_performance_random_write_burst_007', {'iops': 340.2}, 'PASS'),
+        ('t_performance_random_write_burst_007', {'iops': 300.0}, 'FAIL'),
     ]
     
     passed = 0
@@ -233,7 +233,7 @@ def verify_report_generation():
             'device': '/dev/zero',
             'test_cases': [
                 {
-                    'test_name': 'seq_read_burst',
+                    'test_name': 't_performance_sequential_read_burst_001',
                     'status': 'PASS',
                     'metrics': {'bandwidth': 2150.5, 'iops': 0, 'latency_avg': 120.5}
                 },
@@ -243,7 +243,7 @@ def verify_report_generation():
                     'metrics': {'bandwidth': 1680.3, 'iops': 0, 'latency_avg': 150.2}
                 },
                 {
-                    'test_name': 'rand_write_burst',
+                    'test_name': 't_performance_random_write_burst_007',
                     'status': 'FAIL',
                     'metrics': {'bandwidth': 0, 'iops': 280.5, 'latency_avg': 200.5}
                 }
@@ -312,7 +312,7 @@ def verify_failure_analysis():
         'test_id': 'verify_slc_001',
         'test_results': {
             'test_cases': [{
-                'test_name': 'seq_write_sustained',
+                'test_name': 't_performance_sequential_write_sustained_004',
                 'status': 'FAIL',
                 'metrics': {
                     'bandwidth': 180.5,
@@ -322,7 +322,7 @@ def verify_failure_analysis():
                 }
             }]
         },
-        'config': {'targets': {'seq_write_sustained': 250}}
+        'config': {'targets': {'t_performance_sequential_write_sustained_004': 250}}
     }
     
     analysis_1 = analyzer.analyze(fail_data_1)
@@ -339,7 +339,7 @@ def verify_failure_analysis():
         'test_id': 'verify_latency_001',
         'test_results': {
             'test_cases': [{
-                'test_name': 'latency_percentile',
+                'test_name': 't_qos_latency_percentile_001',
                 'status': 'FAIL',
                 'metrics': {
                     'latency_p50': 50.0,
