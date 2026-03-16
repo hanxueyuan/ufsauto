@@ -5,6 +5,59 @@
       "name": "t_performance_SequentialReadBurst_001",
       "description": "顺序读带宽 (Burst)",
       "type": "bandwidth",
+      "purpose": "验证 UFS 设备的顺序读带宽 Burst 性能，评估设备在短时间内能达到的最大读取带宽，确保满足车规级 UFS 3.1 的≥2100 MB/s 要求。",
+      "precondition": {
+        "system_env": {
+          "os": "Debian 12, kernel 5.15.120",
+          "cpu_memory": "8 核，16GB",
+          "fio_version": "fio-3.33"
+        },
+        "device_info": {
+          "path": "/dev/ufs0",
+          "model": "UFS 3.1 128GB",
+          "firmware": "v1.0.0",
+          "capacity": "128GB",
+          "available_space": "≥10GB"
+        },
+        "config": {
+          "enable": ["TURBO Mode"],
+          "disable": ["省电模式"],
+          "special": []
+        },
+        "lun_config": {
+          "count": 4,
+          "LUN0": "64GB 系统盘",
+          "LUN1": "32GB 数据盘（测试目标）",
+          "LUN2": "16GB 日志盘",
+          "LUN3": "16GB 预留",
+          "mapping": "LUN1→/dev/ufs0"
+        },
+        "health": {
+          "smart": "正常",
+          "remaining_life": "98%",
+          "bad_blocks": 0,
+          "temperature": "35℃（当前）/ 45℃（最高）",
+          "error_count": "CRC 错误=0, 重传次数=0"
+        },
+        "verification": [
+          "SMART 状态必须为正常",
+          "可用空间必须≥10GB",
+          "温度必须<70℃",
+          "剩余寿命必须>90%"
+        ]
+      },
+      "test_steps": [
+        "使用 FIO 工具发起顺序读测试",
+        "配置参数：rw=read, bs=128k, iodepth=32, numjobs=1, runtime=60, time_based",
+        "FIO 持续读取 60 秒，记录带宽数据",
+        "收集测试结果，计算平均带宽"
+      ],
+      "postcondition": [
+        "测试结果保存到 results/performance/目录",
+        "配置恢复：无配置变更，无需恢复",
+        "设备恢复到空闲状态（等待 5 秒）",
+        "数据清理：无测试数据残留"
+      ],
       "fio": {
         "rw": "read",
         "bs": "128k",
@@ -17,12 +70,75 @@
         "value": 2100,
         "unit": "MB/s",
         "tolerance": 0.95
-      }
+      },
+      "acceptance_criteria": [
+        "PASS: 平均带宽 ≥ 2100 MB/s（允许 5% 误差，即≥1995 MB/s）",
+        "FAIL: 平均带宽 < 1995 MB/s"
+      ],
+      "notes": [
+        "Burst 测试时间短（60 秒），反映设备峰值性能",
+        "测试前确保设备未处于过热状态",
+        "如果测试失败，检查设备温度、队列深度配置",
+        "建议重复测试 3 次取平均值"
+      ]
     },
     {
       "name": "t_performance_SequentialReadSustained_002",
       "description": "顺序读带宽 (Sustained)",
       "type": "bandwidth",
+      "purpose": "验证 UFS 设备的顺序读带宽 Sustained 性能，评估设备在长时间连续读取下的稳定带宽，确保满足车规级 UFS 3.1 的≥1800 MB/s 要求。",
+      "precondition": {
+        "system_env": {
+          "os": "Debian 12, kernel 5.15.120",
+          "cpu_memory": "8 核，16GB",
+          "fio_version": "fio-3.33"
+        },
+        "device_info": {
+          "path": "/dev/ufs0",
+          "model": "UFS 3.1 128GB",
+          "firmware": "v1.0.0",
+          "capacity": "128GB",
+          "available_space": "≥10GB"
+        },
+        "config": {
+          "enable": ["TURBO Mode"],
+          "disable": ["省电模式"],
+          "special": []
+        },
+        "lun_config": {
+          "count": 4,
+          "LUN0": "64GB 系统盘",
+          "LUN1": "32GB 数据盘（测试目标）",
+          "LUN2": "16GB 日志盘",
+          "LUN3": "16GB 预留",
+          "mapping": "LUN1→/dev/ufs0"
+        },
+        "health": {
+          "smart": "正常",
+          "remaining_life": "98%",
+          "bad_blocks": 0,
+          "temperature": "35℃（当前）/ 45℃（最高）",
+          "error_count": "CRC 错误=0, 重传次数=0"
+        },
+        "verification": [
+          "SMART 状态必须为正常",
+          "可用空间必须≥10GB",
+          "温度必须<70℃",
+          "剩余寿命必须>90%"
+        ]
+      },
+      "test_steps": [
+        "使用 FIO 工具发起顺序读测试",
+        "配置参数：rw=read, bs=128k, iodepth=32, numjobs=1, runtime=300, time_based",
+        "FIO 持续读取 300 秒（5 分钟），记录带宽数据",
+        "收集测试结果，计算平均带宽"
+      ],
+      "postcondition": [
+        "测试结果保存到 results/performance/目录",
+        "配置恢复：无配置变更，无需恢复",
+        "设备恢复到空闲状态（等待 5 秒）",
+        "数据清理：无测试数据残留"
+      ],
       "fio": {
         "rw": "read",
         "bs": "128k",
@@ -35,12 +151,75 @@
         "value": 1800,
         "unit": "MB/s",
         "tolerance": 0.95
-      }
+      },
+      "acceptance_criteria": [
+        "PASS: 平均带宽 ≥ 1800 MB/s（允许 5% 误差，即≥1710 MB/s）",
+        "FAIL: 平均带宽 < 1710 MB/s"
+      ],
+      "notes": [
+        "Sustained 测试时间长（300 秒），反映设备持续性能",
+        "测试过程中监控设备温度，防止过热降频",
+        "如果性能衰减>20%，检查 SLC Cache 是否耗尽",
+        "建议重复测试 3 次取平均值"
+      ]
     },
     {
       "name": "t_performance_SequentialWriteBurst_003",
       "description": "顺序写带宽 (Burst)",
       "type": "bandwidth",
+      "purpose": "验证 UFS 设备的顺序写带宽 Burst 性能，评估设备在短时间内能达到的最大写入带宽，确保满足车规级 UFS 3.1 的≥1650 MB/s 要求。",
+      "precondition": {
+        "system_env": {
+          "os": "Debian 12, kernel 5.15.120",
+          "cpu_memory": "8 核，16GB",
+          "fio_version": "fio-3.33"
+        },
+        "device_info": {
+          "path": "/dev/ufs0",
+          "model": "UFS 3.1 128GB",
+          "firmware": "v1.0.0",
+          "capacity": "128GB",
+          "available_space": "≥10GB"
+        },
+        "config": {
+          "enable": ["TURBO Mode"],
+          "disable": ["省电模式"],
+          "special": []
+        },
+        "lun_config": {
+          "count": 4,
+          "LUN0": "64GB 系统盘",
+          "LUN1": "32GB 数据盘（测试目标）",
+          "LUN2": "16GB 日志盘",
+          "LUN3": "16GB 预留",
+          "mapping": "LUN1→/dev/ufs0"
+        },
+        "health": {
+          "smart": "正常",
+          "remaining_life": "98%",
+          "bad_blocks": 0,
+          "temperature": "35℃（当前）/ 45℃（最高）",
+          "error_count": "CRC 错误=0, 重传次数=0"
+        },
+        "verification": [
+          "SMART 状态必须为正常",
+          "可用空间必须≥10GB",
+          "温度必须<70℃",
+          "剩余寿命必须>90%"
+        ]
+      },
+      "test_steps": [
+        "使用 FIO 工具发起顺序写测试",
+        "配置参数：rw=write, bs=128k, iodepth=32, numjobs=1, runtime=60, time_based",
+        "FIO 持续写入 60 秒，记录带宽数据",
+        "收集测试结果，计算平均带宽"
+      ],
+      "postcondition": [
+        "测试结果保存到 results/performance/目录",
+        "配置恢复：无配置变更，无需恢复",
+        "设备恢复到空闲状态（等待 5 秒）",
+        "数据清理：删除测试生成的数据（可选执行 TRIM）"
+      ],
       "fio": {
         "rw": "write",
         "bs": "128k",
@@ -53,12 +232,75 @@
         "value": 1650,
         "unit": "MB/s",
         "tolerance": 0.95
-      }
+      },
+      "acceptance_criteria": [
+        "PASS: 平均带宽 ≥ 1650 MB/s（允许 5% 误差，即≥1567.5 MB/s）",
+        "FAIL: 平均带宽 < 1567.5 MB/s"
+      ],
+      "notes": [
+        "Burst 测试时间短（60 秒），反映设备峰值写入性能",
+        "测试前建议执行 TRIM，确保设备处于最佳状态",
+        "如果测试失败，检查 SLC Cache 状态",
+        "建议重复测试 3 次取平均值"
+      ]
     },
     {
       "name": "t_performance_SequentialWriteSustained_004",
       "description": "顺序写带宽 (Sustained)",
       "type": "bandwidth",
+      "purpose": "验证 UFS 设备的顺序写带宽 Sustained 性能，评估设备在长时间连续写入下的稳定带宽，检测 SLC Cache 耗尽后的性能表现，确保满足车规级 UFS 3.1 的≥250 MB/s 要求。",
+      "precondition": {
+        "system_env": {
+          "os": "Debian 12, kernel 5.15.120",
+          "cpu_memory": "8 核，16GB",
+          "fio_version": "fio-3.33"
+        },
+        "device_info": {
+          "path": "/dev/ufs0",
+          "model": "UFS 3.1 128GB",
+          "firmware": "v1.0.0",
+          "capacity": "128GB",
+          "available_space": "≥20GB"
+        },
+        "config": {
+          "enable": [],
+          "disable": ["省电模式"],
+          "special": []
+        },
+        "lun_config": {
+          "count": 4,
+          "LUN0": "64GB 系统盘",
+          "LUN1": "32GB 数据盘（测试目标）",
+          "LUN2": "16GB 日志盘",
+          "LUN3": "16GB 预留",
+          "mapping": "LUN1→/dev/ufs0"
+        },
+        "health": {
+          "smart": "正常",
+          "remaining_life": "98%",
+          "bad_blocks": 0,
+          "temperature": "35℃（当前）/ 45℃（最高）",
+          "error_count": "CRC 错误=0, 重传次数=0"
+        },
+        "verification": [
+          "SMART 状态必须为正常",
+          "可用空间必须≥20GB",
+          "温度必须<70℃",
+          "剩余寿命必须>90%"
+        ]
+      },
+      "test_steps": [
+        "使用 FIO 工具发起顺序写测试",
+        "配置参数：rw=write, bs=128k, iodepth=32, numjobs=1, runtime=300, time_based",
+        "FIO 持续写入 300 秒（5 分钟），记录带宽数据",
+        "收集测试结果，计算平均带宽，观察性能衰减曲线"
+      ],
+      "postcondition": [
+        "测试结果保存到 results/performance/目录",
+        "配置恢复：无配置变更，无需恢复",
+        "设备恢复到空闲状态（等待 10 秒）",
+        "数据清理：删除测试生成的数据（执行 TRIM）"
+      ],
       "fio": {
         "rw": "write",
         "bs": "128k",
@@ -71,12 +313,75 @@
         "value": 250,
         "unit": "MB/s",
         "tolerance": 0.95
-      }
+      },
+      "acceptance_criteria": [
+        "PASS: 平均带宽 ≥ 250 MB/s（允许 5% 误差，即≥237.5 MB/s）",
+        "FAIL: 平均带宽 < 237.5 MB/s"
+      ],
+      "notes": [
+        "Sustained 测试时间长（300 秒），可能触发 SLC Cache 耗尽",
+        "测试过程中密切监控带宽变化曲线",
+        "如果性能衰减>80%，可能是 SLC Cache 耗尽（正常现象）",
+        "测试后建议执行 TRIM，恢复设备状态"
+      ]
     },
     {
       "name": "t_performance_RandomReadBurst_005",
       "description": "随机读 IOPS (Burst)",
       "type": "iops",
+      "purpose": "验证 UFS 设备的随机读 IOPS Burst 性能，评估设备在小文件随机读取场景下的峰值 IOPS，确保满足车规级 UFS 3.1 的≥200 KIOPS 要求。",
+      "precondition": {
+        "system_env": {
+          "os": "Debian 12, kernel 5.15.120",
+          "cpu_memory": "8 核，16GB",
+          "fio_version": "fio-3.33"
+        },
+        "device_info": {
+          "path": "/dev/ufs0",
+          "model": "UFS 3.1 128GB",
+          "firmware": "v1.0.0",
+          "capacity": "128GB",
+          "available_space": "≥10GB"
+        },
+        "config": {
+          "enable": ["TURBO Mode"],
+          "disable": ["省电模式"],
+          "special": []
+        },
+        "lun_config": {
+          "count": 4,
+          "LUN0": "64GB 系统盘",
+          "LUN1": "32GB 数据盘（测试目标）",
+          "LUN2": "16GB 日志盘",
+          "LUN3": "16GB 预留",
+          "mapping": "LUN1→/dev/ufs0"
+        },
+        "health": {
+          "smart": "正常",
+          "remaining_life": "98%",
+          "bad_blocks": 0,
+          "temperature": "35℃（当前）/ 45℃（最高）",
+          "error_count": "CRC 错误=0, 重传次数=0"
+        },
+        "verification": [
+          "SMART 状态必须为正常",
+          "可用空间必须≥10GB",
+          "温度必须<70℃",
+          "剩余寿命必须>90%"
+        ]
+      },
+      "test_steps": [
+        "使用 FIO 工具发起随机读测试",
+        "配置参数：rw=randread, bs=4k, iodepth=32, numjobs=1, runtime=60, time_based",
+        "FIO 持续随机读取 60 秒，记录 IOPS 数据",
+        "收集测试结果，计算平均 IOPS"
+      ],
+      "postcondition": [
+        "测试结果保存到 results/performance/目录",
+        "配置恢复：无配置变更，无需恢复",
+        "设备恢复到空闲状态（等待 5 秒）",
+        "数据清理：无测试数据残留"
+      ],
       "fio": {
         "rw": "randread",
         "bs": "4k",
@@ -89,12 +394,75 @@
         "value": 200,
         "unit": "KIOPS",
         "tolerance": 0.95
-      }
+      },
+      "acceptance_criteria": [
+        "PASS: 平均 IOPS ≥ 200 KIOPS（允许 5% 误差，即≥190 KIOPS）",
+        "FAIL: 平均 IOPS < 190 KIOPS"
+      ],
+      "notes": [
+        "4K 随机读模拟小文件读取场景",
+        "队列深度 32 充分利用 NCQ 并行性",
+        "如果 IOPS 不达标，检查队列深度配置",
+        "建议重复测试 3 次取平均值"
+      ]
     },
     {
       "name": "t_performance_RandomReadSustained_006",
       "description": "随机读 IOPS (Sustained)",
       "type": "iops",
+      "purpose": "验证 UFS 设备的随机读 IOPS Sustained 性能，评估设备在长时间小文件随机读取下的稳定 IOPS，确保满足车规级 UFS 3.1 的≥105 KIOPS 要求。",
+      "precondition": {
+        "system_env": {
+          "os": "Debian 12, kernel 5.15.120",
+          "cpu_memory": "8 核，16GB",
+          "fio_version": "fio-3.33"
+        },
+        "device_info": {
+          "path": "/dev/ufs0",
+          "model": "UFS 3.1 128GB",
+          "firmware": "v1.0.0",
+          "capacity": "128GB",
+          "available_space": "≥10GB"
+        },
+        "config": {
+          "enable": ["TURBO Mode"],
+          "disable": ["省电模式"],
+          "special": []
+        },
+        "lun_config": {
+          "count": 4,
+          "LUN0": "64GB 系统盘",
+          "LUN1": "32GB 数据盘（测试目标）",
+          "LUN2": "16GB 日志盘",
+          "LUN3": "16GB 预留",
+          "mapping": "LUN1→/dev/ufs0"
+        },
+        "health": {
+          "smart": "正常",
+          "remaining_life": "98%",
+          "bad_blocks": 0,
+          "temperature": "35℃（当前）/ 45℃（最高）",
+          "error_count": "CRC 错误=0, 重传次数=0"
+        },
+        "verification": [
+          "SMART 状态必须为正常",
+          "可用空间必须≥10GB",
+          "温度必须<70℃",
+          "剩余寿命必须>90%"
+        ]
+      },
+      "test_steps": [
+        "使用 FIO 工具发起随机读测试",
+        "配置参数：rw=randread, bs=4k, iodepth=32, numjobs=1, runtime=300, time_based",
+        "FIO 持续随机读取 300 秒（5 分钟），记录 IOPS 数据",
+        "收集测试结果，计算平均 IOPS"
+      ],
+      "postcondition": [
+        "测试结果保存到 results/performance/目录",
+        "配置恢复：无配置变更，无需恢复",
+        "设备恢复到空闲状态（等待 5 秒）",
+        "数据清理：无测试数据残留"
+      ],
       "fio": {
         "rw": "randread",
         "bs": "4k",
@@ -107,12 +475,75 @@
         "value": 105,
         "unit": "KIOPS",
         "tolerance": 0.95
-      }
+      },
+      "acceptance_criteria": [
+        "PASS: 平均 IOPS ≥ 105 KIOPS（允许 5% 误差，即≥99.75 KIOPS）",
+        "FAIL: 平均 IOPS < 99.75 KIOPS"
+      ],
+      "notes": [
+        "Sustained 测试时间长（300 秒），反映持续随机读性能",
+        "测试过程中监控 IOPS 稳定性",
+        "如果性能衰减>20%，检查设备温度",
+        "建议重复测试 3 次取平均值"
+      ]
     },
     {
       "name": "t_performance_RandomWriteBurst_007",
       "description": "随机写 IOPS (Burst)",
       "type": "iops",
+      "purpose": "验证 UFS 设备的随机写 IOPS Burst 性能，评估设备在小文件随机写入场景下的峰值 IOPS，确保满足车规级 UFS 3.1 的≥330 KIOPS 要求。",
+      "precondition": {
+        "system_env": {
+          "os": "Debian 12, kernel 5.15.120",
+          "cpu_memory": "8 核，16GB",
+          "fio_version": "fio-3.33"
+        },
+        "device_info": {
+          "path": "/dev/ufs0",
+          "model": "UFS 3.1 128GB",
+          "firmware": "v1.0.0",
+          "capacity": "128GB",
+          "available_space": "≥10GB"
+        },
+        "config": {
+          "enable": ["TURBO Mode"],
+          "disable": ["省电模式"],
+          "special": []
+        },
+        "lun_config": {
+          "count": 4,
+          "LUN0": "64GB 系统盘",
+          "LUN1": "32GB 数据盘（测试目标）",
+          "LUN2": "16GB 日志盘",
+          "LUN3": "16GB 预留",
+          "mapping": "LUN1→/dev/ufs0"
+        },
+        "health": {
+          "smart": "正常",
+          "remaining_life": "98%",
+          "bad_blocks": 0,
+          "temperature": "35℃（当前）/ 45℃（最高）",
+          "error_count": "CRC 错误=0, 重传次数=0"
+        },
+        "verification": [
+          "SMART 状态必须为正常",
+          "可用空间必须≥10GB",
+          "温度必须<70℃",
+          "剩余寿命必须>90%"
+        ]
+      },
+      "test_steps": [
+        "使用 FIO 工具发起随机写测试",
+        "配置参数：rw=randwrite, bs=4k, iodepth=32, numjobs=1, runtime=60, time_based",
+        "FIO 持续随机写入 60 秒，记录 IOPS 数据",
+        "收集测试结果，计算平均 IOPS"
+      ],
+      "postcondition": [
+        "测试结果保存到 results/performance/目录",
+        "配置恢复：无配置变更，无需恢复",
+        "设备恢复到空闲状态（等待 5 秒）",
+        "数据清理：删除测试生成的数据（可选执行 TRIM）"
+      ],
       "fio": {
         "rw": "randwrite",
         "bs": "4k",
@@ -125,12 +556,75 @@
         "value": 330,
         "unit": "KIOPS",
         "tolerance": 0.95
-      }
+      },
+      "acceptance_criteria": [
+        "PASS: 平均 IOPS ≥ 330 KIOPS（允许 5% 误差，即≥313.5 KIOPS）",
+        "FAIL: 平均 IOPS < 313.5 KIOPS"
+      ],
+      "notes": [
+        "4K 随机写模拟小文件写入场景",
+        "队列深度 32 充分利用 NCQ 并行性",
+        "测试前建议执行 TRIM，确保设备处于最佳状态",
+        "建议重复测试 3 次取平均值"
+      ]
     },
     {
       "name": "t_performance_RandomWriteSustained_008",
       "description": "随机写 IOPS (Sustained)",
       "type": "iops",
+      "purpose": "验证 UFS 设备的随机写 IOPS Sustained 性能，评估设备在长时间小文件随机写入下的稳定 IOPS，检测 SLC Cache 耗尽后的性能表现，确保满足车规级 UFS 3.1 的≥60 KIOPS 要求。",
+      "precondition": {
+        "system_env": {
+          "os": "Debian 12, kernel 5.15.120",
+          "cpu_memory": "8 核，16GB",
+          "fio_version": "fio-3.33"
+        },
+        "device_info": {
+          "path": "/dev/ufs0",
+          "model": "UFS 3.1 128GB",
+          "firmware": "v1.0.0",
+          "capacity": "128GB",
+          "available_space": "≥20GB"
+        },
+        "config": {
+          "enable": [],
+          "disable": ["省电模式"],
+          "special": []
+        },
+        "lun_config": {
+          "count": 4,
+          "LUN0": "64GB 系统盘",
+          "LUN1": "32GB 数据盘（测试目标）",
+          "LUN2": "16GB 日志盘",
+          "LUN3": "16GB 预留",
+          "mapping": "LUN1→/dev/ufs0"
+        },
+        "health": {
+          "smart": "正常",
+          "remaining_life": "98%",
+          "bad_blocks": 0,
+          "temperature": "35℃（当前）/ 45℃（最高）",
+          "error_count": "CRC 错误=0, 重传次数=0"
+        },
+        "verification": [
+          "SMART 状态必须为正常",
+          "可用空间必须≥20GB",
+          "温度必须<70℃",
+          "剩余寿命必须>90%"
+        ]
+      },
+      "test_steps": [
+        "使用 FIO 工具发起随机写测试",
+        "配置参数：rw=randwrite, bs=4k, iodepth=32, numjobs=1, runtime=300, time_based",
+        "FIO 持续随机写入 300 秒（5 分钟），记录 IOPS 数据",
+        "收集测试结果，计算平均 IOPS，观察性能衰减曲线"
+      ],
+      "postcondition": [
+        "测试结果保存到 results/performance/目录",
+        "配置恢复：无配置变更，无需恢复",
+        "设备恢复到空闲状态（等待 10 秒）",
+        "数据清理：删除测试生成的数据（执行 TRIM）"
+      ],
       "fio": {
         "rw": "randwrite",
         "bs": "4k",
@@ -143,12 +637,75 @@
         "value": 60,
         "unit": "KIOPS",
         "tolerance": 0.95
-      }
+      },
+      "acceptance_criteria": [
+        "PASS: 平均 IOPS ≥ 60 KIOPS（允许 5% 误差，即≥57 KIOPS）",
+        "FAIL: 平均 IOPS < 57 KIOPS"
+      ],
+      "notes": [
+        "Sustained 测试时间长（300 秒），可能触发 SLC Cache 耗尽",
+        "测试过程中密切监控 IOPS 变化曲线",
+        "如果性能衰减>80%，可能是 SLC Cache 耗尽（正常现象）",
+        "测试后建议执行 TRIM，恢复设备状态"
+      ]
     },
     {
       "name": "t_performance_MixedRw_009",
       "description": "混合读写性能",
       "type": "iops",
+      "purpose": "验证 UFS 设备在混合读写场景下的性能表现，模拟真实应用中读写并发的负载，评估设备的综合 IOPS 性能，确保满足≥150 KIOPS 要求。",
+      "precondition": {
+        "system_env": {
+          "os": "Debian 12, kernel 5.15.120",
+          "cpu_memory": "8 核，16GB",
+          "fio_version": "fio-3.33"
+        },
+        "device_info": {
+          "path": "/dev/ufs0",
+          "model": "UFS 3.1 128GB",
+          "firmware": "v1.0.0",
+          "capacity": "128GB",
+          "available_space": "≥10GB"
+        },
+        "config": {
+          "enable": ["TURBO Mode"],
+          "disable": ["省电模式"],
+          "special": []
+        },
+        "lun_config": {
+          "count": 4,
+          "LUN0": "64GB 系统盘",
+          "LUN1": "32GB 数据盘（测试目标）",
+          "LUN2": "16GB 日志盘",
+          "LUN3": "16GB 预留",
+          "mapping": "LUN1→/dev/ufs0"
+        },
+        "health": {
+          "smart": "正常",
+          "remaining_life": "98%",
+          "bad_blocks": 0,
+          "temperature": "35℃（当前）/ 45℃（最高）",
+          "error_count": "CRC 错误=0, 重传次数=0"
+        },
+        "verification": [
+          "SMART 状态必须为正常",
+          "可用空间必须≥10GB",
+          "温度必须<70℃",
+          "剩余寿命必须>90%"
+        ]
+      },
+      "test_steps": [
+        "使用 FIO 工具发起混合读写测试",
+        "配置参数：rw=rw, rwmixread=70, bs=4k, iodepth=16, numjobs=1, runtime=60, time_based",
+        "FIO 持续混合读写 60 秒（70% 读，30% 写），记录 IOPS 数据",
+        "收集测试结果，计算平均 IOPS"
+      ],
+      "postcondition": [
+        "测试结果保存到 results/performance/目录",
+        "配置恢复：无配置变更，无需恢复",
+        "设备恢复到空闲状态（等待 5 秒）",
+        "数据清理：删除测试生成的数据（可选执行 TRIM）"
+      ],
       "fio": {
         "rw": "rw",
         "rwmixread": 70,
@@ -162,7 +719,17 @@
         "value": 150,
         "unit": "KIOPS",
         "tolerance": 0.95
-      }
+      },
+      "acceptance_criteria": [
+        "PASS: 平均 IOPS ≥ 150 KIOPS（允许 5% 误差，即≥142.5 KIOPS）",
+        "FAIL: 平均 IOPS < 142.5 KIOPS"
+      ],
+      "notes": [
+        "混合读写模拟真实应用场景（70% 读，30% 写）",
+        "队列深度 16 适中，平衡性能和资源占用",
+        "测试前建议执行 TRIM，确保设备处于最佳状态",
+        "建议重复测试 3 次取平均值"
+      ]
     }
   ]
 }

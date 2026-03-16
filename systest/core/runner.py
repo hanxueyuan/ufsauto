@@ -12,18 +12,24 @@ import time
 from pathlib import Path
 from datetime import datetime
 
+from precondition_checker import PreconditionChecker
+
 
 class TestRunner:
     """测试执行器"""
     
-    def __init__(self, device='/dev/ufs0', output_dir='./results', config=None, verbose=False):
+    def __init__(self, device='/dev/ufs0', output_dir='./results', config=None, verbose=False, check_precondition=True):
         self.device = device
         self.output_dir = Path(output_dir)
         self.config = config or {}
         self.verbose = verbose
+        self.check_precondition = check_precondition
         
         # 加载测试套件
         self.suites = self._load_suites()
+        
+        # 初始化 Precondition 检查器
+        self.precondition_checker = PreconditionChecker(verbose=verbose)
     
     def _load_suites(self):
         """加载可用的测试套件"""
@@ -112,6 +118,28 @@ class TestRunner:
         if not test_info:
             raise ValueError(f"未找到测试项：{test_name}")
         
+        # 检查 Precondition
+        if self.check_precondition and 'precondition' in test_info:
+            if self.verbose:
+                print(f"\n🔍 检查 Precondition...")
+            
+            precondition_result = self.precondition_checker.check_all(
+                test_info['precondition'],
+                self.device
+            )
+            
+            if self.verbose:
+                self.precondition_checker.print_summary()
+            
+            if not precondition_result['passed']:
+                print(f"⚠️  Precondition 检查失败，跳过测试：{test_name}")
+                return {
+                    'test_name': test_name,
+                    'status': 'SKIPPED',
+                    'reason': 'Precondition 检查失败',
+                    'precondition_result': precondition_result
+                }
+        
         # 执行测试
         if self.verbose:
             print(f"  执行测试：{test_name}")
@@ -145,6 +173,26 @@ class TestRunner:
         
         for i, test in enumerate(tests, 1):
             print(f"[{i}/{len(tests)}] 执行：{test['name']}")
+            
+            # 检查 Precondition
+            if self.check_precondition and 'precondition' in test:
+                if self.verbose:
+                    print(f"  🔍 检查 Precondition...")
+                
+                precondition_result = self.precondition_checker.check_all(
+                    test['precondition'],
+                    self.device
+                )
+                
+                if not precondition_result['passed']:
+                    print(f"  ⚠️  Precondition 检查失败，跳过测试")
+                    results['test_cases'].append({
+                        'test_name': test['name'],
+                        'status': 'SKIPPED',
+                        'reason': 'Precondition 检查失败',
+                        'precondition_result': precondition_result
+                    })
+                    continue
             
             try:
                 result = self._execute_test(test['name'], test)
