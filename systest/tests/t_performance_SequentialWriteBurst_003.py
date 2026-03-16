@@ -25,9 +25,10 @@ Test Steps:
 - 如果测试失败，检查 SLC Cache 状态
 """
 
-from runner import TestRunner
 import sys
 from pathlib import Path
+
+from runner import TestRunner
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 

@@ -27,9 +27,10 @@ Test Steps:
 - p99.99 是关键指标，反映极端情况下的延迟表现
 """
 
-from runner import TestRunner
 import sys
 from pathlib import Path
+
+from runner import TestRunner
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 

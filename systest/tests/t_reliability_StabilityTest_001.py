@@ -67,9 +67,10 @@ Test Steps:
 - 测试过程中不要中断，否则需要重新开始
 """
 
-from runner import TestRunner
 import sys
 from pathlib import Path
+
+from runner import TestRunner
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 

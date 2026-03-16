@@ -27,9 +27,10 @@ Test Steps:
 - 如果带宽不足，检查队列深度和并发数
 """
 
-from runner import TestRunner
 import sys
 from pathlib import Path
+
+from runner import TestRunner
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 

@@ -8,6 +8,7 @@ import json
 import os
 import subprocess
 import tempfile
+
 import pytest
 
 
@@ -55,7 +56,7 @@ class TestFIOQuickValidation:
 
             # 移除 FIO 的 note 行（如 "note: both iodepth >= 1..."）
             # 找到第一个 '{' 开始解析 JSON
-            json_start = output.find('{')
+            json_start = output.find("{")
             if json_start == -1:
                 raise ValueError(f"FIO 输出中没有找到 JSON 数据：{output}")
             output = output[json_start:]

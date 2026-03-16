@@ -4,13 +4,14 @@
 用于在没有硬件的情况下测试报告和失效分析功能
 """
 
-from reporter import ReportGenerator
-from collector import ResultCollector
-from analyzer import FailureAnalyzer
 import json
 import sys
 from datetime import datetime
 from pathlib import Path
+
+from analyzer import FailureAnalyzer
+from collector import ResultCollector
+from reporter import ReportGenerator
 
 # 添加核心模块路径
 core_dir = Path(__file__).parent.parent / "core"

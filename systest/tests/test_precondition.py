@@ -4,9 +4,10 @@ Precondition 检查功能测试脚本
 验证 Precondition 检查功能是否正常工作
 """
 
-from precondition_checker import PreconditionChecker
 import sys
 from pathlib import Path
+
+from precondition_checker import PreconditionChecker
 
 # 添加 core 模块路径
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))

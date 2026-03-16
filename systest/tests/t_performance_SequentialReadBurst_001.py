@@ -69,10 +69,11 @@ Postcondition:
 - 建议重复测试 3 次取平均值
 """
 
-from runner import TestRunner
 import os
 import sys
 from pathlib import Path
+
+from runner import TestRunner
 
 # 添加 core 模块路径
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))

@@ -25,9 +25,10 @@ Test Steps:
 - 如果性能衰减>80%，可能是 SLC Cache 耗尽（正常现象）
 """
 
-from runner import TestRunner
 import sys
 from pathlib import Path
+
+from runner import TestRunner
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 
