@@ -53,7 +53,6 @@ def main():
     run_parser.add_argument('--verbose', '-v', action='store_true', help='详细输出')
     run_parser.add_argument('--background', '-b', action='store_true', help='后台执行')
     run_parser.add_argument('--id', help='测试 ID (默认自动生成)')
-    run_parser.add_argument('--config', '-c', help='配置文件路径 (默认：config/development.json)')
     run_parser.add_argument('--mode', '-m', choices=['development', 'production'], help='运行模式 (默认：development)')
     
     # ========== list 命令 ==========
@@ -111,6 +110,10 @@ def cmd_run(args):
     
     # 确定运行模式
     mode = args.mode if args.mode else 'development'
+    
+    if args.verbose:
+        print(f"使用配置文件：{config_file}")
+        print(f"运行模式：{mode}")
     
     # 创建运行器
     runner = TestRunner(
