@@ -4,11 +4,11 @@ SysTest 最小化验证脚本（纯 Python 版）
 不依赖 FIO，通过模拟真实执行流程验证系统功能
 """
 
-import sys
 import json
+import sys
 import time
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 
 # 颜色输出

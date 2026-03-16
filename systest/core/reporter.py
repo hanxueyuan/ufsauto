@@ -4,10 +4,10 @@
 负责生成测试报告
 """
 
-import os
 import json
-from pathlib import Path
+import os
 from datetime import datetime
+from pathlib import Path
 
 
 class ReportGenerator:
@@ -128,7 +128,7 @@ class ReportGenerator:
             <p style="color: #666;">测试 ID: {test_id}</p>
             <p style="color: #999; font-size: 14px;">生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
         </div>
-        
+
         <div class="summary">
             <div class="summary-card">
                 <div class="value">{summary.get('total', 0)}</div>
@@ -147,7 +147,7 @@ class ReportGenerator:
                 <div class="label">通过率</div>
             </div>
         </div>
-        
+
         <h2>📋 测试结果</h2>
         <table>
             <thead>
@@ -163,7 +163,7 @@ class ReportGenerator:
                 {''.join(test_rows)}
             </tbody>
         </table>
-        
+
         <h2>💻 系统信息</h2>
         <div class="info-grid">
             <div class="info-card">
@@ -181,7 +181,7 @@ class ReportGenerator:
                 <div class="info-item"><span class="info-label">容量</span><span class="info-value">{device_info.get('size', 0)} GB</span></div>
             </div>
         </div>
-        
+
         <div class="footer">
             <p>UFS 系统测试框架 v1.0 | SysTest</p>
         </div>

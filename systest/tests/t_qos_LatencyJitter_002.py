@@ -24,12 +24,11 @@ Test Steps:
 - 如果抖动超标，检查系统负载和 GC 干扰
 """
 
+from runner import TestRunner
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
-
-from runner import TestRunner
 
 
 def main():

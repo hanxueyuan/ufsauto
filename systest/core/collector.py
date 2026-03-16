@@ -4,11 +4,11 @@
 负责收集和整理测试结果、系统信息、设备信息
 """
 
-import os
 import json
+import os
 import subprocess
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 
 class ResultCollector:
@@ -76,14 +76,14 @@ class ResultCollector:
         """获取主机名"""
         try:
             return subprocess.check_output(["hostname"], text=True).strip()
-        except:
+        except BaseException:
             return "unknown"
 
     def _get_kernel_version(self):
         """获取内核版本"""
         try:
             return subprocess.check_output(["uname", "-r"], text=True).strip()
-        except:
+        except BaseException:
             return "unknown"
 
     def _get_os_info(self):
@@ -94,7 +94,7 @@ class ResultCollector:
                 for line in result.stdout.split("\n"):
                     if line.startswith("PRETTY_NAME="):
                         return line.split("=")[1].strip('"')
-        except:
+        except BaseException:
             pass
         return "unknown"
 
@@ -102,7 +102,7 @@ class ResultCollector:
         """获取 CPU 核心数"""
         try:
             return os.cpu_count() or 0
-        except:
+        except BaseException:
             return 0
 
     def _get_cpu_memory_info(self):
@@ -126,7 +126,7 @@ class ResultCollector:
                         break
 
             return f"{cpu_info}, {memory_info}"
-        except:
+        except BaseException:
             return "unknown"
 
     def _get_memory_total(self):
@@ -137,7 +137,7 @@ class ResultCollector:
                     if line.startswith("MemTotal:"):
                         kb = int(line.split()[1])
                         return round(kb / 1024)
-        except:
+        except BaseException:
             pass
         return 0
 
@@ -153,7 +153,7 @@ class ResultCollector:
             result = subprocess.run(["fio", "--version"], capture_output=True, text=True)
             if result.returncode == 0:
                 return result.stdout.strip()
-        except:
+        except BaseException:
             pass
         return "unknown"
 
@@ -166,7 +166,7 @@ class ResultCollector:
             result = subprocess.run(["lsblk", "-ndo", "MODEL", device], capture_output=True, text=True)
             if result.returncode == 0 and result.stdout.strip():
                 return result.stdout.strip()
-        except:
+        except BaseException:
             pass
 
         # 尝试从 sysfs 获取
@@ -175,7 +175,7 @@ class ResultCollector:
             if os.path.exists(model_path):
                 with open(model_path, "r") as f:
                     return f.read().strip()
-        except:
+        except BaseException:
             pass
 
         return "unknown"
@@ -187,7 +187,7 @@ class ResultCollector:
             if os.path.exists(serial_path):
                 with open(serial_path, "r") as f:
                     return f.read().strip()
-        except:
+        except BaseException:
             pass
         return "unknown"
 
@@ -198,7 +198,7 @@ class ResultCollector:
             if result.returncode == 0 and result.stdout.strip():
                 bytes_ = int(result.stdout.strip())
                 return round(bytes_ / 1024 / 1024 / 1024, 2)
-        except:
+        except BaseException:
             pass
         return 0
 
@@ -210,7 +210,7 @@ class ResultCollector:
             if os.path.exists(fw_path):
                 with open(fw_path, "r") as f:
                     return f.read().strip()
-        except:
+        except BaseException:
             pass
         return "unknown"
 
@@ -223,7 +223,7 @@ class ResultCollector:
                 if len(lines) > 1:
                     available = lines[1].strip().replace("G", "")
                     return f"≥{available}GB"
-        except:
+        except BaseException:
             pass
         return "unknown"
 
@@ -243,7 +243,7 @@ class ResultCollector:
                 lun_info["count"] = 4  # 默认 4 个 LUN
                 lun_info["LUNs"] = ["LUN0: 系统盘", "LUN1: 数据盘（测试目标）", "LUN2: 日志盘", "LUN3: 预留"]
                 lun_info["mapping"] = f"LUN1→{device}"
-        except:
+        except BaseException:
             pass
 
         return lun_info
@@ -258,7 +258,7 @@ class ResultCollector:
                     return "正常"
                 elif "FAILED" in result.stdout:
                     return "警告"
-        except:
+        except BaseException:
             pass
 
         # 如果没有 smartctl，尝试从 sysfs 获取
@@ -269,7 +269,7 @@ class ResultCollector:
                     status = f.read().strip()
                     if status == "0" or status.lower() == "ok":
                         return "正常"
-        except:
+        except BaseException:
             pass
 
         return "未知"
@@ -297,9 +297,9 @@ class ResultCollector:
                                     with open(temp_max, "r") as f:
                                         temp = int(f.read().strip()) / 1000
                                         temp_info["max"] = f"{temp}℃"
-                except:
+                except BaseException:
                     continue
-        except:
+        except BaseException:
             pass
 
         return temp_info
@@ -320,7 +320,7 @@ class ResultCollector:
                             error_info["crc_errors"] = int(line.split(":")[1].strip())
                         if "retransmit" in line.lower():
                             error_info["retransmit_count"] = int(line.split(":")[1].strip())
-        except:
+        except BaseException:
             pass
 
         return error_info

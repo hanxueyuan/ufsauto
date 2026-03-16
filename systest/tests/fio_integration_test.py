@@ -4,16 +4,16 @@ SysTest FIO 集成验证
 在接近真实测试的环境中验证 FIO 集成
 """
 
-import subprocess
-import tempfile
-import os
+from runner import TestRunner
 import json
+import os
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 # 添加 core 模块路径
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
-from runner import TestRunner
 
 print("🔍 SysTest FIO 集成验证")
 print("=" * 70)

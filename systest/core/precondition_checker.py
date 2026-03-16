@@ -6,8 +6,8 @@ Precondition 检查器 - Precondition Checker
 
 import os
 import subprocess
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 
 class PreconditionChecker:
@@ -369,7 +369,7 @@ class PreconditionChecker:
             result = subprocess.run(["fio", "--version"], capture_output=True, text=True)
             if result.returncode == 0:
                 return result.stdout.strip()
-        except:
+        except BaseException:
             pass
         return "unknown"
 
@@ -381,7 +381,7 @@ class PreconditionChecker:
                 for line in result.stdout.split("\n"):
                     if line.startswith("PRETTY_NAME="):
                         return line.split("=")[1].strip('"')
-        except:
+        except BaseException:
             pass
         return "unknown"
 
@@ -404,7 +404,7 @@ class PreconditionChecker:
                         break
 
             return f"{cpu_info}, {memory_info}"
-        except:
+        except BaseException:
             return "unknown"
 
     def _get_available_space_gb(self, device):
@@ -416,7 +416,7 @@ class PreconditionChecker:
                 if len(lines) > 1:
                     available = lines[1].strip().replace("G", "")
                     return float(available)
-        except:
+        except BaseException:
             pass
         return None
 
@@ -434,7 +434,7 @@ class PreconditionChecker:
                     return "正常"
                 elif "FAILED" in result.stdout:
                     return "警告"
-        except:
+        except BaseException:
             pass
         return "未知"
 
@@ -458,9 +458,9 @@ class PreconditionChecker:
                                     with open(temp_input, "r") as f:
                                         temp = int(f.read().strip()) / 1000
                                         return temp
-                except:
+                except BaseException:
                     continue
-        except:
+        except BaseException:
             pass
         return None
 
@@ -475,7 +475,7 @@ class PreconditionChecker:
                     for line in f:
                         if "crc_error" in line.lower():
                             return int(line.split(":")[1].strip())
-        except:
+        except BaseException:
             pass
         return 0
 
@@ -487,7 +487,7 @@ class PreconditionChecker:
             match = re.search(r"≥?(\d+)GB", text)
             if match:
                 return float(match.group(1))
-        except:
+        except BaseException:
             pass
         return None
 
@@ -499,7 +499,7 @@ class PreconditionChecker:
             match = re.search(r">?(\d+)%", text)
             if match:
                 return float(match.group(1))
-        except:
+        except BaseException:
             pass
         return None
 
@@ -512,7 +512,7 @@ class PreconditionChecker:
             for line in result.stdout.split("\n"):
                 if "Serial Number" in line:
                     return line.split(":")[1].strip()
-        except:
+        except BaseException:
             pass
         return "unknown"
 
@@ -523,7 +523,7 @@ class PreconditionChecker:
             for line in result.stdout.split("\n"):
                 if "Firmware Version" in line or "Version" in line:
                     return line.split(":")[1].strip()
-        except:
+        except BaseException:
             pass
         return "unknown"
 
@@ -535,7 +535,7 @@ class PreconditionChecker:
                 if "User Capacity" in line:
                     # 解析 "User Capacity: 128,259,596,288 bytes [128 GB]"
                     return line.split(":")[1].strip()
-        except:
+        except BaseException:
             pass
         return "unknown"
 
@@ -551,7 +551,7 @@ class PreconditionChecker:
                         sectors = int(parts[9])
                         tb = (sectors * 512) / (1024**4)  # 转换为 TB
                         return f"{tb:.2f}"
-        except:
+        except BaseException:
             pass
         return None
 
@@ -564,7 +564,7 @@ class PreconditionChecker:
                     parts = line.split()
                     if len(parts) >= 10:
                         return int(parts[9])
-        except:
+        except BaseException:
             pass
         return None
 
@@ -577,7 +577,7 @@ class PreconditionChecker:
                     parts = line.split()
                     if len(parts) >= 10:
                         return int(parts[9])
-        except:
+        except BaseException:
             pass
         return None
 
@@ -590,7 +590,7 @@ class PreconditionChecker:
                     parts = line.split()
                     if len(parts) >= 10:
                         return int(parts[9])
-        except:
+        except BaseException:
             pass
         return None
 
@@ -601,7 +601,7 @@ class PreconditionChecker:
             for line in result.stdout.split("\n"):
                 if "UFS" in line and "Version" in line:
                     return line.split(":")[1].strip()
-        except:
+        except BaseException:
             pass
         return None
 
@@ -612,7 +612,7 @@ class PreconditionChecker:
             for line in result.stdout.split("\n"):
                 if "Vendor" in line:
                     return line.split(":")[1].strip()
-        except:
+        except BaseException:
             pass
         return None
 
@@ -625,7 +625,7 @@ class PreconditionChecker:
                     parts = line.split()
                     if len(parts) >= 10:
                         return int(parts[9])
-        except:
+        except BaseException:
             pass
         return None
 
@@ -637,7 +637,7 @@ class PreconditionChecker:
             match = re.search(r"<\s*(\d+)℃", text)
             if match:
                 return float(match.group(1))
-        except:
+        except BaseException:
             pass
         return None
 

@@ -25,12 +25,11 @@ Test Steps:
 - 测试前建议执行 TRIM，确保设备处于最佳状态
 """
 
+from runner import TestRunner
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
-
-from runner import TestRunner
 
 
 def main():

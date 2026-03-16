@@ -67,12 +67,11 @@ Postcondition:
 - 建议重复测试 3 次取平均值
 """
 
+from runner import TestRunner
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
-
-from runner import TestRunner
 
 
 def main():

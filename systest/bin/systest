@@ -4,10 +4,10 @@ SysTest - UFS 系统测试框架
 统一测试入口，参数化执行，自动报告，失效分析
 """
 
-import sys
-import os
 import argparse
 import json
+import os
+import sys
 from pathlib import Path
 
 # 添加核心模块路径
@@ -15,10 +15,10 @@ script_dir = Path(__file__).parent.absolute()
 core_dir = script_dir.parent / 'core'
 sys.path.insert(0, str(core_dir))
 
-from runner import TestRunner
+from analyzer import FailureAnalyzer
 from collector import ResultCollector
 from reporter import ReportGenerator
-from analyzer import FailureAnalyzer
+from runner import TestRunner
 
 __version__ = '1.0.0'
 

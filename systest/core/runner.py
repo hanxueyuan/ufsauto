@@ -4,13 +4,13 @@
 负责执行测试用例和测试套件
 """
 
-import os
-import sys
 import json
+import os
 import subprocess
+import sys
 import time
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 from precondition_checker import PreconditionChecker
 

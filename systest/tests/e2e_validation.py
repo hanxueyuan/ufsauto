@@ -4,11 +4,11 @@ SysTest 端到端验证脚本
 最小化测试周期，验证所有功能流程
 """
 
+import json
 import subprocess
 import sys
-import json
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 
 # 颜色输出
