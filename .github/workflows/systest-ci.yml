@@ -25,6 +25,12 @@ on:
           - development
           - production
 
+# ⚠️ 重要说明：
+# GitHub Actions 环境没有 UFS 硬件设备，因此：
+# - ✅ 执行代码质量检查、配置验证、最小化验证
+# - ❌ 不执行实际的 UFS 性能测试（需要真实硬件）
+# - ✅ 实际硬件测试在开发板上执行
+
 env:
   PYTHON_VERSION: '11'
   DEBIAN_VERSION: '12'
@@ -361,6 +367,12 @@ jobs:
         run: |
           echo "=== SysTest CI/CD 汇总报告 ==="
           echo ""
+          echo "⚠️  重要说明："
+          echo "GitHub Actions 环境没有 UFS 硬件设备，因此："
+          echo "  ✅ 执行代码质量检查、配置验证、最小化验证"
+          echo "  ❌ 不执行实际的 UFS 性能测试（需要真实硬件）"
+          echo "  ✅ 实际硬件测试在开发板上执行"
+          echo ""
           echo "环境信息:"
           echo "  - Python: 3.11"
           echo "  - Debian: 12"
@@ -388,3 +400,45 @@ jobs:
             echo "❌ 部分检查失败"
             exit 1
           fi
+      
+      - name: 创建 QA 报告文件
+        run: |
+          mkdir -p qa-report
+          cat > qa-report/ci-cd-result.md << EOF
+          # SysTest CI/CD 结果报告
+          
+          **执行时间**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          **触发方式**: ${{ github.event_name }}
+          **提交**: ${{ github.sha }}
+          **分支**: ${{ github.ref }}
+          
+          ## 检查结果
+          
+          | 检查项 | 状态 |
+          |--------|------|
+          | 代码质量 | ${{ needs.lint.result }} |
+          | Precondition 检查 | ${{ needs.precondition-test.result }} |
+          | 最小化验证 | ${{ needs.minimal-validation.result }} |
+          | FIO 集成验证 | ${{ needs.fio-integration.result }} |
+          | 测试用例验证 | ${{ needs.test-cases.result }} |
+          | 文档验证 | ${{ needs.docs-validation.result }} |
+          
+          ## 总体状态
+          
+          $([[ "${{ needs.lint.result }}" == "success" ]] && echo "✅ 所有检查通过" || echo "❌ 部分检查失败")
+          
+          ## 详细信息
+          
+          查看完整日志：${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          
+          ## 注意事项
+          
+          ⚠️ GitHub Actions 环境没有 UFS 硬件设备，实际 UFS 性能测试需要在开发板上执行。
+          EOF
+      
+      - name: 上传 QA 报告
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-report
+          path: qa-report/
+          retention-days: 90
