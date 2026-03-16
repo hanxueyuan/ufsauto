@@ -64,9 +64,9 @@ def test_precondition_checker():
         ]
     }
     
-    # 执行检查
-    print("\n开始检查 Precondition...\n")
-    result = checker.check_all(test_precondition, device='/dev/zero')
+    # 执行检查（开发模式）
+    print("\n开始检查 Precondition（开发模式）...\n")
+    result = checker.check_all(test_precondition, device='/dev/zero', mode='development')
     
     # 打印摘要
     checker.print_summary()

@@ -18,12 +18,13 @@ from precondition_checker import PreconditionChecker
 class TestRunner:
     """测试执行器"""
     
-    def __init__(self, device='/dev/ufs0', output_dir='./results', config=None, verbose=False, check_precondition=True):
+    def __init__(self, device='/dev/ufs0', output_dir='./results', config=None, verbose=False, check_precondition=True, mode='development'):
         self.device = device
         self.output_dir = Path(output_dir)
         self.config = config or {}
         self.verbose = verbose
         self.check_precondition = check_precondition
+        self.mode = mode  # 'development' | 'production'
         
         # 加载测试套件
         self.suites = self._load_suites()
@@ -125,13 +126,19 @@ class TestRunner:
             
             precondition_result = self.precondition_checker.check_all(
                 test_info['precondition'],
-                self.device
+                self.device,
+                mode=self.mode
             )
             
             if self.verbose:
                 self.precondition_checker.print_summary()
             
-            if not precondition_result['passed']:
+            # 开发模式下只记录问题，继续执行测试
+            if self.mode == 'development':
+                if precondition_result['warnings']:
+                    print(f"⚠️  发现 {len(precondition_result['warnings'])} 个问题，继续执行测试（开发模式）")
+            # 生产模式下如果检查失败，跳过测试
+            elif not precondition_result['passed']:
                 print(f"⚠️  Precondition 检查失败，跳过测试：{test_name}")
                 return {
                     'test_name': test_name,
@@ -181,10 +188,16 @@ class TestRunner:
                 
                 precondition_result = self.precondition_checker.check_all(
                     test['precondition'],
-                    self.device
+                    self.device,
+                    mode=self.mode
                 )
                 
-                if not precondition_result['passed']:
+                # 开发模式下只记录问题，继续执行测试
+                if self.mode == 'development':
+                    if precondition_result['warnings']:
+                        print(f"  ⚠️  发现 {len(precondition_result['warnings'])} 个问题，继续执行测试（开发模式）")
+                # 生产模式下如果检查失败，跳过测试
+                elif not precondition_result['passed']:
                     print(f"  ⚠️  Precondition 检查失败，跳过测试")
                     results['test_cases'].append({
                         'test_name': test['name'],

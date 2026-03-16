@@ -23,23 +23,28 @@ class PreconditionChecker:
             'errors': []
         }
     
-    def check_all(self, precondition_config, device='/dev/ufs0'):
+    def check_all(self, precondition_config, device='/dev/ufs0', mode='development'):
         """
         检查所有前置条件
         
         Args:
             precondition_config: precondition 配置字典
             device: 测试设备路径
+            mode: 模式 ('development' | 'production')
+                - development: 只记录问题，不阻止测试（开发调试阶段）
+                - production: 严格检查，不满足则跳过测试（生产环境）
             
         Returns:
             dict: 检查结果
         """
+        self.mode = mode
         self.check_results = {
             'timestamp': datetime.now().isoformat(),
             'passed': True,
             'checks': [],
             'warnings': [],
-            'errors': []
+            'errors': [],
+            'mode': mode
         }
         
         # 1. 检查系统环境
@@ -60,8 +65,15 @@ class PreconditionChecker:
         # 6. 验证前置条件
         self._verify_conditions(precondition_config.get('verification', []), device)
         
-        # 判断是否通过
-        if self.check_results['errors']:
+        # 开发模式下不阻止测试
+        if mode == 'development':
+            if self.check_results['errors']:
+                self.check_results['warnings'].extend(self.check_results['errors'])
+                self.check_results['errors'] = []
+            self.check_results['passed'] = True  # 开发模式下总是通过
+        
+        # 生产模式下严格检查
+        elif self.check_results['errors']:
             self.check_results['passed'] = False
         
         return self.check_results
@@ -92,6 +104,12 @@ class PreconditionChecker:
     
     def _add_error(self, message):
         """添加错误"""
+        # 开发模式下作为 warning 处理
+        if self.mode == 'development':
+            self._add_warning(message)
+            return
+        
+        # 生产模式下作为 error 处理
         self.check_results['errors'].append({
             'message': message,
             'timestamp': datetime.now().isoformat()
@@ -163,7 +181,11 @@ class PreconditionChecker:
                 f'实际：{device}'
             )
             if not passed:
-                self._add_error(f'设备 {device} 不存在')
+                # 开发模式下只输出 warning
+                if self.mode == 'development':
+                    self._add_warning(f'未发现 UFS 设备：{device}，请确认硬件连接')
+                else:
+                    self._add_error(f'设备 {device} 不存在')
         
         # 检查可用空间
         available_space = device_info.get('available_space', '')
@@ -528,6 +550,10 @@ class PreconditionChecker:
         print("Precondition 检查摘要")
         print("=" * 60)
         
+        # 显示模式
+        mode_text = '开发模式' if self.mode == 'development' else '生产模式'
+        print(f"模式：{mode_text}")
+        
         total_checks = len(self.check_results['checks'])
         passed_checks = sum(1 for c in self.check_results['checks'] if c['passed'])
         
@@ -537,7 +563,13 @@ class PreconditionChecker:
         print(f"警告：{len(self.check_results['warnings'])}")
         print(f"错误：{len(self.check_results['errors'])}")
         
-        if self.check_results['passed']:
+        if self.mode == 'development':
+            print("\n⚠️  开发模式：Precondition 检查问题已记录，测试将继续执行")
+            if self.check_results['warnings']:
+                print("\n⚠️  警告列表:")
+                for warning in self.check_results['warnings']:
+                    print(f"  - {warning['message']}")
+        elif self.check_results['passed']:
             print("\n✅ Precondition 检查通过")
         else:
             print("\n❌ Precondition 检查失败")
