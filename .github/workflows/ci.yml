@@ -57,6 +57,13 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Install FIO
+        run: |
+          echo "=== Installing FIO ==="
+          sudo apt-get update
+          sudo apt-get install -y fio
+          fio --version
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -66,9 +73,8 @@ jobs:
         run: |
           echo "=== Running pytest ==="
           cd systest
-          # 只运行不依赖外部工具的测试
-          # quick_fio_test 需要 FIO 工具，在 CI 中不可用
-          python -m pytest tests/test_precondition.py -v --tb=short
+          # 运行所有单元测试（包括 FIO 测试）
+          python -m pytest tests/ -v --tb=short
 
   security-scan:
     name: Security Scan

@@ -6,10 +6,37 @@ SysTest FIO 快速验证
 
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 
 import pytest
+
+
+def get_fio_path():
+    """动态查找 FIO 路径"""
+    # 1. 优先使用环境变量
+    env_path = os.environ.get('FIO_PATH')
+    if env_path and os.path.exists(env_path):
+        return env_path
+    
+    # 2. 在 PATH 中查找
+    fio_in_path = shutil.which('fio')
+    if fio_in_path:
+        return fio_in_path
+    
+    # 3. 常见安装路径
+    common_paths = [
+        '/usr/bin/fio',
+        '/usr/local/bin/fio',
+        '/home/gem/.local/bin/fio',
+    ]
+    for path in common_paths:
+        if os.path.exists(path):
+            return path
+    
+    # 4. 未找到
+    return None
 
 
 class TestFIOQuickValidation:
@@ -17,8 +44,8 @@ class TestFIOQuickValidation:
 
     def test_fio_installed(self):
         """测试 FIO 已安装"""
-        fio_path = "/home/gem/.local/bin/fio"
-        assert os.path.exists(fio_path), f"FIO 不存在于 {fio_path}"
+        fio_path = get_fio_path()
+        assert fio_path is not None, "FIO 未安装，请运行：apt-get install fio"
 
         result = subprocess.run([fio_path, "--version"], capture_output=True, text=True)
         assert result.returncode == 0, "FIO 版本检查失败"
@@ -27,7 +54,7 @@ class TestFIOQuickValidation:
 
     def test_fio_basic_read(self):
         """测试 FIO 基本读取功能"""
-        fio_path = "/home/gem/.local/bin/fio"
+        fio_path = get_fio_path()
 
         # 创建临时文件
         temp_file = tempfile.mktemp(prefix="fio_test_")
