@@ -76,13 +76,16 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Python security scan
-        uses: PyCQA/bandit-action@v1
-        with:
-          targets: systest/
-          severity: high
-          confidence: high
-          skips: B307,B306,B602
+      - name: Install bandit
+        run: pip install bandit
+
+      - name: Run bandit security scan
+        run: |
+          # 忽略内部测试工具的安全警告
+          # B307: eval() 用于阈值计算
+          # B306: mktemp() 用于临时文件
+          # B602: shell=True 用于内部命令
+          bandit -r systest/ --skip B307,B306,B602 --level high --confidence high
 
   build-test-package:
     name: Build Test Package
