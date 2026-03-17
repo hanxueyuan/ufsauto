@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-测试用例：t_reliability_StabilityTest_001
-长期稳定性测试 ⭐ 最关键测试
+测试用例：t_reliability_StabilityTest_001 ⭐
+长期稳定性测试 - 最关键测试
 
 测试目的:
 验证 UFS 设备在长时间（24 小时）连续工作下的稳定性，
@@ -45,6 +45,8 @@ Precondition:
     - ✓ 可用空间必须≥20GB
     - ✓ 温度必须<70℃
     - ✓ 剩余寿命必须>90%
+    - ✓ 电源必须稳定
+    - ✓ 散热必须良好
 
 Test Steps:
 1. 启动 24 小时稳定性测试
@@ -53,18 +55,34 @@ Test Steps:
 4. 监控错误计数（CRC 错误/重传次数/IO 错误）
 5. 24 小时后停止测试，分析数据
 
+Postcondition:
+- 测试结果保存到 results/reliability/目录
+- 配置恢复：恢复自动休眠功能，恢复 IO 调度器为默认值（如 mq-deadline）
+- 设备恢复到空闲状态（等待 10 秒）
+- 数据清理：删除测试生成的临时文件
+- 测试后器件状态检查：
+  - SMART 状态对比（测试前 vs 测试后）
+  - 剩余寿命变化
+  - 温度变化曲线
+  - 错误计数变化（CRC 错误/重传次数）
+  - 性能衰减分析（初始带宽 vs 最终带宽）
+
 验收标准:
 - 无 IO 错误（错误计数=0）
 - 性能衰减 < 20%（初始带宽 vs 最终带宽）
 - 设备温度 < 70℃（全程）
 - 无设备掉线或重启
+- SMART 状态保持正常
+- 剩余寿命衰减 < 1%
 
 注意事项:
-- 24 小时测试时间长，确保电源稳定
+- ⭐ 24 小时测试时间长，确保电源稳定
 - 测试前备份重要数据（虽然不会破坏数据）
 - 建议定期检查设备温度
 - 如温度超过 70℃，暂停测试并改善散热
 - 测试过程中不要中断，否则需要重新开始
+- 建议在非工作时间运行此测试
+- 测试后必须执行配置恢复和状态检查
 """
 
 import sys
@@ -77,15 +95,19 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 
 def main():
     print("=" * 80)
-    print("测试用例：t_reliability_StabilityTest_001")
-    print("长期稳定性测试 ⭐ 最关键测试")
+    print("测试用例：t_reliability_StabilityTest_001 ⭐")
+    print("长期稳定性测试 - 最关键测试")
     print("=" * 80)
     print()
     print("⚠️  警告：此测试将运行 24 小时！")
     print()
 
     runner = TestRunner(
-        device="/dev/ufs0", output_dir="./results/reliability", verbose=True, check_precondition=True, mode="development"
+        device="/dev/ufs0",
+        output_dir="./results/reliability",
+        verbose=True,
+        check_precondition=True,
+        mode="development"
     )
 
     print("开始执行测试...")
@@ -101,10 +123,20 @@ def main():
     status = result.get("status", "UNKNOWN")
     print("✅ PASS" if status == "PASS" else "❌ FAIL" if status == "FAIL" else f"状态：{status}")
 
+    metrics = result.get("metrics", {})
+    if metrics:
+        print()
+        print("24 小时测试统计:")
+        print(f"  - 初始带宽：{metrics.get('initial_bandwidth', 0)} MB/s")
+        print(f"  - 最终带宽：{metrics.get('final_bandwidth', 0)} MB/s")
+        print(f"  - 性能衰减：{metrics.get('performance_degradation', 0)}%")
+        print(f"  - 最高温度：{metrics.get('max_temperature', 0)}℃")
+        print(f"  - 错误计数：{metrics.get('error_count', 0)}")
+
     print()
     print("验收目标:")
     print("  - 无 IO 错误（错误计数=0）")
-    print("  - 性能衰减 < 20%（初始带宽 vs 最终带宽）")
+    print("  - 性能衰减 < 20%")
     print("  - 设备温度 < 70℃（全程）")
     print("  - 无设备掉线或重启")
     print()
