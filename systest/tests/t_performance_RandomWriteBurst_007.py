@@ -9,9 +9,9 @@
 
 Precondition:
 1.1 系统环境收集
-    - 操作系统：收集并记录实际 OS 信息（/etc/os-release）
+    - 操作系统：读取 /etc/os-release，收集 PRETTY_NAME 字段
     - CPU/内存：收集并记录实际 CPU/内存配置（/proc/cpuinfo, /proc/meminfo）
-    - FIO 版本：调用 fio --version 获取实际版本
+    - FIO 版本：执行 fio --version，收集版本号
 
 1.2 测试目标信息收集
     - 设备路径：检查/dev/ufs0 是否存在
