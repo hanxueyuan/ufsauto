@@ -16,25 +16,25 @@ import pytest
 def get_fio_path():
     """动态查找 FIO 路径"""
     # 1. 优先使用环境变量
-    env_path = os.environ.get('FIO_PATH')
+    env_path = os.environ.get("FIO_PATH")
     if env_path and os.path.exists(env_path):
         return env_path
-    
+
     # 2. 在 PATH 中查找
-    fio_in_path = shutil.which('fio')
+    fio_in_path = shutil.which("fio")
     if fio_in_path:
         return fio_in_path
-    
+
     # 3. 常见安装路径
     common_paths = [
-        '/usr/bin/fio',
-        '/usr/local/bin/fio',
-        '/home/gem/.local/bin/fio',
+        "/usr/bin/fio",
+        "/usr/local/bin/fio",
+        "/home/gem/.local/bin/fio",
     ]
     for path in common_paths:
         if os.path.exists(path):
             return path
-    
+
     # 4. 未找到
     return None
 
