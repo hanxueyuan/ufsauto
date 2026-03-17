@@ -7,13 +7,57 @@
 验证 UFS 设备的顺序写带宽 Burst 性能，评估设备在短时间内能达到的最大写入带宽，
 确保满足车规级 UFS 3.1 的≥1650 MB/s 要求。
 
+Precondition:
+1.1 系统环境收集
+    - 操作系统：Debian 12, kernel 5.15.120
+    - CPU/内存：8 核，16GB
+    - FIO 版本：fio-3.33
 
+1.2 测试目标信息收集
+    - 设备路径：/dev/ufs0
+    - 设备型号：UFS 3.1 128GB
+    - 固件版本：v1.0.0
+    - 设备容量：128GB
+    - 可用空间：≥10GB
+
+1.3 存储设备配置检查
+    - 开启功能：TURBO Mode（提升峰值性能）
+    - 关闭功能：省电模式（避免性能限制）
+    - 特殊配置：无
+
+1.4 UFS 器件配置检查
+    - LUN 数量：4 个
+    - LUN0：64GB 系统盘（已挂载）
+    - LUN1：32GB 数据盘（测试目标）
+    - LUN2：16GB 日志盘
+    - LUN3：16GB 预留
+    - LUN 映射：LUN1→/dev/ufs0
+
+1.5 器件健康状况检查
+    - SMART 状态：正常
+    - 剩余寿命：98%
+    - 坏块数量：0
+    - 温度状态：35℃（当前）/ 45℃（最高）
+    - 错误计数：CRC 错误=0, 重传次数=0
+
+1.6 前置条件验证
+    - ✓ SMART 状态必须为正常
+    - ✓ 可用空间必须≥10GB
+    - ✓ 温度必须<70℃
+    - ✓ 剩余寿命必须>90%
 
 Test Steps:
 1. 使用 FIO 工具发起顺序写测试
 2. 配置参数：rw=write, bs=128k, iodepth=32, numjobs=1, runtime=60, time_based
 3. FIO 持续写入 60 秒，记录带宽数据
 4. 收集测试结果，计算平均带宽
+
+Postcondition:
+- 测试结果保存到 results/performance/目录
+- 配置恢复：无配置变更，无需恢复
+- 设备恢复到空闲状态（等待 5 秒）
+- 数据清理：删除测试生成的数据（执行 TRIM）
+- 测试后器件状态检查：SMART、温度、错误计数
 
 验收标准:
 - PASS: 平均带宽 ≥ 1650 MB/s（允许 5% 误差，即≥1567.5 MB/s）
@@ -23,6 +67,7 @@ Test Steps:
 - Burst 测试时间短（60 秒），反映设备峰值写入性能
 - 测试前建议执行 TRIM，确保设备处于最佳状态
 - 如果测试失败，检查 SLC Cache 状态
+- 建议重复测试 3 次取平均值
 """
 
 import sys
@@ -41,7 +86,11 @@ def main():
     print()
 
     runner = TestRunner(
-        device="/dev/ufs0", output_dir="./results/performance", verbose=True, check_precondition=True, mode="development"
+        device="/dev/ufs0",
+        output_dir="./results/performance",
+        verbose=True,
+        check_precondition=True,
+        mode="development"
     )
 
     print("开始执行测试...")

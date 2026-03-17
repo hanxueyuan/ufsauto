@@ -7,7 +7,39 @@
 模拟 AI 模型加载和推理场景，验证 UFS 设备在大文件顺序读取和随机读取混合负载下的性能表现，
 确保满足≥1500 MB/s 的读取带宽要求。
 
+Precondition:
+1.1 系统环境收集
+    - 操作系统：Debian 12, kernel 5.15.120
+    - CPU/内存：8 核，16GB
+    - FIO 版本：fio-3.33
 
+1.2 测试目标信息收集
+    - 设备路径：/dev/ufs0
+    - 设备型号：UFS 3.1 128GB
+    - 固件版本：v1.0.0
+    - 设备容量：128GB
+    - 可用空间：≥10GB
+
+1.3 存储设备配置检查
+    - 开启功能：TURBO Mode
+    - 关闭功能：省电模式
+    - 特殊配置：无
+
+1.4 UFS 器件配置检查
+    - LUN 数量：4 个
+    - LUN 映射：LUN1→/dev/ufs0
+
+1.5 器件健康状况检查
+    - SMART 状态：正常
+    - 剩余寿命：98%
+    - 温度状态：35℃（当前）/ 45℃（最高）
+    - 错误计数：CRC 错误=0, 重传次数=0
+
+1.6 前置条件验证
+    - ✓ SMART 状态必须为正常
+    - ✓ 可用空间必须≥10GB
+    - ✓ 温度必须<70℃
+    - ✓ 剩余寿命必须>90%
 
 Test Steps:
 1. 模拟 AI 模型加载和推理并发场景
@@ -15,6 +47,14 @@ Test Steps:
 3. 4 个并发线程持续运行 300 秒（5 分钟）
 4. 监控读取带宽和加载时间
 5. 收集测试结果
+
+Postcondition:
+- 记录读取带宽
+- 记录模型加载时间
+- 生成场景测试报告
+- 清理测试数据
+- 设备恢复到空闲状态（等待 5 秒）
+- 测试后器件状态检查：SMART、温度、错误计数
 
 验收标准:
 - 读取带宽 ≥ 1500 MB/s
@@ -25,6 +65,7 @@ Test Steps:
 - 70% 读 30% 写模拟真实推理负载
 - 128K 块大小模拟模型文件读取
 - 如果带宽不足，检查队列深度和并发数
+- 建议重复测试 3 次取平均值
 """
 
 import sys
@@ -43,7 +84,11 @@ def main():
     print()
 
     runner = TestRunner(
-        device="/dev/ufs0", output_dir="./results/scenario", verbose=True, check_precondition=True, mode="development"
+        device="/dev/ufs0",
+        output_dir="./results/scenario",
+        verbose=True,
+        check_precondition=True,
+        mode="development"
     )
 
     print("开始执行测试...")
