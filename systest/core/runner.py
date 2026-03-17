@@ -5,6 +5,7 @@
 """
 
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -13,6 +14,7 @@ from datetime import datetime
 from pathlib import Path
 
 from precondition_checker import PreconditionChecker
+from logger import TestLogger
 
 
 class TestRunner:
@@ -27,9 +29,11 @@ class TestRunner:
         verbose=False,
         check_precondition=True,
         mode=None,
+        log_dir="./logs",
     ):
         self.device = device
         self.output_dir = Path(output_dir)
+        self.log_dir = Path(log_dir)
 
         # 加载配置文件
         if config_file:
@@ -55,6 +59,9 @@ class TestRunner:
 
         # 初始化 Precondition 检查器
         self.precondition_checker = PreconditionChecker(verbose=verbose)
+
+        # 初始化日志记录器（在 run_test 时创建）
+        self.logger = None
 
     def _load_config(self, config_file):
         """加载配置文件"""
@@ -147,15 +154,19 @@ class TestRunner:
         """执行单个测试"""
         test_id = test_id or datetime.now().strftime("%Y%m%d_%H%M%S")
 
+        # 初始化日志记录器
+        self.logger = TestLogger(test_name, output_dir=self.log_dir)
+        self.logger.step("测试初始化", f"测试 ID: {test_id}")
+
         # 查找测试
         test_info = self._find_test(test_name)
         if not test_info:
+            self.logger.error(f"未找到测试项：{test_name}")
             raise ValueError(f"未找到测试项：{test_name}")
 
         # 检查 Precondition
         if self.check_precondition and "precondition" in test_info:
-            if self.verbose:
-                print(f"\n🔍 检查 Precondition...")
+            self.logger.step("Precondition 检查")
 
             # 生产模式下严格检查
             precondition_mode = "production" if self.mode == "production" else "development"
@@ -164,13 +175,15 @@ class TestRunner:
                 test_info["precondition"], self.device, mode=precondition_mode
             )
 
-            if self.verbose:
-                self.precondition_checker.print_summary()
+            # 记录 Precondition 检查结果
+            for check in precondition_result.get("checks", []):
+                status = "PASS" if check.get("passed", False) else "FAIL"
+                self.logger.precondition(check.get("name", ""), status, check.get("message", ""))
 
             # 开发模式下只记录问题，继续执行测试
             if self.mode == "development":
                 if precondition_result["warnings"]:
-                    print(f"⚠️  发现 {len(precondition_result['warnings'])} 个问题，继续执行测试（开发模式）")
+                    self.logger.warning(f"发现 {len(precondition_result['warnings'])} 个问题，继续执行测试（开发模式）")
             # 生产模式下如果检查失败，抛出异常停止测试
             elif not precondition_result["passed"]:
                 error_msg = f"Precondition 检查失败：{test_name}\n"
@@ -178,20 +191,17 @@ class TestRunner:
                     error_msg += "\n错误列表:\n"
                     for error in precondition_result["errors"]:
                         error_msg += f"  - {error['message']}\n"
+                self.logger.error(error_msg)
                 raise RuntimeError(error_msg)
 
         # 执行测试（支持循环执行）
         results = []
         for i in range(self.loop_count):
-            if self.verbose and self.loop_count > 1:
-                print(f"\n{'=' * 80}")
-                print(f"循环 {i+1}/{self.loop_count}")
-                print(f"{'=' * 80}")
+            if self.loop_count > 1:
+                self.logger.step("循环执行", f"第 {i+1}/{self.loop_count} 次")
 
-            if self.verbose:
-                print(f"  执行测试：{test_name}")
-
-            result = self._execute_test(test_name, test_info)
+            self.logger.info(f"执行测试：{test_name}")
+            result = self._execute_test(test_name, test_info, self.logger)
             result["loop"] = i + 1
             results.append(result)
 
@@ -201,6 +211,11 @@ class TestRunner:
             result["test_id"] = test_id
             result["test_name"] = test_name
             result["timestamp"] = datetime.now().isoformat()
+            
+            # 记录测试总结
+            self.logger.summary(result)
+            self.logger.close()
+            
             return result
 
         # 多次执行，计算平均值
@@ -210,6 +225,10 @@ class TestRunner:
         avg_result["timestamp"] = datetime.now().isoformat()
         avg_result["loops"] = results
         avg_result["loop_count"] = self.loop_count
+
+        # 记录测试总结
+        self.logger.summary(avg_result)
+        self.logger.close()
 
         return avg_result
 

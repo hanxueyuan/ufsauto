@@ -156,53 +156,23 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 
 def main():
     """执行测试用例"""
-    print("=" * 80)
-    print("测试用例：t_performance_SequentialReadBurst_001")
-    print("顺序读带宽 (Burst) 测试")
-    print("=" * 80)
-    print()
-
-    # 创建 TestRunner
+    # 创建 TestRunner（日志会自动记录到 logs/ 目录）
     runner = TestRunner(
         device="/dev/ufs0",
         output_dir="./results/performance",
+        log_dir="./logs",  # 日志目录
         verbose=True,
         check_precondition=True,
         mode="development",  # 开发模式：只记录问题，不阻止测试
     )
 
-    # 执行测试
-    print("开始执行测试...")
-    print()
-
+    # 执行测试（所有信息都会记录到日志文件）
     result = runner.run_test("t_performance_SequentialReadBurst_001")
 
-    # 打印结果
-    print()
-    print("=" * 80)
-    print("测试结果")
-    print("=" * 80)
-
+    # 获取测试结果
     status = result.get("status", "UNKNOWN")
-    print("✅ PASS" if status == "PASS" else "❌ FAIL" if status == "FAIL" else f"状态：{status}")
 
-    # 打印测试指标
-    metrics = result.get("metrics", {})
-    if metrics:
-        print()
-        print("测试指标:")
-        bandwidth = metrics.get("bandwidth", 0)
-        if bandwidth:
-            print(f"  - 带宽：{bandwidth} MB/s")
-
-    # 打印验收目标
-    print()
-    print("验收目标:")
-    print("  - ≥ 2100 MB/s (容差：95%)")
-    print("  - 即 ≥ 1995 MB/s")
-    print()
-    print("=" * 80)
-
+    # 返回退出码
     return 0 if status == "PASS" else 1
 
 
