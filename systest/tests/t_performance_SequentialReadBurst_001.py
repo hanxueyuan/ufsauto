@@ -7,173 +7,205 @@
 验证 UFS 设备的顺序读带宽 Burst 性能，评估设备在短时间内能达到的最大读取带宽，
 确保满足车规级 UFS 3.1 的≥2100 MB/s 要求。
 
-Precondition:
-1.1 系统环境收集
-    - 操作系统：读取 /etc/os-release，收集 PRETTY_NAME 字段
-    - CPU：读取 /proc/cpuinfo，收集 model name 和 cpu cores
-    - 内存：读取 /proc/meminfo，收集 MemTotal
-    - FIO 版本：执行 fio --version，收集版本号
-
-1.2 测试目标信息收集
-    - 设备路径：
-      - 方法 1：ls -l /dev/ | grep -E "(ufs|nvme|sd)" 查找存储设备
-      - 方法 2：fdisk -l 列出所有块设备
-      - 方法 3：通过配置文件或命令行参数指定设备路径
-      - 预期：找到目标 UFS 设备节点（如 /dev/ufs0、/dev/sda 等）
-    - 设备型号：
-      - 方法 1：读取 /sys/block/<device>/device/model（如存在）
-      - 方法 2：smartctl -i /dev/<device> 获取设备信息
-      - 预期：返回设备型号字符串
-    - 固件版本：
-      - 方法 1：读取 /sys/block/<device>/device/rev（如存在）
-      - 方法 2：smartctl -i /dev/<device> | grep "Firmware Version"
-      - 预期：返回固件版本号
-    - 设备容量：
-      - 方法：fdisk -l /dev/<device> | grep "Disk"
-      - 或使用：blockdev --getsize64 /dev/<device>
-      - 预期：返回设备总容量
-    - 可用空间：
-      - 方法：df -BG /dev/<device> | tail -1 | awk '{print $4}'
-      - 预期：可用空间≥10GB
-
-1.3 存储设备配置检查
-    - 查看支持的功能：
-      - 方法 1：cat /sys/block/<device>/device/features
-      - 方法 2：smartctl -i /dev/<device> | grep "Features"
-      - 方法 3：hdparm -I /dev/<device> | grep "Advanced power management"
-      - 预期：列出设备支持的所有功能列表
-    - 需要开启的功能：
-      - TURBO Mode（如支持）：
-        - 检查方法：cat /sys/block/<device>/device/turbo_mode
-        - 预期值：1（开启）
-        - 开启方法：echo 1 > /sys/block/<device>/device/turbo_mode
-      - Write Booster（如支持）：
-        - 检查方法：cat /sys/block/<device>/device/write_booster
-        - 预期值：1（开启）
-        - 开启方法：echo 1 > /sys/block/<device>/device/write_booster
-    - 需要关闭的功能：
-      - 省电模式（Auto Low Power Mode）：
-        - 检查方法：cat /sys/block/<device>/device/power_save
-        - 预期值：0（关闭）
-        - 关闭方法：echo 0 > /sys/block/<device>/device/power_save
-      - 自动休眠（Auto Sleep）：
-        - 检查方法：cat /sys/block/<device>/device/auto_sleep
-        - 预期值：0（关闭）
-        - 关闭方法：echo 0 > /sys/block/<device>/device/auto_sleep
-    - 特殊配置项：
-      - IO 调度器：
-        - 检查方法：cat /sys/block/<device>/queue/scheduler
-        - 预期值：none（性能测试推荐）
-        - 设置方法：echo none > /sys/block/<device>/queue/scheduler
-
-1.4 UFS 器件配置检查
-    - LUN 数量：调用 _get_lun_count() 获取实际 LUN 数量
-    - LUN 配置：读取并记录各 LUN 容量和用途
-    - LUN 映射：验证 LUN 与/dev/ufs0 映射关系（待实现）
-
-1.5 器件健康状况检查
-    - SMART 状态：执行 smartctl -H /dev/ufs0，检查 SMART overall-health
-    - 剩余寿命：执行 smartctl -l smartctl /dev/ufs0，收集 Percentage Used
-    - 坏块数量：执行 smartctl -l smartctl /dev/ufs0，收集 Available Spare
-    - 温度：读取 /sys/class/hwmon/*/temp*_input，转换为摄氏度
-    - 错误计数：读取 /sys/block/ufs0/device/stats，收集 CRC 错误和重传次数
-
-1.6 前置条件验证
-    - ✓ SMART 状态验证（必须为 PASS）
-    - ✓ 可用空间验证（必须≥10GB）
-    - ✓ 温度验证（必须<70℃）
-    - ✓ 剩余寿命验证（必须>90%）
-
-Test Steps:
-1. 使用 FIO 工具发起顺序读测试
-2. 配置参数：rw=read, bs=128k, iodepth=32, numjobs=1, runtime=60, time_based
-3. FIO 持续读取 60 秒，记录带宽数据
-4. 收集测试结果，计算平均带宽
-
-Postcondition:
-- 测试结果保存到 results/performance/目录
-- 配置恢复：
-  - 恢复 TURBO Mode 为原始状态
-  - 恢复省电模式为原始状态
-  - 恢复 IO 调度器为原始值
-- 设备恢复到空闲状态（等待 5 秒）
-- 数据清理：无测试数据残留
-- 测试后器件状态检查：
-  - SMART 状态对比（测试前 vs 测试后）
-  - 剩余寿命对比（测试前 vs 测试后）
-  - 坏块数量对比（测试前 vs 测试后）
-  - 温度对比（测试前 vs 测试后）
-  - 错误计数对比（测试前 vs 测试后）
-- 验收标准：
-  - 坏块数量不应增加（如增加则 FAIL，需重点排查）
-  - 剩余寿命衰减应<1%
-  - 错误计数应保持为 0
+FIO 参数:
+- rw: read（顺序读）
+- bs: 128k（块大小）
+- iodepth: 32（队列深度）
+- numjobs: 1（单线程）
+- runtime: 60（运行 60 秒）
+- time_based: True（基于时间的测试）
 
 验收标准:
-
-【性能指标】
 - PASS: 平均带宽 ≥ 2100 MB/s（允许 5% 误差，即≥1995 MB/s）
 - FAIL: 平均带宽 < 1995 MB/s
-
-【Precondition 检查】
-- PASS: 所有前置条件验证通过
-- WARN: 非关键检查项失败（如 TURBO Mode 不支持），记录但继续测试
-- FAIL: 关键检查项失败（SMART 故障、温度>70℃、剩余寿命<90%），跳过测试
-
-【Postcondition 检查】
-- PASS: 坏块数量无增加，剩余寿命衰减<1%，错误计数=0
-- FAIL: 坏块数量增加（立即 FAIL，需重点排查）
-- FAIL: 剩余寿命衰减≥1%
-- FAIL: 错误计数>0
-
-【测试执行】
-- PASS: 测试正常完成，无异常报错
-- FAIL: FIO 命令执行失败
-- FAIL: 测试未完成（超时、中断）
-
-【最终判定逻辑】
-- 性能指标 FAIL → 整体 FAIL
-- Postcondition FAIL → 整体 FAIL（优先级最高）
-- Precondition FAIL（关键项）→ 跳过测试，不计入 PASS/FAIL
-- 测试执行 FAIL → 整体 FAIL
 
 注意事项:
 - Burst 测试时间短（60 秒），反映设备峰值性能
 - 测试前确保设备未处于过热状态
-- 如果测试失败，检查设备温度、队列深度配置
 - 建议重复测试 3 次取平均值
 """
 
 import os
+import re
+import subprocess
 import sys
 from pathlib import Path
-
-from runner import TestRunner
 
 # 添加 core 模块路径
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 
+from test_framework import TestFramework
+
+
+def parse_fio_output(output):
+    """
+    解析 FIO 输出
+
+    Args:
+        output: FIO 命令输出
+
+    Returns:
+        dict: 解析后的结果
+    """
+    result = {
+        "bandwidth": 0,
+        "iops": 0,
+        "latency_avg": 0,
+        "latency_stddev": 0,
+    }
+
+    # 解析带宽（BW）
+    bw_match = re.search(r"bw=\((\d+)/s\)", output)
+    if bw_match:
+        bw_str = bw_match.group(1)
+        # 转换为 MB/s
+        if "KiB" in bw_str:
+            result["bandwidth"] = round(int(bw_str.replace("KiB", "").replace(",", "")) / 1024, 2)
+        elif "MiB" in bw_str:
+            result["bandwidth"] = round(float(bw_str.replace("MiB", "").replace(",", "")), 2)
+        elif "GiB" in bw_str:
+            result["bandwidth"] = round(float(bw_str.replace("GiB", "").replace(",", "")) * 1024, 2)
+
+    # 解析 IOPS
+    iops_match = re.search(r"iops=(\d+)", output)
+    if iops_match:
+        result["iops"] = int(iops_match.group(1))
+
+    # 解析延迟
+    lat_match = re.search(r"lat\s+\(.*?\):\s+avg=(\d+)", output)
+    if lat_match:
+        result["latency_avg"] = round(int(lat_match.group(1)) / 1000, 2)  # 转换为 μs
+
+    return result
+
+
+def run_fio(device, fio_params):
+    """
+    执行 FIO 测试
+
+    Args:
+        device: 测试设备路径
+        fio_params: FIO 参数字典
+
+    Returns:
+        tuple: (success, output, error)
+    """
+    # 构建 FIO 命令
+    cmd = [
+        "fio",
+        f"--name=test",
+        f"--filename={device}",
+        f"--rw={fio_params.get('rw', 'read')}",
+        f"--bs={fio_params.get('bs', '128k')}",
+        f"--iodepth={fio_params.get('iodepth', 32)}",
+        f"--numjobs={fio_params.get('numjobs', 1)}",
+        f"--runtime={fio_params.get('runtime', 60)}",
+    ]
+
+    # 添加 time_based 参数
+    if fio_params.get("time_based", False):
+        cmd.append("--time_based")
+
+    # 添加输出格式
+    cmd.append("--output-format=normal")
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=fio_params.get("runtime", 60) + 30)
+        return result.returncode == 0, result.stdout, result.stderr
+    except subprocess.TimeoutExpired:
+        return False, "", "FIO 执行超时"
+    except Exception as e:
+        return False, "", str(e)
+
+
+def validate_result(parsed_result, expected_bandwidth, tolerance=0.05):
+    """
+    验证测试结果
+
+    Args:
+        parsed_result: 解析后的 FIO 结果
+        expected_bandwidth: 期望带宽（MB/s）
+        tolerance: 容差（默认 5%）
+
+    Returns:
+        bool: 是否通过
+    """
+    actual_bandwidth = parsed_result.get("bandwidth", 0)
+    min_bandwidth = expected_bandwidth * (1 - tolerance)
+
+    return actual_bandwidth >= min_bandwidth
+
 
 def main():
     """执行测试用例"""
-    # 创建 TestRunner（日志会自动记录到 logs/ 目录）
-    runner = TestRunner(
+    # 1. 初始化测试框架
+    fw = TestFramework(
+        test_name="t_performance_SequentialReadBurst_001",
         device="/dev/ufs0",
         output_dir="./results/performance",
-        log_dir="./logs",  # 日志目录
-        verbose=True,
-        check_precondition=True,
-        mode="development",  # 开发模式：只记录问题，不阻止测试
+        log_dir="./logs",
     )
 
-    # 执行测试（所有信息都会记录到日志文件）
-    result = runner.run_test("t_performance_SequentialReadBurst_001")
+    # 2. 脚本定义 FIO 参数
+    fio_params = {
+        "rw": "read",
+        "bs": "128k",
+        "iodepth": 32,
+        "numjobs": 1,
+        "runtime": 60,
+        "time_based": True,
+    }
 
-    # 获取测试结果
-    status = result.get("status", "UNKNOWN")
+    # 3. Precondition 检查
+    precondition = fw.check_precondition(mode="development")
+    if not precondition.get("passed", True) and precondition.get("errors"):
+        fw.fail("Precondition 检查失败，跳过测试")
+        fw.report({"status": "SKIP", "reason": "Precondition 失败", "precondition": precondition})
+        return 1
 
-    # 返回退出码
-    return 0 if status == "PASS" else 1
+    # 4. 执行 FIO（脚本自己调用）
+    fw.step("执行 FIO 测试")
+    success, output, error = run_fio(fw.device, fio_params)
+
+    if not success:
+        fw.fail(f"FIO 执行失败：{error}")
+        fw.report({"status": "FAIL", "reason": f"FIO 执行失败：{error}", "precondition": precondition})
+        return 1
+
+    # 5. 脚本解析结果
+    parsed_result = parse_fio_output(output)
+    fw.info(f"FIO 输出解析结果：{parsed_result}")
+
+    # 6. 脚本验证结果
+    expected_bandwidth = 2100  # MB/s
+    tolerance = 0.05  # 5%
+    passed = validate_result(parsed_result, expected_bandwidth, tolerance)
+
+    min_bandwidth = expected_bandwidth * (1 - tolerance)
+    fw.info(f"验证结果：{parsed_result['bandwidth']} MB/s >= {min_bandwidth} MB/s → {'PASS' if passed else 'FAIL'}")
+
+    # 7. Postcondition 检查
+    postcondition = fw.check_postcondition(precondition)
+
+    # 如果 Postcondition 有关键失败，标记为 FAIL
+    if postcondition.get("critical_fail", False):
+        fw.fail("Postcondition 检查失败：坏块数量增加")
+        fw.report(
+            {
+                "status": "FAIL",
+                "reason": "Postcondition 检查失败：坏块数量增加",
+                "metrics": parsed_result,
+                "precondition": precondition,
+                "postcondition": postcondition,
+            }
+        )
+        return 1
+
+    # 8. 报告结果
+    status = "PASS" if passed else "FAIL"
+    fw.report({"status": status, "metrics": parsed_result, "precondition": precondition, "postcondition": postcondition})
+
+    return 0 if passed else 1
 
 
 if __name__ == "__main__":
