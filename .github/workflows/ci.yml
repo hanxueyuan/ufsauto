@@ -108,8 +108,9 @@ jobs:
       - name: Run tests in ARM64 Debian 12 container
         uses: addnab/docker-run-action@v3
         with:
-          image: arm64v8/debian:12
-          options: -v ${{ github.workspace }}:/workspace
+          # 使用官方多架构镜像，通过 QEMU 模拟 ARM64
+          image: debian:12
+          options: --platform linux/arm64 -v ${{ github.workspace }}:/workspace
           run: |
             set -e
             echo "=== ARM64 容器测试 ==="
