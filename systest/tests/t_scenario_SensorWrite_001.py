@@ -29,7 +29,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 
-from test_framework import TestFramework
+from systest import Systest
 
 
 def parse_fio_output(output):
@@ -84,7 +84,7 @@ def run_fio(device, fio_params):
 
 def main():
     """执行测试用例"""
-    fw = TestFramework(
+    kit = Systest(
         test_name="t_scenario_SensorWrite_001",
         device="/dev/ufs0",
         output_dir="./results/scenario",
@@ -100,29 +100,29 @@ def main():
         "rate": "50M",
     }
 
-    precondition = fw.check_precondition(mode="development")
+    precondition = kit.check_precondition(mode="development")
     if not precondition.get("passed", True) and precondition.get("errors"):
-        fw.fail("Precondition 检查失败")
-        fw.report({"status": "SKIP", "reason": "Precondition 失败"})
+        kit.fail("Precondition 检查失败")
+        kit.report({"status": "SKIP", "reason": "Precondition 失败"})
         return 1
 
-    fw.step("执行 FIO 测试")
-    success, output, error = run_fio(fw.device, fio_params)
+    kit.step("执行 FIO 测试")
+    success, output, error = run_fio(kit.device, fio_params)
 
     if not success:
-        fw.fail(f"FIO 执行失败：{error}")
-        fw.report({"status": "FAIL", "reason": error})
+        kit.fail(f"FIO 执行失败：{error}")
+        kit.report({"status": "FAIL", "reason": error})
         return 1
 
     parsed_result = parse_fio_output(output)
 
-    postcondition = fw.check_postcondition(precondition)
+    postcondition = kit.check_postcondition(precondition)
 
     if postcondition.get("critical_fail", False):
-        fw.fail("Postcondition 检查失败：坏块增加")
+        kit.fail("Postcondition 检查失败：坏块增加")
         return 1
 
-    fw.report({"status": "PASS", "metrics": parsed_result})
+    kit.report({"status": "PASS", "metrics": parsed_result})
     return 0
 
 
