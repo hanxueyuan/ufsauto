@@ -98,10 +98,11 @@ jobs:
         run: |
           mkdir -p build/ufs_test_package
           cp -r systest/ build/ufs_test_package/
-          cp -r scripts/ build/ufs_test_package/
           cp -r docs/ build/ufs_test_package/
-          cp README.md build/ufs_test_package/
+          cp README.md build/ufs_test_package/ 2>/dev/null || true
           cp requirements.txt build/ufs_test_package/
+          # scripts 目录可选，不存在时跳过
+          [ -d scripts ] && cp -r scripts/ build/ufs_test_package/ || true
           tar zcf build/ufs_test_package.tar.gz -C build/ ufs_test_package
 
       - name: Upload test package
