@@ -6,6 +6,7 @@ SysTest FIO 集成验证
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -16,12 +17,31 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 
 from runner import TestRunner
 
+
+def get_fio_path():
+    """动态查找 FIO 路径"""
+    env_path = os.environ.get("FIO_PATH")
+    if env_path and os.path.exists(env_path):
+        return env_path
+    fio_in_path = shutil.which("fio")
+    if fio_in_path:
+        return fio_in_path
+    common_paths = ["/usr/bin/fio", "/usr/local/bin/fio", "/home/gem/.local/bin/fio"]
+    for path in common_paths:
+        if os.path.exists(path):
+            return path
+    return None
+
+
 print("🔍 SysTest FIO 集成验证")
 print("=" * 70)
 
 # 1. FIO 检查
 print("\n【验证 1】FIO 工具检查")
-fio_path = "/home/gem/.local/bin/fio"
+fio_path = get_fio_path()
+if not fio_path:
+    print("❌ FIO 未安装")
+    sys.exit(1)
 result = subprocess.run([fio_path, "--version"], capture_output=True, text=True)
 print(f"✅ FIO 版本：{result.stdout.strip()}")
 
