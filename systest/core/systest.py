@@ -110,7 +110,7 @@ class Systest:
 
     def check_precondition(self, device=None, mode=None):
         """
-        检查 Precondition
+        检查 Precondition（带错误处理）
 
         Args:
             device: 测试设备路径
@@ -124,17 +124,21 @@ class Systest:
 
         self.logger.step("Precondition 检查")
 
-        # 获取 Precondition 配置
-        precondition_config = self._get_precondition_config()
+        try:
+            # 获取 Precondition 配置
+            precondition_config = self._get_precondition_config()
 
-        result = self.precondition_checker.check_all(precondition_config, device, mode=mode)
+            result = self.precondition_checker.check_all(precondition_config, device, mode=mode)
 
-        # 记录检查结果
-        for check in result.get("checks", []):
-            status = "PASS" if check.get("passed", False) else "FAIL"
-            self.logger.precondition(check.get("name", ""), status, check.get("message", ""))
+            # 记录检查结果
+            for check in result.get("checks", []):
+                status = "PASS" if check.get("passed", False) else "FAIL"
+                self.logger.precondition(check.get("name", ""), status, check.get("message", ""))
 
-        return result
+            return result
+        except Exception as e:
+            self.logger.error(f"Precondition 检查异常：{e}")
+            return {"passed": False, "errors": [{"message": str(e)}]}
 
     def _get_precondition_config(self):
         """获取 Precondition 配置"""
