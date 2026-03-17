@@ -9,16 +9,17 @@
 
 Precondition:
 1.1 系统环境收集
-    - 操作系统：收集并记录实际 OS 信息（/etc/os-release）
-    - CPU/内存：收集并记录实际 CPU/内存配置（/proc/cpuinfo, /proc/meminfo）
-    - FIO 版本：调用 fio --version 获取实际版本
+    - 操作系统：读取 /etc/os-release，收集 PRETTY_NAME 字段
+    - CPU：读取 /proc/cpuinfo，收集 model name 和 cpu cores
+    - 内存：读取 /proc/meminfo，收集 MemTotal
+    - FIO 版本：执行 fio --version，收集版本号
 
 1.2 测试目标信息收集
-    - 设备路径：检查/dev/ufs0 是否存在
-    - 设备型号：读取并记录实际设备型号
-    - 固件版本：读取并记录实际固件版本
-    - 设备容量：读取并记录实际设备容量
-    - 可用空间：调用 df 命令获取实际可用空间
+    - 设备路径：检查 /dev/ufs0 是否存在（os.path.exists）
+    - 设备型号：读取 /sys/block/ufs0/device/model
+    - 固件版本：读取 /sys/block/ufs0/device/rev
+    - 设备容量：执行 fdisk -l /dev/ufs0，收集容量信息
+    - 可用空间：执行 df -BG /dev/ufs0，收集 Available 字段
 
 1.3 存储设备配置检查
     - 开启功能：检查 TURBO Mode 状态（待实现自动检查）
@@ -29,19 +30,16 @@ Precondition:
     - LUN 数量：调用 _get_lun_count() 获取实际 LUN 数量
     - LUN 配置：读取并记录各 LUN 容量和用途
     - LUN 映射：验证 LUN 与/dev/ufs0 映射关系（待实现）
-    - 
-    - 
-    - 
 
 1.5 器件健康状况检查
-    - SMART 状态：调用 smartctl -H 检查实际 SMART 状态
-    - 剩余寿命：调用 smartctl -l smartctl 获取实际剩余寿命
-    - 坏块数量：读取并记录实际坏块数量
-    - 温度状态：读取/sys/class/hwmon/*/temp*_input 获取实际温度
-    - 错误计数：读取/sys/block/<device>/device/stats 获取实际错误计数
+    - SMART 状态：执行 smartctl -H /dev/ufs0，检查 SMART overall-health
+    - 剩余寿命：执行 smartctl -l smartctl /dev/ufs0，收集 Percentage Used
+    - 坏块数量：执行 smartctl -l smartctl /dev/ufs0，收集 Available Spare
+    - 温度：读取 /sys/class/hwmon/*/temp*_input，转换为摄氏度
+    - 错误计数：读取 /sys/block/ufs0/device/stats，收集 CRC 错误和重传次数
 
 1.6 前置条件验证
-    - ✓ SMART 状态验证（必须为正常）
+    - ✓ SMART 状态验证（必须为 PASS）
     - ✓ 可用空间验证（必须≥10GB）
     - ✓ 温度验证（必须<70℃）
     - ✓ 剩余寿命验证（必须>90%）
