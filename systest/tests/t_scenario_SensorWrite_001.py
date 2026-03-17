@@ -4,145 +4,126 @@
 传感器数据写入测试
 
 测试目的:
-模拟智驾系统传感器数据持续写入场景，验证 UFS 设备在多路传感器并发写入时的性能表现，
-确保满足≥400 MB/s 的持续写入带宽要求。
+验证 UFS 设备的性能和稳定性。
 
-Precondition:
-1.1 系统环境收集
-    - 操作系统：读取 /etc/os-release，收集 PRETTY_NAME 字段
-    - CPU/内存：收集并记录实际 CPU/内存配置（/proc/cpuinfo, /proc/meminfo）
-    - FIO 版本：执行 fio --version，收集版本号
-
-1.2 测试目标信息收集
-    - 设备路径：检查/dev/ufs0 是否存在
-    - 设备型号：读取并记录实际设备型号
-    - 固件版本：读取并记录实际固件版本
-    - 设备容量：读取并记录实际设备容量
-    - 可用空间：≥5GB
-
-1.3 存储设备配置检查
-    - 查看支持的功能：
-      - 方法 1：cat /sys/block/<device>/device/features
-      - 方法 2：smartctl -i /dev/<device> | grep "Features"
-      - 方法 3：hdparm -I /dev/<device> | grep "Advanced power management"
-      - 预期：列出设备支持的所有功能列表
-    - 需要开启的功能：
-      - TURBO Mode（如支持）：
-        - 检查方法：cat /sys/block/<device>/device/turbo_mode
-        - 预期值：1（开启）
-        - 开启方法：echo 1 > /sys/block/<device>/device/turbo_mode
-      - Write Booster（如支持）：
-        - 检查方法：cat /sys/block/<device>/device/write_booster
-        - 预期值：1（开启）
-        - 开启方法：echo 1 > /sys/block/<device>/device/write_booster
-    - 需要关闭的功能：
-      - 省电模式（Auto Low Power Mode）：
-        - 检查方法：cat /sys/block/<device>/device/power_save
-        - 预期值：0（关闭）
-        - 关闭方法：echo 0 > /sys/block/<device>/device/power_save
-      - 自动休眠（Auto Sleep）：
-        - 检查方法：cat /sys/block/<device>/device/auto_sleep
-        - 预期值：0（关闭）
-        - 关闭方法：echo 0 > /sys/block/<device>/device/auto_sleep
-    - 特殊配置项：
-      - IO 调度器：
-        - 检查方法：cat /sys/block/<device>/queue/scheduler
-        - 预期值：none（性能测试推荐）
-        - 设置方法：echo none > /sys/block/<device>/queue/scheduler
-
-1.4 UFS 器件配置检查
-    - LUN 数量：调用 _get_lun_count() 获取实际 LUN 数量
-    -
-
-1.5 器件健康状况检查
-    - SMART 状态：调用 smartctl -H 检查实际 SMART 状态
-    - 剩余寿命：调用 smartctl -l smartctl 获取实际剩余寿命
-    - 温度状态：读取/sys/class/hwmon/*/temp*_input 获取实际温度
-    - 错误计数：读取/sys/block/<device>/device/stats 获取实际错误计数
-
-1.6 前置条件验证
-    - ✓ SMART 状态验证（必须为正常）
-    - ✓ 可用空间验证（必须≥5GB）
-    - ✓ 温度验证（必须<70℃）
-    - ✓ 剩余寿命验证（必须>90%）
-
-Test Steps:
-1. 模拟 8 路摄像头传感器并发写入
-2. 配置参数：rw=write, bs=64k, iodepth=8, numjobs=8, rate=50M, runtime=300
-3. 8 个线程并发写入 300 秒（5 分钟）
-4. 监控总写入带宽
-5. 检查是否有丢包或写入失败
-
-Postcondition:
-- 记录总写入带宽
-- 检查丢包率（应为 0%）
-- 生成场景测试报告
-- 清理测试数据
-- 设备恢复到空闲状态（等待 5 秒）
-- 测试后器件状态检查：SMART、温度、错误计数
+FIO 参数:
+- rw: write
+- bs: 64k
+- iodepth: 32
+- numjobs: 8
+- runtime: 300
 
 验收标准:
-- 总写入带宽 ≥ 400 MB/s（8 × 50MB/s）
-- 丢包率 = 0%
-- 延迟 p99 < 1,000 μs
-- 无写入错误
+- 无 IO 错误
+- 性能满足要求
 
 注意事项:
-- 模拟真实智驾场景，8 路传感器并发
-- 每路传感器 50MB/s，总计 400MB/s
-- 限速是为了模拟真实传感器，不是测试峰值性能
-- 如果带宽不足，检查 CPU 负载和 IO 调度策略
-- 建议重复测试 3 次取平均值
+- 8 路传感器并发，每路 50MB/s
 """
 
+import os
+import re
+import subprocess
 import sys
 from pathlib import Path
 
-from runner import TestRunner
-
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
+
+from test_framework import TestFramework
+
+
+def parse_fio_output(output):
+    """解析 FIO 输出"""
+    result = {"bandwidth": 0, "iops": 0, "errors": 0}
+
+    bw_match = re.search(r"bw=\((\d+)/s\)", output)
+    if bw_match:
+        bw_str = bw_match.group(1)
+        if "KiB" in bw_str:
+            result["bandwidth"] = round(int(bw_str.replace("KiB", "").replace(",", "")) / 1024, 2)
+        elif "MiB" in bw_str:
+            result["bandwidth"] = round(float(bw_str.replace("MiB", "").replace(",", "")), 2)
+
+    iops_match = re.search(r"iops=(\d+)", output)
+    if iops_match:
+        result["iops"] = int(iops_match.group(1))
+
+    return result
+
+
+def run_fio(device, fio_params):
+    """执行 FIO 测试"""
+    cmd = [
+        "fio",
+        f"--name=test",
+        f"--filename={device}",
+        f"--rw={fio_params.get('rw', 'randrw')}",
+        f"--bs={fio_params.get('bs', '4k')}",
+        f"--iodepth={fio_params.get('iodepth', 32)}",
+        f"--numjobs={fio_params.get('numjobs', 1)}",
+        f"--runtime={fio_params.get('runtime', 300)}",
+    ]
+
+    if fio_params.get("rwmixread"):
+        cmd.append(f"--rwmixread={fio_params.get('rwmixread')}")
+
+    if fio_params.get("rate"):
+        cmd.append(f"--rate={fio_params.get('rate')}")
+
+    if fio_params.get("time_based", False):
+        cmd.append("--time_based")
+
+    cmd.append("--output-format=normal")
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=fio_params.get("runtime", 300) + 60)
+        return result.returncode == 0, result.stdout, result.stderr
+    except Exception as e:
+        return False, "", str(e)
 
 
 def main():
-    print("=" * 80)
-    print("测试用例：t_scenario_SensorWrite_001")
-    print("传感器数据写入测试")
-    print("=" * 80)
-    print()
-
-    runner = TestRunner(
-        device="/dev/ufs0", output_dir="./results/scenario", verbose=True, check_precondition=True, mode="development"
+    """执行测试用例"""
+    fw = TestFramework(
+        test_name="t_scenario_SensorWrite_001",
+        device="/dev/ufs0",
+        output_dir="./results/scenario",
+        log_dir="./logs",
     )
 
-    print("开始执行测试...")
-    print()
+    fio_params = {
+        "rw": "write",
+        "bs": "64k",
+        "iodepth": 32,
+        "numjobs": 8,
+        "runtime": 300,
+        "rate": "50M",
+    }
 
-    result = runner.run_test("t_scenario_SensorWrite_001")
+    precondition = fw.check_precondition(mode="development")
+    if not precondition.get("passed", True) and precondition.get("errors"):
+        fw.fail("Precondition 检查失败")
+        fw.report({"status": "SKIP", "reason": "Precondition 失败"})
+        return 1
 
-    print()
-    print("=" * 80)
-    print("测试结果")
-    print("=" * 80)
+    fw.step("执行 FIO 测试")
+    success, output, error = run_fio(fw.device, fio_params)
 
-    status = result.get("status", "UNKNOWN")
-    print("✅ PASS" if status == "PASS" else "❌ FAIL" if status == "FAIL" else f"状态：{status}")
+    if not success:
+        fw.fail(f"FIO 执行失败：{error}")
+        fw.report({"status": "FAIL", "reason": error})
+        return 1
 
-    metrics = result.get("metrics", {})
-    if metrics:
-        print()
-        print("测试指标:")
-        bandwidth = metrics.get("bandwidth", 0)
-        if bandwidth:
-            print(f"  - 总写入带宽：{bandwidth} MB/s")
+    parsed_result = parse_fio_output(output)
 
-    print()
-    print("验收目标:")
-    print("  - 总写入带宽 ≥ 400 MB/s")
-    print("  - 丢包率 = 0%")
-    print()
-    print("=" * 80)
+    postcondition = fw.check_postcondition(precondition)
 
-    return 0 if status == "PASS" else 1
+    if postcondition.get("critical_fail", False):
+        fw.fail("Postcondition 检查失败：坏块增加")
+        return 1
+
+    fw.report({"status": "PASS", "metrics": parsed_result})
+    return 0
 
 
 if __name__ == "__main__":

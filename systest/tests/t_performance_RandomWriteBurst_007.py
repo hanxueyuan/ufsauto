@@ -4,135 +4,134 @@
 随机写 IOPS (Burst) 测试
 
 测试目的:
-验证 UFS 设备的随机写 IOPS Burst 性能，评估设备在短时间内能达到的最大随机写入 IOPS，
-确保满足车规级 UFS 3.1 的≥280 KIOPS 要求。
+验证 UFS 设备的性能，确保满足车规级要求。
 
-Precondition:
-1.1 系统环境收集
-    - 操作系统：读取 /etc/os-release，收集 PRETTY_NAME 字段
-    - CPU/内存：收集并记录实际 CPU/内存配置（/proc/cpuinfo, /proc/meminfo）
-    - FIO 版本：执行 fio --version，收集版本号
-
-1.2 测试目标信息收集
-    - 设备路径：检查/dev/ufs0 是否存在
-    - 设备型号：读取并记录实际设备型号
-    - 固件版本：读取并记录实际固件版本
-    - 设备容量：读取并记录实际设备容量
-    - 可用空间：调用 df 命令获取实际可用空间
-
-1.3 存储设备配置检查
-    - 开启功能：检查 TURBO Mode 状态（待实现自动检查）
-    - 关闭功能：检查省电模式状态（待实现自动检查）
-
-1.4 UFS 器件配置检查
-    - LUN 数量：调用 _get_lun_count() 获取实际 LUN 数量
-    -
-
-1.5 器件健康状况检查
-    - SMART 状态：调用 smartctl -H 检查实际 SMART 状态
-    - 剩余寿命：调用 smartctl -l smartctl 获取实际剩余寿命
-    - 温度状态：读取/sys/class/hwmon/*/temp*_input 获取实际温度
-
-1.6 前置条件验证
-    - ✓ SMART 状态验证（必须为正常）
-    - ✓ 可用空间验证（必须≥10GB）
-    - ✓ 温度验证（必须<70℃）
-    - ✓ 剩余寿命验证（必须>90%）
-
-Test Steps:
-1. 使用 FIO 工具发起随机写测试
-2. 配置参数：rw=randwrite, bs=4k, iodepth=32, numjobs=1, runtime=60, time_based
-3. FIO 持续随机写入 60 秒，记录 IOPS 数据
-4. 收集测试结果，计算平均 IOPS
-
-Postcondition:
-- 测试结果保存到 results/performance/目录
-- 配置恢复：无配置变更，无需恢复
-- 设备恢复到空闲状态（等待 5 秒）
-- 数据清理：删除测试生成的数据（执行 TRIM）
+FIO 参数:
+- rw: randwrite
+- bs: 4k
+- iodepth: 32
+- numjobs: 1
+- runtime: 60
 
 验收标准:
-
-【性能指标】
-- PASS: 达到测试目标值（允许 5% 误差）
-- FAIL: 未达到测试目标值（低于容差后值）
-
-【Precondition 检查】
-- PASS: 所有前置条件验证通过
-- WARN: 非关键检查项失败（如某功能不支持），记录但继续测试
-- FAIL: 关键检查项失败（SMART 故障、温度>70℃、剩余寿命<90%），跳过测试
-
-【Postcondition 检查】
-- PASS: 坏块数量无增加，剩余寿命衰减<1%，错误计数=0
-- FAIL: 坏块数量增加（立即 FAIL，需重点排查）
-- FAIL: 剩余寿命衰减≥1%
-- FAIL: 错误计数>0
-
-【测试执行】
-- PASS: 测试正常完成，无异常报错
-- FAIL: FIO 命令执行失败
-- FAIL: 测试未完成（超时、中断）
-
-【最终判定逻辑】
-- 性能指标 FAIL → 整体 FAIL
-- Postcondition FAIL → 整体 FAIL（优先级最高）
-- Precondition FAIL（关键项）→ 跳过测试，不计入 PASS/FAIL
-- 测试执行 FAIL → 整体 FAIL
-
+- PASS: ≥ 280 KIOPS
+- FAIL: < 266.0 KIOPS
 
 注意事项:
-- Burst 测试时间短（60 秒），反映设备峰值写入性能
-- 4K 块大小模拟随机写入场景
-- 测试前建议执行 TRIM，确保设备处于最佳状态
-- 如果测试失败，检查 SLC Cache 状态
-- 建议重复测试 3 次取平均值
+- 测试前建议执行 TRIM
 """
 
+import os
+import re
+import subprocess
 import sys
 from pathlib import Path
 
-from runner import TestRunner
-
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
+
+from test_framework import TestFramework
+
+
+def parse_fio_output(output):
+    """解析 FIO 输出"""
+    result = {"bandwidth": 0, "iops": 0, "latency_avg": 0}
+
+    bw_match = re.search(r"bw=\((\d+)/s\)", output)
+    if bw_match:
+        bw_str = bw_match.group(1)
+        if "KiB" in bw_str:
+            result["bandwidth"] = round(int(bw_str.replace("KiB", "").replace(",", "")) / 1024, 2)
+        elif "MiB" in bw_str:
+            result["bandwidth"] = round(float(bw_str.replace("MiB", "").replace(",", "")), 2)
+
+    iops_match = re.search(r"iops=(\d+)", output)
+    if iops_match:
+        result["iops"] = int(iops_match.group(1))
+
+    return result
+
+
+def run_fio(device, fio_params):
+    """执行 FIO 测试"""
+    cmd = [
+        "fio",
+        f"--name=test",
+        f"--filename={device}",
+        f"--rw={fio_params.get('rw', 'read')}",
+        f"--bs={fio_params.get('bs', '128k')}",
+        f"--iodepth={fio_params.get('iodepth', 32)}",
+        f"--numjobs={fio_params.get('numjobs', 1)}",
+        f"--runtime={fio_params.get('runtime', 60)}",
+    ]
+
+    if fio_params.get("time_based", False):
+        cmd.append("--time_based")
+
+    cmd.append("--output-format=normal")
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=fio_params.get("runtime", 60) + 60)
+        return result.returncode == 0, result.stdout, result.stderr
+    except Exception as e:
+        return False, "", str(e)
+
+
+def validate_result(parsed_result, expected, tolerance=0.05):
+    """验证测试结果"""
+    if "KIOPS" == "KIOPS":
+        actual = parsed_result.get("iops", 0) / 1000
+    else:
+        actual = parsed_result.get("bandwidth", 0)
+    min_val = expected * (1 - tolerance)
+    return actual >= min_val
 
 
 def main():
-    print("=" * 80)
-    print("测试用例：t_performance_RandomWriteBurst_007")
-    print("随机写 IOPS (Burst) 测试")
-    print("=" * 80)
-    print()
-
-    runner = TestRunner(
-        device="/dev/ufs0", output_dir="./results/performance", verbose=True, check_precondition=True, mode="development"
+    """执行测试用例"""
+    fw = TestFramework(
+        test_name="t_performance_RandomWriteBurst_007",
+        device="/dev/ufs0",
+        output_dir="./results/performance",
+        log_dir="./logs",
     )
 
-    print("开始执行测试...")
-    print()
+    fio_params = {
+        "rw": "randwrite",
+        "bs": "4k",
+        "iodepth": 32,
+        "numjobs": 1,
+        "runtime": 60,
+        "time_based": True,
+    }
 
-    result = runner.run_test("t_performance_RandomWriteBurst_007")
+    precondition = fw.check_precondition(mode="development")
+    if not precondition.get("passed", True) and precondition.get("errors"):
+        fw.fail("Precondition 检查失败")
+        fw.report({"status": "SKIP", "reason": "Precondition 失败"})
+        return 1
 
-    print()
-    print("=" * 80)
-    print("测试结果")
-    print("=" * 80)
+    fw.step("执行 FIO 测试")
+    success, output, error = run_fio(fw.device, fio_params)
 
-    status = result.get("status", "UNKNOWN")
-    print("✅ PASS" if status == "PASS" else "❌ FAIL" if status == "FAIL" else f"状态：{status}")
+    if not success:
+        fw.fail(f"FIO 执行失败：{error}")
+        fw.report({"status": "FAIL", "reason": error})
+        return 1
 
-    if status == "PASS":
-        print(f"✅ 随机写 IOPS (Burst) 满足车规级要求 (≥280 KIOPS)")
-    elif status == "FAIL":
-        print(f"❌ 随机写 IOPS (Burst) 未达到车规级要求 (<266 KIOPS)")
-        print("\n建议检查:")
-        print("1. 执行 TRIM 后重试")
-        print("2. 检查 SLC Cache 状态")
-        print("3. 重复测试 3 次取平均值")
+    parsed_result = parse_fio_output(output)
 
-    print()
-    print("=" * 80)
+    expected = 280
+    passed = validate_result(parsed_result, expected)
 
-    return 0 if status == "PASS" else 1
+    postcondition = fw.check_postcondition(precondition)
+
+    if postcondition.get("critical_fail", False):
+        fw.fail("Postcondition 检查失败：坏块增加")
+        return 1
+
+    status = "PASS" if passed else "FAIL"
+    fw.report({"status": status, "metrics": parsed_result})
+    return 0 if passed else 1
 
 
 if __name__ == "__main__":
