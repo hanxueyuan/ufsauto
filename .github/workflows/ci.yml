@@ -93,6 +93,45 @@ jobs:
           # B602: shell=True 用于内部命令
           bandit -r systest/ -s B307,B306,B602 -ll -ii
 
+  arm64-container-test:
+    name: ARM64 Container Test (Debian 12)
+    runs-on: ubuntu-latest
+    needs: [unit-test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Run tests in ARM64 Debian 12 container
+        uses: addnab/docker-run-action@v3
+        with:
+          image: arm64v8/debian:12
+          options: -v ${{ github.workspace }}:/workspace
+          run: |
+            set -e
+            echo "=== ARM64 容器测试 ==="
+            echo "架构：$(uname -m)"
+            echo "系统：$(cat /etc/debian_version)"
+            
+            # 安装依赖
+            apt-get update
+            apt-get install -y python3 python3-pip fio
+            
+            # 安装 Python 依赖
+            cd /workspace/systest
+            pip3 install --break-system-packages -r requirements.txt
+            
+            # 运行测试
+            echo "=== 运行 pytest ==="
+            python3 -m pytest tests/ -v --tb=short
+            
+            # 验证 FIO
+            echo "=== 验证 FIO ==="
+            fio --version
+
   build-test-package:
     name: Build Test Package
     runs-on: ubuntu-latest
