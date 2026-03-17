@@ -29,9 +29,9 @@ Precondition:
     - LUN 数量：调用 _get_lun_count() 获取实际 LUN 数量
     - LUN 配置：读取并记录各 LUN 容量和用途
     - LUN 映射：验证 LUN 与/dev/ufs0 映射关系（待实现）
-    - 
-    - 
-    - 
+    -
+    -
+    -
 
 1.5 器件健康状况检查
     - SMART 状态：调用 smartctl -H 检查实际 SMART 状态
@@ -103,11 +103,7 @@ def main():
     print()
 
     runner = TestRunner(
-        device="/dev/ufs0",
-        output_dir="./results/reliability",
-        verbose=True,
-        check_precondition=True,
-        mode="development"
+        device="/dev/ufs0", output_dir="./results/reliability", verbose=True, check_precondition=True, mode="development"
     )
 
     print("开始执行测试...")

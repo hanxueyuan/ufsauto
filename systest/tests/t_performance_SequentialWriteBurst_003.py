@@ -84,11 +84,7 @@ def main():
     print()
 
     runner = TestRunner(
-        device="/dev/ufs0",
-        output_dir="./results/performance",
-        verbose=True,
-        check_precondition=True,
-        mode="development"
+        device="/dev/ufs0", output_dir="./results/performance", verbose=True, check_precondition=True, mode="development"
     )
 
     print("开始执行测试...")

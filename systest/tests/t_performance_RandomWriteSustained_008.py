@@ -26,7 +26,7 @@ Precondition:
 
 1.4 UFS 器件配置检查
     - LUN 数量：调用 _get_lun_count() 获取实际 LUN 数量
-    - 
+    -
 
 1.5 器件健康状况检查
     - SMART 状态：调用 smartctl -H 检查实际 SMART 状态
@@ -80,11 +80,7 @@ def main():
     print()
 
     runner = TestRunner(
-        device="/dev/ufs0",
-        output_dir="./results/performance",
-        verbose=True,
-        check_precondition=True,
-        mode="development"
+        device="/dev/ufs0", output_dir="./results/performance", verbose=True, check_precondition=True, mode="development"
     )
 
     print("开始执行测试...")
