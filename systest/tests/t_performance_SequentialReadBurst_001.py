@@ -110,8 +110,32 @@ Postcondition:
   - 错误计数应保持为 0
 
 验收标准:
+
+【性能指标】
 - PASS: 平均带宽 ≥ 2100 MB/s（允许 5% 误差，即≥1995 MB/s）
 - FAIL: 平均带宽 < 1995 MB/s
+
+【Precondition 检查】
+- PASS: 所有前置条件验证通过
+- WARN: 非关键检查项失败（如 TURBO Mode 不支持），记录但继续测试
+- FAIL: 关键检查项失败（SMART 故障、温度>70℃、剩余寿命<90%），跳过测试
+
+【Postcondition 检查】
+- PASS: 坏块数量无增加，剩余寿命衰减<1%，错误计数=0
+- FAIL: 坏块数量增加（立即 FAIL，需重点排查）
+- FAIL: 剩余寿命衰减≥1%
+- FAIL: 错误计数>0
+
+【测试执行】
+- PASS: 测试正常完成，无异常报错
+- FAIL: FIO 命令执行失败
+- FAIL: 测试未完成（超时、中断）
+
+【最终判定逻辑】
+- 性能指标 FAIL → 整体 FAIL
+- Postcondition FAIL → 整体 FAIL（优先级最高）
+- Precondition FAIL（关键项）→ 跳过测试，不计入 PASS/FAIL
+- 测试执行 FAIL → 整体 FAIL
 
 注意事项:
 - Burst 测试时间短（60 秒），反映设备峰值性能

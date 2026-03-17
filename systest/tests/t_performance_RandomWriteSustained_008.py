@@ -52,8 +52,33 @@ Postcondition:
 - 数据清理：删除测试生成的数据（执行 TRIM）
 
 验收标准:
-- PASS: 平均 IOPS ≥ 60 KIOPS（允许 5% 误差，即≥57 KIOPS）
-- FAIL: 平均 IOPS < 57 KIOPS
+
+【性能指标】
+- PASS: 达到测试目标值（允许 5% 误差）
+- FAIL: 未达到测试目标值（低于容差后值）
+
+【Precondition 检查】
+- PASS: 所有前置条件验证通过
+- WARN: 非关键检查项失败（如某功能不支持），记录但继续测试
+- FAIL: 关键检查项失败（SMART 故障、温度>70℃、剩余寿命<90%），跳过测试
+
+【Postcondition 检查】
+- PASS: 坏块数量无增加，剩余寿命衰减<1%，错误计数=0
+- FAIL: 坏块数量增加（立即 FAIL，需重点排查）
+- FAIL: 剩余寿命衰减≥1%
+- FAIL: 错误计数>0
+
+【测试执行】
+- PASS: 测试正常完成，无异常报错
+- FAIL: FIO 命令执行失败
+- FAIL: 测试未完成（超时、中断）
+
+【最终判定逻辑】
+- 性能指标 FAIL → 整体 FAIL
+- Postcondition FAIL → 整体 FAIL（优先级最高）
+- Precondition FAIL（关键项）→ 跳过测试，不计入 PASS/FAIL
+- 测试执行 FAIL → 整体 FAIL
+
 
 注意事项:
 - ⭐ Sustained 测试时间长（300 秒），可能触发 SLC Cache 耗尽
