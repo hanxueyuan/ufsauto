@@ -42,22 +42,16 @@ class TestLogger:
         self.logger.handlers.clear()
 
         # 创建文件 handler（记录所有级别的日志）
-        file_handler = logging.FileHandler(self.log_file, encoding='utf-8')
+        file_handler = logging.FileHandler(self.log_file, encoding="utf-8")
         file_handler.setLevel(logging.DEBUG)
-        file_formatter = logging.Formatter(
-            '%(asctime)s | %(levelname)-8s | %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
-        )
+        file_formatter = logging.Formatter("%(asctime)s | %(levelname)-8s | %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
         file_handler.setFormatter(file_formatter)
         self.logger.addHandler(file_handler)
 
         # 创建控制台 handler（只记录 INFO 及以上级别）
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setLevel(logging.INFO)
-        console_formatter = logging.Formatter(
-            '%(asctime)s | %(levelname)-8s | %(message)s',
-            datefmt='%H:%M:%S'
-        )
+        console_formatter = logging.Formatter("%(asctime)s | %(levelname)-8s | %(message)s", datefmt="%H:%M:%S")
         console_handler.setFormatter(console_formatter)
         self.logger.addHandler(console_handler)
 
@@ -141,21 +135,51 @@ class TestLogger:
 
         # 记录 Precondition 检查结果
         precondition = result_dict.get("precondition", {})
-        if precondition:
-            self.info("-" * 60)
-            self.info("Precondition 检查:")
-            for check_name, check_result in precondition.items():
-                status_icon = "✅" if check_result.get("passed", False) else "❌"
-                self.info(f"  {status_icon} {check_name}: {check_result.get('message', '')}")
+        if precondition and isinstance(precondition, dict):
+            checks = precondition.get("checks", [])
+            if checks:
+                self.info("-" * 60)
+                self.info("Precondition 检查:")
+                for check in checks:
+                    status_icon = "✅" if check.get("passed", False) else "❌"
+                    self.info(f"  {status_icon} {check.get('name', '')}: {check.get('message', '')}")
 
         # 记录 Postcondition 检查结果
         postcondition = result_dict.get("postcondition", {})
-        if postcondition:
-            self.info("-" * 60)
-            self.info("Postcondition 检查:")
-            for check_name, check_result in postcondition.items():
-                status_icon = "✅" if check_result.get("passed", False) else "❌"
-                self.info(f"  {status_icon} {check_name}: {check_result.get('message', '')}")
+        if postcondition and isinstance(postcondition, dict):
+            checks = postcondition.get("checks", [])
+            if checks:
+                self.info("-" * 60)
+                self.info("Postcondition 检查:")
+                for check in checks:
+                    status_icon = "✅" if check.get("passed", False) else "❌"
+                    self.info(f"  {status_icon} {check.get('name', '')}: {check.get('message', '')}")
+
+            # 显示状态变化
+            changes = postcondition.get("changes", {})
+            if changes:
+                self.info("-" * 60)
+                self.info("状态变化:")
+                if "bad_blocks_change" in changes:
+                    change = changes["bad_blocks_change"]
+                    icon = "⚠️" if change > 0 else "✅"
+                    self.info(f"  {icon} 坏块变化：{change}")
+                if "lifespan_degradation" in changes:
+                    degradation = changes["lifespan_degradation"]
+                    icon = "⚠️" if degradation >= 1 else "✅"
+                    self.info(f"  {icon} 寿命衰减：{degradation}%")
+                if "error_counts_change" in changes:
+                    change = changes["error_counts_change"]
+                    icon = "⚠️" if change > 0 else "✅"
+                    self.info(f"  {icon} 错误计数变化：{change}")
+
+        # 显示关键失败警告
+        postcondition = result_dict.get("postcondition", {})
+        if postcondition and postcondition.get("critical_fail", False):
+            self.error("=" * 60)
+            self.error("⚠️ 关键失败：坏块数量增加！")
+            self.error("⚠️ 需立即停止测试并排查原因")
+            self.error("=" * 60)
 
         self.info("=" * 80)
         self.info(f"日志文件：{self.log_file}")

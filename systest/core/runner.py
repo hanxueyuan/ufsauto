@@ -13,8 +13,9 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from precondition_checker import PreconditionChecker
 from logger import TestLogger
+from postcondition_checker import PostconditionChecker
+from precondition_checker import PreconditionChecker
 
 
 class TestRunner:
@@ -59,6 +60,9 @@ class TestRunner:
 
         # 初始化 Precondition 检查器
         self.precondition_checker = PreconditionChecker(verbose=verbose)
+
+        # 初始化 Postcondition 检查器
+        self.postcondition_checker = PostconditionChecker(verbose=verbose)
 
         # 初始化日志记录器（在 run_test 时创建）
         self.logger = None
@@ -211,11 +215,32 @@ class TestRunner:
             result["test_id"] = test_id
             result["test_name"] = test_name
             result["timestamp"] = datetime.now().isoformat()
-            
+
+            # 执行 Postcondition 检查
+            self.logger.step("Postcondition 检查")
+
+            # 获取 Precondition 状态用于对比
+            before_state = (
+                self.precondition_checker.check_results if hasattr(self.precondition_checker, "check_results") else {}
+            )
+
+            # 执行 Postcondition 检查
+            postcondition_result = self.postcondition_checker.check_all(
+                test_name, self.device, before_state=before_state, mode=self.mode
+            )
+
+            # 将 Postcondition 结果添加到测试结果
+            result["postcondition"] = postcondition_result
+
+            # 如果 Postcondition 有关键失败（坏块增加），标记测试为 FAIL
+            if postcondition_result.get("critical_fail", False):
+                result["status"] = "FAIL"
+                self.logger.error("Postcondition 检查失败：坏块数量增加")
+
             # 记录测试总结
             self.logger.summary(result)
             self.logger.close()
-            
+
             return result
 
         # 多次执行，计算平均值
