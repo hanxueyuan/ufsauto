@@ -85,7 +85,7 @@ jobs:
           # B307: eval() 用于阈值计算
           # B306: mktemp() 用于临时文件
           # B602: shell=True 用于内部命令
-          bandit -r systest/ --skip B307,B306,B602 --level high --confidence high
+          bandit -r systest/ -s B307,B306,B602 -ll -ii
 
   build-test-package:
     name: Build Test Package
