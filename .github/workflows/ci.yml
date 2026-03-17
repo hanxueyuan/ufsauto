@@ -66,8 +66,9 @@ jobs:
         run: |
           echo "=== Running pytest ==="
           cd systest
-          # 暂时只运行基础单元测试，跳过 e2e 测试（依赖本地环境）
-          python -m pytest tests/quick_fio_test.py tests/test_precondition.py -v --tb=short
+          # 只运行不依赖外部工具的测试
+          # quick_fio_test 需要 FIO 工具，在 CI 中不可用
+          python -m pytest tests/test_precondition.py -v --tb=short
 
   security-scan:
     name: Security Scan
@@ -78,14 +79,10 @@ jobs:
       - name: Python security scan
         uses: PyCQA/bandit-action@v1
         with:
-          path: systest/
-          level: high
+          targets: systest/
+          severity: high
           confidence: high
-          # 忽略内部测试工具的安全警告
-          # B307: eval() 用于阈值计算
-          # B306: mktemp() 用于临时文件
-          # B602: shell=True 用于内部命令
-          skip: "B307,B306,B602"
+          skips: B307,B306,B602
 
   build-test-package:
     name: Build Test Package
