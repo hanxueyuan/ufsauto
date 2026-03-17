@@ -15,11 +15,26 @@ Precondition:
     - FIO 版本：执行 fio --version，收集版本号
 
 1.2 测试目标信息收集
-    - 设备路径：检查 /dev/ufs0 是否存在（os.path.exists）
-    - 设备型号：读取 /sys/block/ufs0/device/model
-    - 固件版本：读取 /sys/block/ufs0/device/rev
-    - 设备容量：执行 fdisk -l /dev/ufs0，收集容量信息
-    - 可用空间：执行 df -BG /dev/ufs0，收集 Available 字段
+    - 设备路径：
+      - 方法 1：ls -l /dev/ | grep -E "(ufs|nvme|sd)" 查找存储设备
+      - 方法 2：fdisk -l 列出所有块设备
+      - 方法 3：通过配置文件或命令行参数指定设备路径
+      - 预期：找到目标 UFS 设备节点（如 /dev/ufs0、/dev/sda 等）
+    - 设备型号：
+      - 方法 1：读取 /sys/block/<device>/device/model（如存在）
+      - 方法 2：smartctl -i /dev/<device> 获取设备信息
+      - 预期：返回设备型号字符串
+    - 固件版本：
+      - 方法 1：读取 /sys/block/<device>/device/rev（如存在）
+      - 方法 2：smartctl -i /dev/<device> | grep "Firmware Version"
+      - 预期：返回固件版本号
+    - 设备容量：
+      - 方法：fdisk -l /dev/<device> | grep "Disk"
+      - 或使用：blockdev --getsize64 /dev/<device>
+      - 预期：返回设备总容量
+    - 可用空间：
+      - 方法：df -BG /dev/<device> | tail -1 | awk '{print $4}'
+      - 预期：可用空间≥10GB
 
 1.3 存储设备配置检查
     - 开启功能：检查 TURBO Mode 状态（待实现自动检查）
