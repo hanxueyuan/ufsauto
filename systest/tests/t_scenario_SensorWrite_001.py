@@ -21,9 +21,34 @@ Precondition:
     - 可用空间：≥5GB
 
 1.3 存储设备配置检查
-    - 开启功能：检查 TURBO Mode 状态（待实现自动检查）
-    - 关闭功能：检查省电模式状态（待实现自动检查）
-    - 特殊配置：检查并记录特殊配置
+    - 查看支持的功能：
+      - 方法 1：cat /sys/block/<device>/device/features
+      - 方法 2：smartctl -i /dev/<device> | grep "Features"
+      - 方法 3：hdparm -I /dev/<device> | grep "Advanced power management"
+      - 预期：列出设备支持的所有功能列表
+    - 需要开启的功能：
+      - TURBO Mode（如支持）：
+        - 检查方法：cat /sys/block/<device>/device/turbo_mode
+        - 预期值：1（开启）
+        - 开启方法：echo 1 > /sys/block/<device>/device/turbo_mode
+      - Write Booster（如支持）：
+        - 检查方法：cat /sys/block/<device>/device/write_booster
+        - 预期值：1（开启）
+        - 开启方法：echo 1 > /sys/block/<device>/device/write_booster
+    - 需要关闭的功能：
+      - 省电模式（Auto Low Power Mode）：
+        - 检查方法：cat /sys/block/<device>/device/power_save
+        - 预期值：0（关闭）
+        - 关闭方法：echo 0 > /sys/block/<device>/device/power_save
+      - 自动休眠（Auto Sleep）：
+        - 检查方法：cat /sys/block/<device>/device/auto_sleep
+        - 预期值：0（关闭）
+        - 关闭方法：echo 0 > /sys/block/<device>/device/auto_sleep
+    - 特殊配置项：
+      - IO 调度器：
+        - 检查方法：cat /sys/block/<device>/queue/scheduler
+        - 预期值：none（性能测试推荐）
+        - 设置方法：echo none > /sys/block/<device>/queue/scheduler
 
 1.4 UFS 器件配置检查
     - LUN 数量：调用 _get_lun_count() 获取实际 LUN 数量
