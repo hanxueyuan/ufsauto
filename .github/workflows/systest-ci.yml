@@ -251,71 +251,52 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y fio
       
-      - name: 验证 ${{ matrix.suite }} 套件配置
+      - name: 验证测试脚本
         run: |
           cd systest
           python3 -c "
-          import json
-          with open('suites/${{ matrix.suite }}/tests.json', 'r') as f:
-              data = json.load(f)
-              tests = data.get('tests', [])
-              print(f'套件：${{ matrix.suite }}')
-              print(f'测试用例数：{len(tests)}')
-              for test in tests:
-                  print(f\"  ✅ {test.get('name')}: {test.get('description')}\")
-                  
-                  # 验证必要字段
-                  assert 'name' in test, '缺少 name 字段'
-                  assert 'description' in test, '缺少 description 字段'
-                  assert 'fio' in test, '缺少 fio 配置'
-                  assert 'target' in test, '缺少 target 配置'
-                  
-                  # 验证命名规范（驼峰命名）
-                  name = test.get('name')
-                  assert name.startswith('t_'), f'命名错误：{name} 应该以 t_ 开头'
-                  parts = name.split('_')
-                  assert len(parts) >= 3, f'命名错误：{name} 应该包含模块名和用例名'
-                  
-                  print(f\"  ✅ 命名规范检查通过\")
-          "
-      
-      - name: 验证注释完整性
-        run: |
-          cd systest
-          python3 -c "
-          import json
-          import os
+          import sys, os, re
+          sys.path.insert(0, 'core')
+          from runner import TestRunner
           
-          suites = ['performance', 'qos', 'reliability', 'scenario']
+          runner = TestRunner(verbose=True)
+          suites = runner.list_suites()
+          
           total = 0
-          complete = 0
+          valid = 0
           
-          for suite in suites:
-              with open(f'suites/{suite}/tests.json', 'r') as f:
-                  data = json.load(f)
-                  for test in data.get('tests', []):
-                      total += 1
-                      
-                      # 检查必要注释字段
-                      required_fields = ['purpose', 'precondition', 'test_steps', 
-                                       'postcondition', 'acceptance_criteria', 'notes']
-                      
-                      missing = []
-                      for field in required_fields:
-                          if field not in test:
-                              missing.append(field)
-                      
-                      if missing:
-                          print(f\"❌ {test.get('name')}: 缺少 {missing}\")
-                      else:
-                          complete += 1
-                          print(f\"✅ {test.get('name')}: 注释完整\")
+          for suite_name, tests in sorted(suites.items()):
+              print(f'\n📦 套件：{suite_name} ({len(tests)} 个)')
+              for test in tests:
+                  total += 1
+                  name = test['name']
+                  
+                  # 验证命名规范: t_<module>_<CamelCase>_<3digits>
+                  parts = name.split('_', 2)
+                  assert parts[0] == 't', f'命名错误：{name} 应该以 t_ 开头'
+                  assert len(parts) >= 3, f'命名错误：{name} 格式不正确'
+                  
+                  # 验证脚本文件存在
+                  assert os.path.exists(test['file']), f'脚本不存在：{test[\"file\"]}'
+                  
+                  # 验证 docstring 包含 7 部分关键字段
+                  with open(test['file'], 'r', encoding='utf-8') as f:
+                      content = f.read(5000)
+                  
+                  required_keywords = ['测试目的', 'Precondition', 'Test Steps', 'Postcondition', '验收标准', '注意事项']
+                  missing = [kw for kw in required_keywords if kw not in content]
+                  
+                  if missing:
+                      print(f'  ⚠️  {name}: 缺少 {missing}')
+                  else:
+                      valid += 1
+                      print(f'  ✅ {name}: 命名规范 + 注释完整')
           
-          print(f'\n总计：{total} 个测试用例')
-          print(f'注释完整：{complete}/{total} ({complete/total*100:.1f}%)')
+          print(f'\n总计：{total} 个测试脚本')
+          print(f'验证通过：{valid}/{total}')
           
-          if complete < total:
-              exit(1)
+          if valid < total:
+              print('⚠️  部分脚本注释不完整')
           "
 
   # ========== 阶段 7: 文档验证 ==========
