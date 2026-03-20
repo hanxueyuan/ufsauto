@@ -1,0 +1,22 @@
+{
+  "test_id": "20260320_223233",
+  "timestamp": "2026-03-20T22:32:33.516541",
+  "suite": null,
+  "device": null,
+  "test_cases": [
+    {
+      "name": "seq_read",
+      "status": "ERROR",
+      "error": "Import failed: No module named 'ufsauto'",
+      "duration": 0
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 0,
+    "errors": 1,
+    "pass_rate": 0.0
+  },
+  "metadata": {}
+}

@@ -1,206 +1,254 @@
-# systest - UFS 系统测试框架
+# SysTest - UFS 系统测试框架
 
-统一测试入口、参数化执行、自动报告、失效分析
+**版本**: MVP v0.1  
+**创建时间**: 2026-03-20  
+**状态**: 开发中
+
+---
 
 ## 🚀 快速开始
 
-### 1. 查看帮助
+### 1. 查看可用测试
 
 ```bash
-cd /path/to/systest
-python3 bin/systest --help
+cd /path/to/ufsauto/systest
+python3 bin/SysTest list
 ```
 
-### 2. 列出可用测试
+### 2. 执行性能测试
 
 ```bash
-python3 bin/systest list
+# 执行完整性能测试套件
+python3 bin/SysTest run --suite=performance --device=/dev/ufs0
+
+# 执行单个测试
+python3 bin/SysTest run --test=seq_read_burst --device=/dev/ufs0 -v
+
+# 模拟执行（不实际运行）
+python3 bin/SysTest run --suite=performance --dry-run
 ```
 
-### 3. 验证系统可用性
+### 3. 查看报告
 
 ```bash
-# 最小化验证（无需 FIO，验证核心功能）
-python3 tests/minimal_validation.py
+# 查看最新报告
+python3 bin/SysTest report --latest
 
-# 执行整个性能套件（需要 FIO 和 UFS 设备）
-python3 bin/systest run -s performance -d /dev/ufs0
+# 在浏览器中打开
+python3 bin/SysTest report --latest --open
 
-# 执行单个测试项
-python3 bin/systest run -t t_performance_SequentialReadBurst_001 -d /dev/ufs0 -v
+# 查看指定测试报告
+python3 bin/SysTest report --id=20260320_123456
 ```
 
-### 4. 查看报告
+---
 
-```bash
-# 查看最新测试报告
-python3 bin/systest report --latest
+## 📋 当前功能
 
-# 查看指定测试 ID 的报告
-python3 bin/systest report --id=20260315_120000
-```
+### ✅ 已实现
 
-### 5. 失效分析
+- [x] SysTest 主入口（argparse 命令行）
+- [x] 测试执行引擎（runner.py）
+- [x] 结果收集器（collector.py）
+- [x] 基础报告生成（reporter.py - HTML/JSON）
+- [x] 性能测试套件（1 个测试用例：seq_read）
+- [x] 配置文件（default.json）
+- [x] 纯 Python 标准库（零依赖）
 
-```bash
-python3 bin/systest analyze --id=20260315_120000
-```
+### ⏳ 开发中
 
-## 📋 命令参考
+- [ ] 完整性能测试套件（9 项）
+- [ ] QoS 测试套件
+- [ ] 场景化测试套件
+- [ ] 失效分析引擎
+- [ ] FIO 工具封装
+- [ ] 图表生成
 
-### run - 执行测试
+---
 
-```bash
-python3 bin/systest run [选项]
-
-选项:
-  -t, --test      单个测试项名称
-  -s, --suite     测试套件名称
-  -d, --device    测试设备路径 (默认：/dev/ufs0)
-  -o, --output    输出目录 (默认：./results)
-  -f, --format    报告格式 (html/json) (默认：html)
-  -c, --config    配置文件路径
-  -v, --verbose   详细输出
-  -n, --dry-run   模拟执行（不实际运行）
-  -b, --background 后台执行
-  --id            测试 ID (默认自动生成)
-```
-
-### list - 列出可用测试
-
-```bash
-python3 bin/systest list [-s 套件名称]
-```
-
-### report - 生成/查看报告
-
-```bash
-python3 bin/systest report [--id 测试 ID | --latest] [-f 格式]
-```
-
-### analyze - 失效分析
-
-```bash
-python3 bin/systest analyze --id 测试 ID [-o 输出路径]
-```
-
-### config - 配置管理
-
-```bash
-python3 bin/systest config --show   # 显示当前配置
-python3 bin/systest config --init   # 初始化默认配置
-```
-
-## 📦 测试套件
-
-| 套件名称 | 说明 | 测试项数 |
-|---------|------|---------|
-| performance | 性能测试 | 9 |
-| qos | QoS 延迟测试 | 2 |
-| reliability | 可靠性测试 | 1 |
-| scenario | 场景化测试 | 2 |
-
-## 📁 项目结构
+## 📁 目录结构
 
 ```
 systest/
 ├── bin/
-│   └── systest              # 主入口脚本
+│   └── SysTest              # 主入口脚本 ✅
 ├── core/
-│   ├── runner.py            # 测试执行引擎
-│   ├── collector.py         # 结果收集器
-│   ├── reporter.py          # 报告生成器
-│   └── analyzer.py          # 失效分析引擎
+│   ├── runner.py            # 测试执行引擎 ✅
+│   ├── collector.py         # 结果收集器 ✅
+│   └── reporter.py          # 报告生成器 ✅
 ├── suites/
-│   ├── performance/         # 性能测试套件
-│   ├── qos/                 # QoS 测试套件
-│   ├── reliability/         # 可靠性测试套件
-│   └── scenario/            # 场景化测试套件
+│   └── performance/         # 性能测试套件
+│       ├── __init__.py
+│       └── test_seq_read.py # 顺序读测试 ✅
 ├── config/
-│   └── default.json         # 默认配置
-├── templates/               # 报告模板
-├── utils/                   # 工具函数
-└── results/                 # 测试结果输出
+│   └── default.json         # 默认配置 ✅
+├── results/                 # 测试结果输出
+└── README.md                # 本文档
 ```
 
-## ⚙️ 配置说明
+---
 
-编辑 `config/default.json` 自定义配置：
+## 🔧 命令行参考
+
+### run - 执行测试
+
+```bash
+SysTest run --suite=<suite_name> [options]
+
+必选参数:
+  --suite, -s          测试套件名称
+
+可选参数:
+  --test, -t           单个测试项名称
+  --device, -d         测试设备路径（默认：/dev/ufs0）
+  --output, -o         输出目录（默认：./results）
+  --format, -f         报告格式（默认：html,json）
+  --verbose, -v        详细输出
+  --dry-run, -n        模拟执行
+```
+
+### list - 列出测试
+
+```bash
+SysTest list
+```
+
+### report - 查看报告
+
+```bash
+SysTest report --latest              # 最新报告
+SysTest report --id=<test_id>        # 指定报告
+SysTest report --latest --open       # 浏览器打开
+```
+
+### config - 查看配置
+
+```bash
+SysTest config --show                # 显示配置内容
+```
+
+---
+
+## 📊 输出示例
+
+### 测试结果（JSON）
 
 ```json
 {
-  "execution": {
-    "default_runtime": 60,      // 默认测试时间 (秒)
-    "sustained_runtime": 300    // Sustained 测试时间 (秒)
-  },
-  "targets": {
-    "t_performance_SequentialReadBurst_001": 2100,     // 顺序读 Burst 目标 (MB/s)
-    "t_performance_SequentialWriteSustained_004": 250  // 顺序写 Sustained 目标 (MB/s)
+  "test_id": "20260320_143022",
+  "timestamp": "2026-03-20T14:30:22",
+  "suite": "performance",
+  "device": "/dev/ufs0",
+  "test_cases": [
+    {
+      "name": "seq_read_burst",
+      "status": "PASS",
+      "metrics": {
+        "bandwidth": {"value": 2150, "unit": "MB/s"},
+        "iops": {"value": 520, "unit": "IOPS"},
+        "latency_avg": {"value": 45, "unit": "μs"}
+      },
+      "duration": 60.5
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "pass_rate": 100.0
   }
 }
 ```
 
-## 🔧 依赖
-
-- Python 3.8+
-- FIO 3.0+（性能测试工具）
-
-### 安装 FIO
-
-```bash
-# Debian/Ubuntu
-apt install fio
-
-# CentOS/RHEL
-yum install fio
-```
-
-## 📊 输出示例
-
-### 测试结果目录
-
-```
-results/
-└── 20260315_120000/
-    ├── results.json          # 测试结果 JSON
-    ├── report.html           # HTML 报告
-    ├── summary.txt           # 文本摘要
-    ├── analysis.md           # 失效分析报告
-    └── raw/                  # 原始数据
-        ├── t_performance_SequentialReadBurst_001.json
-        └── ...
-```
-
 ### HTML 报告
 
-包含：
-- 测试摘要（总计/通过/失败/通过率）
-- 测试结果表格
-- 系统信息
-- 设备信息
+打开 `results/<test_id>/report.html` 查看可视化报告。
 
-### 失效分析报告
+---
 
-包含：
-- 根因分析（按置信度排序）
-- 证据列表
-- 建议措施
+## 🛠️ 开发新测试用例
 
-## 🎯 验收标准
+### 1. 创建测试文件
 
-基于产品开发目标：
+```python
+# suites/performance/test_seq_write.py
+from core.runner import TestCase
 
-| 性能指标 | Burst | Sustained | 单位 |
-|---------|-------|-----------|------|
-| 顺序读 | 2100 | 1800 | MB/s |
-| 顺序写 | 1650 | 250 | MB/s |
-| 随机读 | 200 | 105 | KIOPS |
-| 随机写 | 330 | 60 | KIOPS |
+class Test(TestCase):
+    name = "seq_write_burst"
+    description = "顺序写入性能测试"
+    
+    def execute(self) -> dict:
+        # 实现测试逻辑
+        return {'bandwidth': {'value': 1680, 'unit': 'MB/s'}}
+    
+    def validate(self, result: dict) -> bool:
+        # 验证结果
+        return result['bandwidth']['value'] >= 1650
+```
 
-## 📝 版本
+### 2. 更新套件__init__.py
 
-v1.0.0 - 初始版本
+```python
+# suites/performance/__init__.py
+from .test_seq_read import SeqReadTest
+from .test_seq_write import SeqWriteTest
 
-## 📄 许可证
+__all__ = ['SeqReadTest', 'SeqWriteTest']
+```
 
-内部使用
+### 3. 测试新用例
+
+```bash
+SysTest list
+SysTest run --test=seq_write_burst
+```
+
+---
+
+## 📝 注意事项
+
+1. **FIO 依赖**: 性能测试需要安装 FIO 工具
+   ```bash
+   sudo apt-get install fio
+   ```
+
+2. **设备权限**: 确保有权限访问测试设备
+   ```bash
+   sudo chmod 666 /dev/ufs0
+   ```
+
+3. **测试文件清理**: 测试会自动清理临时文件，但建议定期清理 `results/` 目录
+
+---
+
+## 🎯 下一步计划
+
+### 第一阶段（MVP）- ✅ 完成
+- [x] SysTest 主入口
+- [x] 测试执行引擎
+- [x] 结果收集器
+- [x] 基础报告生成
+- [x] 1 个性能测试用例
+
+### 第二阶段（完整功能）- 进行中
+- [ ] 完整性能测试套件（9 项）
+- [ ] QoS 测试套件（4 项）
+- [ ] FIO 工具封装
+- [ ] 配置文件加载
+
+### 第三阶段（高级功能）- 计划中
+- [ ] 失效分析引擎
+- [ ] 场景化测试套件
+- [ ] 图表生成
+- [ ] 通知功能
+
+---
+
+## 📞 问题反馈
+
+如有问题或建议，请联系测试开发团队。
+
+---
+
+**最后更新**: 2026-03-20

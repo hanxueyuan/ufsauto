@@ -1,234 +1,276 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 报告生成器 - Report Generator
-负责生成测试报告
+负责生成 HTML/JSON/PDF 格式的测试报告
 """
 
 import json
-import os
-from datetime import datetime
+import logging
+import webbrowser
 from pathlib import Path
+from datetime import datetime
+from typing import Dict, List, Any, Optional
+from string import Template
+
+logger = logging.getLogger(__name__)
 
 
 class ReportGenerator:
-    """报告生成器"""
-
-    def __init__(self, output_dir="./results", formats=None):
-        self.output_dir = Path(output_dir)
-        self.formats = formats or ["html", "json"]
-
-    def generate(self, results, test_id):
-        """生成报告"""
-        output_path = self.output_dir / test_id
-        output_path.mkdir(parents=True, exist_ok=True)
-
-        generated_files = []
-
-        # 保存 JSON 结果
-        if "json" in self.formats:
-            json_file = output_path / "results.json"
-            with open(json_file, "w", encoding="utf-8") as f:
-                json.dump(results, f, indent=2, ensure_ascii=False)
-            generated_files.append(str(json_file))
-
-        # 生成 HTML 报告
-        if "html" in self.formats:
-            html_file = output_path / "report.html"
-            html_content = self._generate_html(results, test_id)
-            with open(html_file, "w", encoding="utf-8") as f:
-                f.write(html_content)
-            generated_files.append(str(html_file))
-
-        # 生成文本摘要
-        if "text" in self.formats:
-            txt_file = output_path / "summary.txt"
-            txt_content = self._generate_text_summary(results, test_id)
-            with open(txt_file, "w", encoding="utf-8") as f:
-                f.write(txt_content)
-            generated_files.append(str(txt_file))
-
-        return generated_files[0] if generated_files else None
-
-    def _generate_html(self, results, test_id):
-        """生成 HTML 报告"""
-
-        # 兼容两种数据结构
-        if "test_results" in results:
-            summary = results["test_results"].get("summary", {})
-            test_cases = results["test_results"].get("test_cases", [])
-        else:
-            summary = results.get("summary", {})
-            test_cases = results.get("test_cases", [])
-
-        system_info = results.get("system_info", {})
-        device_info = results.get("device_info", {})
-
-        # 生成测试结果表格
-        test_rows = []
-        for tc in test_cases:
-            name = tc.get("test_name", "Unknown")
-            status = tc.get("status", "UNKNOWN")
-            status_class = "pass" if status == "PASS" else "fail" if status == "FAIL" else "error"
-            status_icon = "✅" if status == "PASS" else "❌" if status == "FAIL" else "⚠️"
-
-            metrics = tc.get("metrics", {})
-            bandwidth = metrics.get("bandwidth", 0)
-            iops = metrics.get("iops", 0)
-            latency = metrics.get("latency_avg", 0)
-
-            test_rows.append(f"""
-            <tr class="{status_class}">
-                <td>{name}</td>
-                <td>{status_icon} {status}</td>
-                <td>{bandwidth if bandwidth else '-'} MB/s</td>
-                <td>{iops if iops else '-'} K</td>
-                <td>{latency if latency else '-'} μs</td>
-            </tr>
-            """)
-
-        html = f"""<!DOCTYPE html>
+    """测试报告生成器"""
+    
+    # HTML 报告模板（纯标准库，无外部依赖）
+    HTML_TEMPLATE = Template('''<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UFS 系统测试报告 - {test_id}</title>
+    <title>UFS 系统测试报告 - $test_id</title>
     <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; padding: 20px; }}
-        .container {{ max-width: 1200px; margin: 0 auto; }}
-        h1 {{ color: #333; margin-bottom: 10px; }}
-        h2 {{ color: #555; margin: 30px 0 15px; border-bottom: 2px solid #007bff; padding-bottom: 10px; }}
-        .header {{ background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
-        .summary {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin: 20px 0; }}
-        .summary-card {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; text-align: center; }}
-        .summary-card.pass {{ background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }}
-        .summary-card.fail {{ background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%); }}
-        .summary-card .value {{ font-size: 32px; font-weight: bold; }}
-        .summary-card .label {{ font-size: 14px; opacity: 0.9; margin-top: 5px; }}
-        table {{ width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
-        th {{ background: #f8f9fa; padding: 15px; text-align: left; font-weight: 600; color: #333; }}
-        td {{ padding: 12px 15px; border-top: 1px solid #eee; }}
-        tr.pass {{ background: #d4edda; }}
-        tr.fail {{ background: #f8d7da; }}
-        tr.error {{ background: #fff3cd; }}
-        .info-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }}
-        .info-card {{ background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
-        .info-card h3 {{ color: #667eea; margin-bottom: 10px; font-size: 16px; }}
-        .info-item {{ display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }}
-        .info-item:last-child {{ border-bottom: none; }}
-        .info-label {{ color: #666; }}
-        .info-value {{ color: #333; font-weight: 500; }}
-        .footer {{ text-align: center; padding: 20px; color: #999; font-size: 14px; }}
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1 { color: #333; border-bottom: 3px solid #007bff; padding-bottom: 10px; }
+        h2 { color: #555; margin-top: 30px; }
+        .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0; }
+        .summary-card { padding: 20px; border-radius: 8px; text-align: center; }
+        .summary-card.total { background: #e3f2fd; }
+        .summary-card.passed { background: #e8f5e9; }
+        .summary-card.failed { background: #ffebee; }
+        .summary-card .value { font-size: 36px; font-weight: bold; }
+        .summary-card .label { color: #666; margin-top: 5px; }
+        .pass-rate { font-size: 24px; font-weight: bold; }
+        .pass-rate.good { color: #2e7d32; }
+        .pass-rate.bad { color: #c62828; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #f8f9fa; font-weight: 600; }
+        tr:hover { background: #f8f9fa; }
+        .status { padding: 4px 12px; border-radius: 4px; font-weight: 500; }
+        .status.PASS { background: #e8f5e9; color: #2e7d32; }
+        .status.FAIL { background: #ffebee; color: #c62828; }
+        .status.ERROR { background: #fff3e0; color: #ef6c00; }
+        .failure-analysis { background: #fff3e0; padding: 20px; border-radius: 8px; margin: 20px 0; }
+        .failure-analysis h3 { color: #e65100; margin-top: 0; }
+        .metrics { font-family: monospace; background: #f8f9fa; padding: 2px 6px; border-radius: 3px; }
+        .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 14px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>📊 UFS 系统测试报告</h1>
-            <p style="color: #666;">测试 ID: {test_id}</p>
-            <p style="color: #999; font-size: 14px;">生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+        <h1>📊 UFS 系统测试报告</h1>
+        
+        <div class="meta">
+            <p><strong>测试 ID:</strong> $test_id</p>
+            <p><strong>时间:</strong> $timestamp</p>
+            <p><strong>套件:</strong> $suite</p>
+            <p><strong>设备:</strong> $device</p>
         </div>
-
+        
+        <h2>📈 汇总统计</h2>
         <div class="summary">
-            <div class="summary-card">
-                <div class="value">{summary.get('total', 0)}</div>
+            <div class="summary-card total">
+                <div class="value">$total</div>
                 <div class="label">总计</div>
             </div>
-            <div class="summary-card pass">
-                <div class="value">{summary.get('passed', 0)}</div>
+            <div class="summary-card passed">
+                <div class="value">$passed</div>
                 <div class="label">通过</div>
             </div>
-            <div class="summary-card fail">
-                <div class="value">{summary.get('failed', 0)}</div>
+            <div class="summary-card failed">
+                <div class="value">$failed</div>
                 <div class="label">失败</div>
             </div>
             <div class="summary-card">
-                <div class="value">{summary.get('pass_rate', 0):.1f}%</div>
+                <div class="pass-rate $pass_rate_class">$pass_rate%</div>
                 <div class="label">通过率</div>
             </div>
         </div>
-
+        
         <h2>📋 测试结果</h2>
         <table>
             <thead>
                 <tr>
                     <th>测试项</th>
                     <th>状态</th>
-                    <th>带宽</th>
-                    <th>IOPS</th>
-                    <th>延迟</th>
+                    <th>耗时</th>
+                    <th>关键指标</th>
                 </tr>
             </thead>
             <tbody>
-                {''.join(test_rows)}
+                $test_rows
             </tbody>
         </table>
-
-        <h2>💻 系统信息</h2>
-        <div class="info-grid">
-            <div class="info-card">
-                <h3>系统</h3>
-                <div class="info-item"><span class="info-label">主机名</span><span class="info-value">{system_info.get('hostname', '-')}</span></div>
-                <div class="info-item"><span class="info-label">内核</span><span class="info-value">{system_info.get('kernel', '-')}</span></div>
-                <div class="info-item"><span class="info-label">CPU</span><span class="info-value">{system_info.get('cpu_count', 0)} 核心</span></div>
-                <div class="info-item"><span class="info-label">内存</span><span class="info-value">{system_info.get('memory_total', 0)} MB</span></div>
-            </div>
-            <div class="info-card">
-                <h3>设备</h3>
-                <div class="info-item"><span class="info-label">设备路径</span><span class="info-value">{device_info.get('device_path', '-')}</span></div>
-                <div class="info-item"><span class="info-label">型号</span><span class="info-value">{device_info.get('model', '-')}</span></div>
-                <div class="info-item"><span class="info-label">序列号</span><span class="info-value">{device_info.get('serial', '-')}</span></div>
-                <div class="info-item"><span class="info-label">容量</span><span class="info-value">{device_info.get('size', 0)} GB</span></div>
-            </div>
-        </div>
-
+        
+        $failure_section
+        
         <div class="footer">
-            <p>UFS 系统测试框架 v1.0 | SysTest</p>
+            <p>UFS 系统测试框架 SysTest | 生成时间：$gen_time</p>
         </div>
     </div>
 </body>
-</html>
-"""
-        return html
-
-    def _generate_text_summary(self, results, test_id):
-        """生成文本摘要"""
-        # 兼容两种数据结构
-        if "test_results" in results:
-            summary = results["test_results"].get("summary", {})
-            test_cases = results["test_results"].get("test_cases", [])
+</html>''')
+    
+    def __init__(self, template: str = 'default'):
+        self.template = template
+        self.results_dir = Path('./results')
+    
+    def generate(
+        self,
+        report_data: Dict[str, Any],
+        output_dir: Optional[str] = None,
+        formats: Optional[List[str]] = None
+    ) -> str:
+        """
+        生成报告
+        
+        Args:
+            report_data: 报告数据
+            output_dir: 输出目录
+            formats: 报告格式列表 ['html', 'json', 'pdf']
+        
+        Returns:
+            主报告文件路径
+        """
+        if formats is None:
+            formats = ['html', 'json']
+        
+        if output_dir:
+            output_path = Path(output_dir) / report_data['test_id']
         else:
-            summary = results.get("summary", {})
-            test_cases = results.get("test_cases", [])
-
-        lines = [
-            f"UFS 系统测试报告",
-            f"测试 ID: {test_id}",
-            f"生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-            "",
-            "测试摘要:",
-            f"  总计：{summary.get('total', 0)} 项",
-            f"  通过：{summary.get('passed', 0)} 项",
-            f"  失败：{summary.get('failed', 0)} 项",
-            f"  通过率：{summary.get('pass_rate', 0):.1f}%",
-            "",
-            "测试结果:",
-        ]
-
-        for tc in test_cases:
-            name = tc.get("test_name", "Unknown")
-            status = tc.get("status", "UNKNOWN")
-            status_icon = "✅" if status == "PASS" else "❌" if status == "FAIL" else "⚠️"
-
-            metrics = tc.get("metrics", {})
-            bandwidth = metrics.get("bandwidth", 0)
-            iops = metrics.get("iops", 0)
-
-            line = f"  {status_icon} {name}"
-            if bandwidth:
-                line += f" - {bandwidth} MB/s"
-            if iops:
-                line += f" - {iops} K IOPS"
-            lines.append(line)
-
-        return "\n".join(lines)
+            output_path = self.results_dir / report_data['test_id']
+        
+        output_path.mkdir(parents=True, exist_ok=True)
+        
+        main_report = None
+        
+        for fmt in formats:
+            if fmt == 'html':
+                report_path = self._generate_html(report_data, output_path)
+                if main_report is None:
+                    main_report = report_path
+            elif fmt == 'json':
+                report_path = self._generate_json(report_data, output_path)
+                if main_report is None:
+                    main_report = report_path
+        
+        logger.info(f"报告已生成：{main_report}")
+        return str(main_report)
+    
+    def _generate_html(self, report_data: Dict[str, Any], output_path: Path) -> Path:
+        """生成 HTML 报告"""
+        # 准备模板变量
+        pass_rate = report_data['summary']['pass_rate']
+        
+        test_rows = []
+        failures = []
+        
+        for result in report_data['test_cases']:
+            status = result.get('status', 'UNKNOWN')
+            status_class = status if status in ['PASS', 'FAIL', 'ERROR'] else 'ERROR'
+            
+            # 提取关键指标
+            metrics = result.get('metrics', {})
+            metrics_str = self._format_metrics(metrics)
+            
+            row = f'''<tr>
+                <td>{result['name']}</td>
+                <td><span class="status {status_class}">{status}</span></td>
+                <td>{result.get('duration', 0):.2f}s</td>
+                <td>{metrics_str}</td>
+            </tr>'''
+            test_rows.append(row)
+            
+            # 收集失败项
+            if status == 'FAIL':
+                failures.append(self._create_failure_analysis(result))
+        
+        # 失败分析部分
+        if failures:
+            failure_section = '''<h2>⚠️ 失效分析</h2>''' + '\n'.join(failures)
+        else:
+            failure_section = ''
+        
+        # 填充模板
+        html_content = self.HTML_TEMPLATE.substitute(
+            test_id=report_data['test_id'],
+            timestamp=report_data['timestamp'],
+            suite=report_data.get('suite', '-'),
+            device=report_data.get('device', '-'),
+            total=report_data['summary']['total'],
+            passed=report_data['summary']['passed'],
+            failed=report_data['summary']['failed'],
+            pass_rate=f'{pass_rate:.1f}',
+            pass_rate_class='good' if pass_rate >= 90 else 'bad',
+            test_rows='\n'.join(test_rows),
+            failure_section=failure_section,
+            gen_time=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        )
+        
+        # 保存文件
+        report_path = output_path / 'report.html'
+        with open(report_path, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+        
+        logger.debug(f"HTML 报告已保存：{report_path}")
+        return report_path
+    
+    def _generate_json(self, report_data: Dict[str, Any], output_path: Path) -> Path:
+        """生成 JSON 报告"""
+        report_path = output_path / 'report.json'
+        with open(report_path, 'w', encoding='utf-8') as f:
+            json.dump(report_data, f, indent=2, ensure_ascii=False)
+        
+        logger.debug(f"JSON 报告已保存：{report_path}")
+        return report_path
+    
+    def _format_metrics(self, metrics: Dict[str, Any]) -> str:
+        """格式化指标显示"""
+        if not metrics:
+            return '-'
+        
+        parts = []
+        for key, value in metrics.items():
+            if isinstance(value, dict):
+                val = value.get('value', '-')
+                unit = value.get('unit', '')
+                parts.append(f'{key}: {val} {unit}')
+            else:
+                parts.append(f'{key}: {value}')
+        
+        return '<br>'.join(parts[:3])  # 最多显示 3 个指标
+    
+    def _create_failure_analysis(self, result: Dict[str, Any]) -> str:
+        """创建失效分析 HTML"""
+        return f'''<div class="failure-analysis">
+            <h3>❌ {result['name']}</h3>
+            <p><strong>状态:</strong> {result.get('status', 'UNKNOWN')}</p>
+            <p><strong>可能原因:</strong></p>
+            <ul>
+                <li>待分析（失效分析引擎待实现）</li>
+            </ul>
+            <p><strong>建议措施:</strong></p>
+            <ul>
+                <li>检查测试环境</li>
+                <li>查看日志文件</li>
+                <li>重新执行测试</li>
+            </ul>
+        </div>'''
+    
+    def get_latest_report(self) -> Optional[str]:
+        """获取最新报告路径"""
+        if not self.results_dir.exists():
+            return None
+        
+        test_dirs = [d for d in self.results_dir.iterdir() if d.is_dir()]
+        if not test_dirs:
+            return None
+        
+        latest = max(test_dirs, key=lambda d: d.stat().st_mtime)
+        report_path = latest / 'report.html'
+        
+        return str(report_path) if report_path.exists() else None
+    
+    def get_report(self, test_id: str) -> Optional[str]:
+        """获取指定测试报告"""
+        report_path = self.results_dir / test_id / 'report.html'
+        return str(report_path) if report_path.exists() else None

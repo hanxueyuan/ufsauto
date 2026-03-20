@@ -1,0 +1,24 @@
+{
+  "test_id": "fio_test_fio_test_j_syndk3",
+  "timestamp": "2026-03-16T10:15:00",
+  "device": "/tmp/fio_test_j_syndk3",
+  "test_results": {
+    "test_cases": [
+      {
+        "test_name": "seq_read_burst",
+        "status": "PASS",
+        "metrics": {
+          "bandwidth": 2150.5,
+          "iops": 0,
+          "latency_avg": 115.0
+        }
+      }
+    ],
+    "summary": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "pass_rate": 100.0
+    }
+  }
+}

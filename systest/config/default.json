@@ -17,7 +17,7 @@
   },
   "report": {
     "template": "default",
-    "include_charts": true,
+    "include_charts": false,
     "include_raw_data": false,
     "auto_open": true
   },

@@ -1,0 +1,22 @@
+{
+  "test_id": "20260320_223124",
+  "timestamp": "2026-03-20T22:31:24.335503",
+  "suite": null,
+  "device": null,
+  "test_cases": [
+    {
+      "name": "seq_read",
+      "status": "ERROR",
+      "error": "Import failed: cannot import name 'SeqReadTest' from 'suites.performance.test_seq_read' (/home/gem/workspace/agent/workspace/ufsauto/systest/suites/performance/test_seq_read.py)",
+      "duration": 0
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 0,
+    "errors": 1,
+    "pass_rate": 0.0
+  },
+  "metadata": {}
+}
