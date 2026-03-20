@@ -13,7 +13,6 @@ Usage:
 import sys
 import os
 import argparse
-import logging
 from datetime import datetime
 from pathlib import Path
 
@@ -25,27 +24,30 @@ sys.path.insert(0, str(project_root))
 from core.runner import TestRunner
 from core.collector import ResultCollector
 from core.reporter import ReportGenerator
-
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-logger = logging.getLogger(__name__)
+from core.logger import get_logger, close_all_loggers
 
 
 def cmd_run(args):
     """执行测试"""
-    logger.info(f"开始执行测试 - Suite: {args.suite}, Device: {args.device}")
-    
-    # 初始化组件
-    runner = TestRunner(device=args.device, verbose=args.verbose)
-    collector = ResultCollector(output_dir=args.output)
-    reporter = ReportGenerator(template='default')
-    
     # 生成测试 ID
     test_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+    
+    # 初始化日志（按测试 ID 分离）
+    logger = get_logger(
+        test_id=test_id,
+        log_dir='logs',
+        console_level=logging.DEBUG if args.verbose else logging.INFO,
+        file_level=logging.DEBUG
+    )
+    
+    logger.info(f"开始执行测试 - Suite: {args.suite}, Device: {args.device}")
+    logger.info(f"测试 ID: {test_id}")
+    logger.debug(f"日志文件：{logger.get_log_file()}")
+    
+    # 初始化组件
+    runner = TestRunner(device=args.device, verbose=args.verbose, logger=logger)
+    collector = ResultCollector(output_dir=args.output)
+    reporter = ReportGenerator(template='default')
     
     # 执行测试
     try:
@@ -59,14 +61,20 @@ def cmd_run(args):
         
         logger.info(f"测试完成 - 通过率：{report_data['summary']['pass_rate']:.1f}%")
         logger.info(f"报告已生成：{report_path}")
+        logger.info(f"日志文件：{logger.get_log_file()}")
+        
+        # 关闭日志
+        close_all_loggers()
         
         return 0 if report_data['summary']['failed'] == 0 else 1
         
     except Exception as e:
-        logger.error(f"测试执行失败：{e}")
-        if args.verbose:
-            import traceback
-            traceback.print_exc()
+        logger.critical(f"测试执行失败：{e}", exc_info=True)
+        logger.error(f"错误日志：{logger.get_error_file()}")
+        
+        # 关闭日志
+        close_all_loggers()
+        
         return 2
 
 

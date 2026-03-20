@@ -13,6 +13,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 
+# 默认 logger（向后兼容）
 logger = logging.getLogger(__name__)
 
 
@@ -22,15 +23,16 @@ class TestCase:
     name: str = "base_test"
     description: str = "基础测试用例"
     
-    def __init__(self, device: str = '/dev/ufs0', verbose: bool = False):
+    def __init__(self, device: str = '/dev/ufs0', verbose: bool = False, logger=None):
         self.device = device
         self.verbose = verbose
+        self.logger = logger or logging.getLogger(f"systest.test.{self.name}")
         self.start_time = None
         self.end_time = None
     
     def setup(self) -> bool:
         """测试前准备"""
-        logger.debug(f"Setup: {self.name}")
+        self.logger.debug(f"Setup: {self.name}")
         return True
     
     def execute(self) -> Dict[str, Any]:
@@ -43,16 +45,19 @@ class TestCase:
     
     def teardown(self) -> bool:
         """测试后清理"""
-        logger.debug(f"Teardown: {self.name}")
+        self.logger.debug(f"Teardown: {self.name}")
         return True
     
     def run(self) -> Dict[str, Any]:
         """完整执行流程"""
         self.start_time = datetime.now()
+        self.logger.info(f"开始执行测试：{self.name}")
         
         try:
             # Setup
+            self.logger.debug("执行 Setup...")
             if not self.setup():
+                self.logger.error(f"Setup 失败：{self.name}")
                 return {
                     'name': self.name,
                     'status': 'ERROR',
@@ -61,17 +66,22 @@ class TestCase:
                 }
             
             # Execute
+            self.logger.debug("执行测试逻辑...")
             result = self.execute()
             
             # Validate
+            self.logger.debug("验证结果...")
             passed = self.validate(result)
             
             self.end_time = datetime.now()
             duration = (self.end_time - self.start_time).total_seconds()
             
+            status = 'PASS' if passed else 'FAIL'
+            self.logger.info(f"测试完成：{self.name} - {status} ({duration:.2f}s)")
+            
             return {
                 'name': self.name,
-                'status': 'PASS' if passed else 'FAIL',
+                'status': status,
                 'metrics': result,
                 'duration': duration,
                 'timestamp': self.start_time.isoformat()
@@ -79,7 +89,7 @@ class TestCase:
             
         except Exception as e:
             self.end_time = datetime.now()
-            logger.error(f"测试执行失败 {self.name}: {e}")
+            self.logger.error(f"测试执行失败 {self.name}: {e}", exc_info=True)
             return {
                 'name': self.name,
                 'status': 'ERROR',
