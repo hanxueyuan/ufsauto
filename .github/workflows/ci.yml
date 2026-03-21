@@ -9,9 +9,18 @@ on:
     # 每天 UTC 时间 2:00 运行（北京时间 10:00）
     - cron: '0 2 * * *'
 
+env:
+  # 环境配置 - 与开发板保持一致
+  PYTHON_VERSION: '3.10'
+  FIO_VERSION: '3.33'
+  UBSAN_OPTIONS: print_stacktrace=1
+
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  # 环境检查作业
+  environment-check:
+    runs-on: ubuntu-22.04  # 固定 Ubuntu 版本
+    outputs:
+      env_report: ${{ steps.check.outputs.report }}
     
     steps:
     - name: Checkout code
@@ -20,20 +29,114 @@ jobs:
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.10'
+        python-version: ${{ env.PYTHON_VERSION }}
     
-    - name: Install dependencies
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          fio=${{ env.FIO_VERSION }}-1 \
+          sg3-utils \
+          hdparm \
+          jq
+    
+    - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
         if [ -f systest/requirements.txt ]; then
           pip install -r systest/requirements.txt
         fi
-        # 安装 FIO
-        sudo apt-get update && sudo apt-get install -y fio
+    
+    - name: Run environment check
+      id: check
+      run: |
+        cd systest
+        python3 bin/check_env.py --report --output ../env_report.json -v
+        
+        # 输出报告摘要
+        echo "=== 环境检查报告 ==="
+        jq '.checks[] | "\(.name): \(.passed)"' ../env_report.json
+        
+        # 保存报告用于后续作业
+        echo "report=$(cat ../env_report.json | base64 -w 0)" >> $GITHUB_OUTPUT
+    
+    - name: Upload environment report
+      uses: actions/upload-artifact@v4
+      with:
+        name: environment-report
+        path: env_report.json
+        retention-days: 30
+
+  # 单元测试（无硬件依赖）
+  unit-tests:
+    runs-on: ubuntu-22.04
+    needs: environment-check
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-cov
+        if [ -f systest/requirements.txt ]; then
+          pip install -r systest/requirements.txt
+        fi
+    
+    - name: Run unit tests
+      run: |
+        cd systest
+        python3 -m pytest core/ -v --cov=core --cov-report=xml
+    
+    - name: Upload coverage
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./systest/coverage.xml
+        flags: unittests
+
+  # 性能测试（需要硬件或使用 Docker 模拟）
+  performance-tests:
+    runs-on: ubuntu-22.04
+    needs: environment-check
+    
+    strategy:
+      matrix:
+        test-mode: [dry-run, hardware]  # dry-run 用于 PR，hardware 用于 master
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          fio=${{ env.FIO_VERSION }}-1 \
+          sg3-utils \
+          hdparm
+    
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f systest/requirements.txt ]; then
+          pip install -r systest/requirements.txt
+        fi
     
     - name: Check FIO installation
       run: |
         fio --version
+        which fio
     
     - name: List available tests
       run: |
@@ -41,20 +144,24 @@ jobs:
         python3 bin/SysTest list
     
     - name: Run performance tests (dry-run)
+      if: matrix.test-mode == 'dry-run'
       run: |
         cd systest
         python3 bin/SysTest run --suite=performance --dry-run -v
     
-    - name: Run tests on UFS device (if available)
+    - name: Run performance tests (hardware)
+      if: matrix.test-mode == 'hardware'
       id: ufs_test
       continue-on-error: true
       run: |
-        if [ -b /dev/ufs0 ]; then
+        # 检查是否有 UFS 设备
+        if [ -b /dev/ufs0 ] || [ -b /dev/sda ]; then
           cd systest
-          python3 bin/SysTest run --suite=performance --device=/dev/ufs0 -v
+          DEVICE=$(ls /dev/ufs0 2>/dev/null || ls /dev/sda 2>/dev/null)
+          python3 bin/SysTest run --suite=performance --device=$DEVICE -v
           echo "has_ufs=true" >> $GITHUB_OUTPUT
         else
-          echo "UFS device not found, skipping hardware tests"
+          echo "UFS/存储设备未找到，跳过硬件测试"
           echo "has_ufs=false" >> $GITHUB_OUTPUT
         fi
     
@@ -62,7 +169,7 @@ jobs:
       if: steps.ufs_test.outputs.has_ufs == 'true'
       uses: actions/upload-artifact@v4
       with:
-        name: test-results
+        name: test-results-${{ matrix.test-mode }}
         path: |
           systest/results/
           systest/logs/
@@ -102,15 +209,58 @@ for test in results.get('test_cases', []):
             failed.append(f'{name}: {value:.1f} {threshold[\"unit\"]} < {target} {threshold[\"unit\"]}')
 
 if failed:
-    print('❌ Threshold breaches:')
+    print('❌ 阈值未达标:')
     for f in failed:
         print(f'  - {f}')
     exit(1)
 else:
-    print('✅ All thresholds passed')
+    print('✅ 所有阈值测试通过')
 "
+
+  # Docker 镜像构建（可选，用于自托管 Runner）
+  build-docker-image:
+    runs-on: ubuntu-22.04
+    if: github.ref == 'refs/heads/master'
+    needs: [unit-tests, performance-tests]
     
-    - name: Notify on failure
-      if: failure()
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Login to Container Registry
+      if: github.event_name != 'pull_request'
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile.ci
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: |
+          ghcr.io/${{ github.repository }}/systest:latest
+          ghcr.io/${{ github.repository }}/systest:${{ github.sha }}
+        cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/systest:buildcache
+        cache-to: type=registry,ref=ghcr.io/${{ github.repository }}/systest:buildcache,mode=max
+
+  # 通知
+  notify-on-failure:
+    runs-on: ubuntu-22.04
+    if: failure()
+    needs: [environment-check, unit-tests, performance-tests]
+    
+    steps:
+    - name: Notify failure
       run: |
-        echo "Test failed! Check the logs for details."
+        echo "❌ CI/CD 流水线失败"
+        echo "请检查日志：https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        
+        # 这里可以添加飞书/钉钉/Slack 通知
+        # curl -X POST ${{ secrets.NOTIFY_WEBHOOK }} ...
