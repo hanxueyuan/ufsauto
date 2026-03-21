@@ -18,15 +18,19 @@
 测试耗时：约 60 秒
 """
 
-import subprocess
-import json
-from pathlib import Path
 import sys
+import subprocess
+from pathlib import Path
 
-# 添加 core 模块路径
+# 添加 core 和 tools 模块路径
 core_dir = Path(__file__).parent.parent.parent / 'core'
+tools_dir = Path(__file__).parent.parent.parent / 'tools'
 sys.path.insert(0, str(core_dir))
+sys.path.insert(0, str(tools_dir))
+
 from runner import TestCase
+from fio_wrapper import FIO, FIOError
+from ufs_utils import UFSDevice
 
 
 class Test(TestCase):
@@ -41,80 +45,95 @@ class Test(TestCase):
         self.size = "1G"
         self.runtime = 60
         self.target = 2100  # MB/s
+        
+        # 初始化工具
+        self.fio = FIO(timeout=self.runtime + 30, logger=self.logger)
+        self.ufs = UFSDevice(device, logger=self.logger)
     
     def setup(self) -> bool:
-        """测试前准备"""
-        try:
-            self.logger.debug("检查测试环境...")
-            # 确保测试目录可写
-            Path('/tmp').mkdir(parents=True, exist_ok=True)
-            self.logger.info("测试环境准备完成")
-            return True
-        except Exception as e:
-            self.logger.error(f"Setup 失败：{e}")
+        """测试前准备 - 检查前置条件"""
+        self.logger.info("开始检查前置条件...")
+        
+        # 1.1 检查设备是否存在
+        if not self.ufs.exists():
+            self.logger.error(f"设备不存在：{self.device}")
             return False
+        self.logger.debug(f"✅ 设备存在：{self.device}")
+        
+        # 1.2 检查可用空间（至少 2GB）
+        if not self.ufs.check_available_space(min_gb=2.0):
+            self.logger.error("可用空间不足")
+            return False
+        self.logger.debug("✅ 可用空间充足（≥2GB）")
+        
+        # 1.3 检查 FIO 工具
+        try:
+            result = subprocess.run(['which', 'fio'], capture_output=True)
+            if result.returncode != 0:
+                self.logger.error("FIO 工具未安装")
+                return False
+            self.logger.debug("✅ FIO 工具已安装")
+        except Exception as e:
+            self.logger.error(f"检查 FIO 失败：{e}")
+            return False
+        
+        # 1.4 检查权限
+        import os
+        if not os.access(self.device, os.R_OK | os.W_OK):
+            self.logger.error(f"设备权限不足：{self.device}")
+            return False
+        self.logger.debug(f"✅ 设备权限正常：{self.device}")
+        
+        # 1.5 检查设备健康状态
+        health = self.ufs.get_health_status()
+        if health['status'] != 'OK':
+            self.logger.warning(f"设备健康状态异常：{health['status']}")
+            # 不阻止测试，但记录警告
+        
+        self.logger.info("✅ 前置条件检查通过")
+        return True
     
     def execute(self) -> dict:
         """执行 FIO 顺序读测试"""
-        fio_cmd = [
-            'fio',
-            '--name=seq_read',
-            f'--filename={self.test_file}',
-            '--rw=read',
-            '--bs=128k',
-            '--size=' + self.size,
-            '--runtime=' + str(self.runtime),
-            '--time_based',
-            '--ioengine=sync',  # 使用 sync 引擎（无需额外依赖）
-            '--direct=1',
-            '--numjobs=1',
-            '--group_reporting',
-            '--output-format=json'
-        ]
+        self.logger.info("开始执行顺序读性能测试...")
         
-        self.logger.info(f"执行 FIO 顺序读测试...")
-        self.logger.debug(f"FIO 命令：{' '.join(fio_cmd)}")
-        
-        result = subprocess.run(
-            fio_cmd,
-            capture_output=True,
-            text=True,
-            timeout=self.runtime + 30
-        )
-        
-        if result.returncode != 0:
-            self.logger.error(f"FIO 执行失败：{result.stderr}")
-            raise RuntimeError(f"FIO 执行失败：{result.stderr}")
-        
-        # 解析 FIO 输出
-        fio_output = json.loads(result.stdout)
-        job = fio_output['jobs'][0]['read']
-        
-        metrics = {
-            'bandwidth': {
-                'value': job['bw_bytes'] / (1024 * 1024),
-                'unit': 'MB/s'
-            },
-            'iops': {
-                'value': job['iops'],
-                'unit': 'IOPS'
-            },
-            'latency_avg': {
-                'value': job['lat_ns']['mean'] / 1000,
-                'unit': 'μs'
-            },
-            'latency_99999': {
-                'value': job['lat_ns']['percentile']['99.999'] / 1000,
-                'unit': 'μs'
+        try:
+            # 使用 FIO 封装执行测试
+            metrics = self.fio.run_seq_read(
+                filename=self.test_file,
+                size=self.size,
+                runtime=self.runtime,
+                bs='128k',
+                ioengine='sync'
+            )
+            
+            # 记录关键指标
+            self.logger.info(f"📊 测试结果:")
+            self.logger.info(f"  带宽：{metrics.bandwidth['value']:.1f} MB/s")
+            self.logger.info(f"  IOPS: {metrics.iops['value']:.0f}")
+            self.logger.info(f"  平均延迟：{metrics.latency_ns['mean']/1000:.1f} μs")
+            self.logger.info(f"  99.999% 延迟：{metrics.latency_ns['percentile'].get('99.999', 0)/1000:.1f} μs")
+            
+            return {
+                'bandwidth': metrics.bandwidth,
+                'iops': metrics.iops,
+                'latency_avg': {
+                    'value': metrics.latency_ns['mean'] / 1000,
+                    'unit': 'μs'
+                },
+                'latency_99999': {
+                    'value': metrics.latency_ns['percentile'].get('99.999', 0) / 1000,
+                    'unit': 'μs'
+                },
+                'cpu': metrics.cpu
             }
-        }
-        
-        # 记录关键指标
-        self.logger.info(f"带宽：{metrics['bandwidth']['value']:.1f} MB/s")
-        self.logger.info(f"IOPS: {metrics['iops']['value']:.0f}")
-        self.logger.info(f"平均延迟：{metrics['latency_avg']['value']:.1f} μs")
-        
-        return metrics
+            
+        except FIOError as e:
+            self.logger.error(f"FIO 执行失败：{e}")
+            raise
+        except Exception as e:
+            self.logger.error(f"测试执行失败：{e}")
+            raise
     
     def validate(self, result: dict) -> bool:
         """验证结果是否达标"""
@@ -139,10 +158,15 @@ class Test(TestCase):
     def teardown(self) -> bool:
         """清理测试文件"""
         try:
+            import os
             test_path = Path(self.test_file)
             if test_path.exists():
                 test_path.unlink()
                 self.logger.debug(f"清理测试文件：{self.test_file}")
+            
+            # 刷新缓存
+            self.ufs.flush_cache()
+            
             self.logger.info("测试清理完成")
             return True
         except Exception as e:
