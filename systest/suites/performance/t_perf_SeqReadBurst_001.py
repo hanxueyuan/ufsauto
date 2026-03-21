@@ -31,6 +31,7 @@ sys.path.insert(0, str(tools_dir))
 from runner import TestCase
 from fio_wrapper import FIO, FIOError
 from ufs_utils import UFSDevice
+from ufs_simulator import UFSSimulator
 
 
 class Test(TestCase):
@@ -39,16 +40,24 @@ class Test(TestCase):
     name = "seq_read_burst"
     description = "顺序读取性能测试（Burst 模式）"
     
-    def __init__(self, device: str = '/dev/ufs0', verbose: bool = False, logger=None):
+    def __init__(self, device: str = '/dev/ufs0', verbose: bool = False, logger=None, simulate: bool = False):
         super().__init__(device, verbose, logger)
         self.test_file = f"/tmp/ufs_test_seq_read"
         self.size = "1G"
         self.runtime = 60
         self.target = 2100  # MB/s
+        self.simulate = simulate
         
         # 初始化工具
-        self.fio = FIO(timeout=self.runtime + 30, logger=self.logger)
-        self.ufs = UFSDevice(device, logger=self.logger)
+        if simulate:
+            self.logger.info("🔧 模拟模式：使用 UFS 模拟器")
+            self.sim = UFSSimulator(device_path='/tmp/ufs_sim.img', logger=self.logger)
+            self.fio = None
+            self.ufs = self.sim
+        else:
+            self.fio = FIO(timeout=self.runtime + 30, logger=self.logger)
+            self.ufs = UFSDevice(device, logger=self.logger)
+            self.sim = None
     
     def setup(self) -> bool:
         """测试前准备 - 检查前置条件"""
@@ -94,25 +103,28 @@ class Test(TestCase):
         return True
     
     def execute(self) -> dict:
-        """执行 FIO 顺序读测试"""
+        """执行顺序读性能测试"""
         self.logger.info("开始执行顺序读性能测试...")
         
         try:
-            # 使用 FIO 封装执行测试
-            metrics = self.fio.run_seq_read(
-                filename=self.test_file,
-                size=self.size,
-                runtime=self.runtime,
-                bs='128k',
-                ioengine='sync'
-            )
+            if self.simulate:
+                # 模拟模式
+                metrics = self.sim.simulate_performance('seq_read')
+            else:
+                # 实际硬件模式
+                metrics = self.fio.run_seq_read(
+                    filename=self.test_file,
+                    size=self.size,
+                    runtime=self.runtime,
+                    bs='128k',
+                    ioengine='sync'
+                )
             
             # 记录关键指标
             self.logger.info(f"📊 测试结果:")
             self.logger.info(f"  带宽：{metrics.bandwidth['value']:.1f} MB/s")
             self.logger.info(f"  IOPS: {metrics.iops['value']:.0f}")
             self.logger.info(f"  平均延迟：{metrics.latency_ns['mean']/1000:.1f} μs")
-            self.logger.info(f"  99.999% 延迟：{metrics.latency_ns['percentile'].get('99.999', 0)/1000:.1f} μs")
             
             return {
                 'bandwidth': metrics.bandwidth,
@@ -124,13 +136,9 @@ class Test(TestCase):
                 'latency_99999': {
                     'value': metrics.latency_ns['percentile'].get('99.999', 0) / 1000,
                     'unit': 'μs'
-                },
-                'cpu': metrics.cpu
+                }
             }
             
-        except FIOError as e:
-            self.logger.error(f"FIO 执行失败：{e}")
-            raise
         except Exception as e:
             self.logger.error(f"测试执行失败：{e}")
             raise

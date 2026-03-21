@@ -103,10 +103,11 @@ class TestCase:
 class TestRunner:
     """测试执行引擎"""
     
-    def __init__(self, device: str = '/dev/ufs0', verbose: bool = False, dry_run: bool = False):
+    def __init__(self, device: str = '/dev/ufs0', verbose: bool = False, dry_run: bool = False, simulate: bool = False):
         self.device = device
         self.verbose = verbose
         self.dry_run = dry_run
+        self.simulate = simulate  # 模拟模式（无硬件）
         self.suites_dir = Path(__file__).parent.parent / 'suites'
         
         # 加载测试套件
@@ -176,7 +177,7 @@ class TestRunner:
                     test_class = getattr(module, class_name, None)
                 if not test_class:
                     raise ImportError(f"未找到测试类（Test 或 {class_name}）")
-                test_instance = test_class(device=self.device, verbose=self.verbose)
+                test_instance = test_class(device=self.device, verbose=self.verbose, simulate=self.simulate)
                 
                 result = test_instance.run()
                 results.append(result)

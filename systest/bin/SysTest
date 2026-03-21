@@ -45,7 +45,7 @@ def cmd_run(args):
     logger.debug(f"日志文件：{logger.get_log_file()}")
     
     # 初始化组件
-    runner = TestRunner(device=args.device, verbose=args.verbose, logger=logger)
+    runner = TestRunner(device=args.device, verbose=args.verbose, simulate=args.simulate)
     collector = ResultCollector(output_dir=args.output)
     reporter = ReportGenerator(template='default')
     
@@ -157,11 +157,12 @@ def main():
     run_parser = subparsers.add_parser('run', help='执行测试')
     run_parser.add_argument('--suite', '-s', required=True, help='测试套件名称')
     run_parser.add_argument('--test', '-t', help='单个测试项名称')
-    run_parser.add_argument('--device', '-d', default='/dev/ufs0', help='测试设备路径')
+    run_parser.add_argument('--device', '-d', default='/tmp/ufs_sim.img', help='测试设备路径')
     run_parser.add_argument('--output', '-o', default='./results', help='输出目录')
     run_parser.add_argument('--format', '-f', default='html,json', help='报告格式 (html/json/pdf)')
     run_parser.add_argument('--verbose', '-v', action='store_true', help='详细输出')
     run_parser.add_argument('--dry-run', '-n', action='store_true', help='模拟执行')
+    run_parser.add_argument('--simulate', action='store_true', help='模拟模式（无硬件）')
     run_parser.set_defaults(func=cmd_run)
     
     # list 命令
