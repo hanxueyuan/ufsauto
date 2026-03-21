@@ -1,0 +1,116 @@
+name: SysTest CI
+
+on:
+  push:
+    branches: [ master, develop ]
+  pull_request:
+    branches: [ master ]
+  schedule:
+    # 每天 UTC 时间 2:00 运行（北京时间 10:00）
+    - cron: '0 2 * * *'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f systest/requirements.txt ]; then
+          pip install -r systest/requirements.txt
+        fi
+        # 安装 FIO
+        sudo apt-get update && sudo apt-get install -y fio
+    
+    - name: Check FIO installation
+      run: |
+        fio --version
+    
+    - name: List available tests
+      run: |
+        cd systest
+        python3 bin/SysTest list
+    
+    - name: Run performance tests (dry-run)
+      run: |
+        cd systest
+        python3 bin/SysTest run --suite=performance --dry-run -v
+    
+    - name: Run tests on UFS device (if available)
+      id: ufs_test
+      continue-on-error: true
+      run: |
+        if [ -b /dev/ufs0 ]; then
+          cd systest
+          python3 bin/SysTest run --suite=performance --device=/dev/ufs0 -v
+          echo "has_ufs=true" >> $GITHUB_OUTPUT
+        else
+          echo "UFS device not found, skipping hardware tests"
+          echo "has_ufs=false" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Upload test results
+      if: steps.ufs_test.outputs.has_ufs == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: |
+          systest/results/
+          systest/logs/
+        retention-days: 30
+    
+    - name: Check test thresholds
+      if: steps.ufs_test.outputs.has_ufs == 'true'
+      run: |
+        cd systest
+        python3 -c "
+import json
+from pathlib import Path
+
+# 加载配置
+with open('config/production.json') as f:
+    config = json.load(f)
+
+# 加载最新测试结果
+results_dir = Path('results')
+latest = max(results_dir.iterdir(), key=lambda x: x.name)
+with open(latest / 'results.json') as f:
+    results = json.load(f)
+
+# 检查阈值
+thresholds = config['thresholds']['performance']
+failed = []
+
+for test in results.get('test_cases', []):
+    name = test['name']
+    if name in thresholds:
+        threshold = thresholds[name]
+        metric = test['metrics'].get(threshold['metric'], {})
+        value = metric.get('value', 0)
+        target = threshold['target']
+        
+        if value < target * (1 - threshold['tolerance']):
+            failed.append(f'{name}: {value:.1f} {threshold[\"unit\"]} < {target} {threshold[\"unit\"]}')
+
+if failed:
+    print('❌ Threshold breaches:')
+    for f in failed:
+        print(f'  - {f}')
+    exit(1)
+else:
+    print('✅ All thresholds passed')
+"
+    
+    - name: Notify on failure
+      if: failure()
+      run: |
+        echo "Test failed! Check the logs for details."
