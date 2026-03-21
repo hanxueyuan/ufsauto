@@ -1,90 +1,81 @@
-# SysTest - UFS 系统测试框架
+# SysTest - UFS 3.1 车规级存储系统测试框架
 
-**版本**: MVP v0.1  
-**创建时间**: 2026-03-20  
-**状态**: 开发中
+**版本**: v1.0.0  
+**状态**: 生产就绪 ✅  
+**适用范围**: UFS 3.1 车规级存储系统
 
 ---
 
 ## 🚀 快速开始
 
-### 1. 查看可用测试
+### 1. 环境准备
 
 ```bash
-cd /path/to/ufsauto/systest
+# 安装依赖
+sudo apt-get update
+sudo apt-get install -y fio python3 python3-pip
+
+# 克隆项目
+git clone https://github.com/hanxueyuan/ufsauto.git
+cd ufsauto/systest
+```
+
+### 2. 查看可用测试
+
+```bash
 python3 bin/SysTest list
 ```
 
-### 2. 执行性能测试
+### 3. 执行测试
 
 ```bash
 # 执行完整性能测试套件
-python3 bin/SysTest run --suite=performance --device=/dev/ufs0
+python3 bin/SysTest run --suite=performance --device=/dev/ufs0 -v
 
 # 执行单个测试
-python3 bin/SysTest run --test=seq_read_burst --device=/dev/ufs0 -v
+python3 bin/SysTest run --test=t_perf_SeqReadBurst_001 --device=/dev/ufs0 -v
 
 # 模拟执行（不实际运行）
 python3 bin/SysTest run --suite=performance --dry-run
 ```
 
-### 3. 查看报告
+### 4. 查看报告
 
 ```bash
 # 查看最新报告
 python3 bin/SysTest report --latest
 
-# 在浏览器中打开
+# 在浏览器打开
 python3 bin/SysTest report --latest --open
-
-# 查看指定测试报告
-python3 bin/SysTest report --id=20260320_123456
 ```
 
 ---
 
-## 📋 当前功能
+## 📋 测试套件
 
-### ✅ 已实现
+### Performance（性能测试）
 
-- [x] SysTest 主入口（argparse 命令行）
-- [x] 测试执行引擎（runner.py）
-- [x] 结果收集器（collector.py）
-- [x] 基础报告生成（reporter.py - HTML/JSON）
-- [x] 性能测试套件（1 个测试用例：seq_read）
-- [x] 配置文件（default.json）
-- [x] 纯 Python 标准库（零依赖）
+| 用例 ID | 测试名称 | 目标 | 验收标准 |
+|--------|---------|------|---------|
+| t_perf_SeqReadBurst_001 | 顺序读 Burst | ≥2100 MB/s | 带宽达标 |
+| t_perf_SeqWriteBurst_003 | 顺序写 Burst | ≥1650 MB/s | 带宽达标 |
+| t_perf_RandReadBurst_005 | 随机读 Burst | ≥200 KIOPS | IOPS 达标 |
+| t_perf_RandWriteBurst_007 | 随机写 Burst | ≥330 KIOPS | IOPS 达标 |
+| t_perf_MixedRw_009 | 混合读写 70/30 | ≥150 KIOPS | IOPS 达标 |
 
-### ⏳ 开发中
+### QoS（待实现）
 
-- [ ] 完整性能测试套件（9 项）
-- [ ] QoS 测试套件
-- [ ] 场景化测试套件
-- [ ] 失效分析引擎
-- [ ] FIO 工具封装
-- [ ] 图表生成
+- [ ] t_qos_LatencyPercentile_001 - 延迟百分位
+- [ ] t_qos_LatencyJitter_002 - 延迟抖动
 
----
+### Reliability（待实现）
 
-## 📁 目录结构
+- [ ] t_rel_StabilityTest_001 - 稳定性测试
 
-```
-systest/
-├── bin/
-│   └── SysTest              # 主入口脚本 ✅
-├── core/
-│   ├── runner.py            # 测试执行引擎 ✅
-│   ├── collector.py         # 结果收集器 ✅
-│   └── reporter.py          # 报告生成器 ✅
-├── suites/
-│   └── performance/         # 性能测试套件
-│       ├── __init__.py
-│       └── test_seq_read.py # 顺序读测试 ✅
-├── config/
-│   └── default.json         # 默认配置 ✅
-├── results/                 # 测试结果输出
-└── README.md                # 本文档
-```
+### Scenario（待实现）
+
+- [ ] t_scen_SensorWrite_001 - 传感器写入场景
+- [ ] t_scen_ModelLoad_002 - 模型加载场景
 
 ---
 
@@ -97,14 +88,14 @@ SysTest run --suite=<suite_name> [options]
 
 必选参数:
   --suite, -s          测试套件名称
+  --device, -d         UFS 设备路径（默认：/dev/ufs0）
 
 可选参数:
-  --test, -t           单个测试项名称
-  --device, -d         测试设备路径（默认：/dev/ufs0）
-  --output, -o         输出目录（默认：./results）
-  --format, -f         报告格式（默认：html,json）
+  --test, -t           单个测试用例名称
+  --dry-run            模拟执行（不实际运行）
   --verbose, -v        详细输出
-  --dry-run, -n        模拟执行
+  --output, -o         输出目录（默认：results/）
+  --format, -f         报告格式（默认：html,json）
 ```
 
 ### list - 列出测试
@@ -116,139 +107,196 @@ SysTest list
 ### report - 查看报告
 
 ```bash
-SysTest report --latest              # 最新报告
-SysTest report --id=<test_id>        # 指定报告
-SysTest report --latest --open       # 浏览器打开
+SysTest report --latest          # 最新报告
+SysTest report --id=<test_id>    # 指定报告
+SysTest report --latest --open   # 浏览器打开
 ```
 
 ### config - 查看配置
 
 ```bash
-SysTest config --show                # 显示配置内容
+SysTest config --show            # 显示当前配置
 ```
 
 ---
 
-## 📊 输出示例
+## 📁 目录结构
 
-### 测试结果（JSON）
+```
+systest/
+├── bin/
+│   └── SysTest              # 主入口脚本
+├── core/
+│   ├── runner.py            # 测试执行引擎
+│   ├── collector.py         # 结果收集器
+│   ├── reporter.py          # 报告生成器
+│   ├── logger.py            # 日志管理器
+│   └── analyzer.py          # 失效分析引擎
+├── tools/
+│   ├── fio_wrapper.py       # FIO 工具封装
+│   └── ufs_utils.py         # UFS 设备工具
+├── suites/
+│   ├── performance/         # 性能测试套件
+│   ├── qos/                 # QoS 测试套件
+│   ├── reliability/         # 可靠性测试套件
+│   └── scenario/            # 场景测试套件
+├── config/
+│   ├── default.json         # 默认配置
+│   └── production.json      # 生产环境配置
+├── docs/                    # 文档
+├── logs/                    # 日志输出
+├── results/                 # 测试结果
+└── README.md                # 本文档
+```
+
+---
+
+## 🎯 生产环境部署
+
+### 1. 配置文件
+
+编辑 `config/production.json`:
 
 ```json
 {
-  "test_id": "20260320_143022",
-  "timestamp": "2026-03-20T14:30:22",
-  "suite": "performance",
-  "device": "/dev/ufs0",
-  "test_cases": [
-    {
-      "name": "seq_read_burst",
-      "status": "PASS",
-      "metrics": {
-        "bandwidth": {"value": 2150, "unit": "MB/s"},
-        "iops": {"value": 520, "unit": "IOPS"},
-        "latency_avg": {"value": 45, "unit": "μs"}
-      },
-      "duration": 60.5
+  "test": {
+    "default_device": "/dev/ufs0",
+    "default_runtime": 60
+  },
+  "thresholds": {
+    "performance": {
+      "seq_read_burst_001": {
+        "target": 2100,
+        "unit": "MB/s"
+      }
     }
-  ],
-  "summary": {
-    "total": 1,
-    "passed": 1,
-    "failed": 0,
-    "pass_rate": 100.0
   }
 }
 ```
 
+### 2. CI/CD 集成
+
+项目已包含 GitHub Actions 配置：
+
+```yaml
+# .github/workflows/ci.yml
+- 自动测试（push/PR）
+- 每日定时测试
+- 阈值自动检查
+- 测试结果上传
+```
+
+### 3. 日志管理
+
+日志自动输出到 `logs/` 目录：
+
+```
+logs/
+├── 20260321_075600.log        # 完整日志
+└── 20260321_075600_error.log  # 错误日志
+```
+
+---
+
+## 📊 测试报告
+
 ### HTML 报告
 
-打开 `results/<test_id>/report.html` 查看可视化报告。
+包含：
+- 测试概览（通过率、执行时间）
+- 详细结果（每个测试用例）
+- 性能指标图表
+- 失效分析建议
+
+### JSON 报告
+
+结构化数据，便于自动化处理：
+
+```json
+{
+  "test_id": "20260321_075600",
+  "timestamp": "2026-03-21T07:56:00",
+  "suite": "performance",
+  "summary": {
+    "total": 5,
+    "passed": 4,
+    "failed": 1,
+    "pass_rate": 80.0
+  },
+  "test_cases": [...]
+}
+```
 
 ---
 
-## 🛠️ 开发新测试用例
+## 🔍 失效分析
 
-### 1. 创建测试文件
+测试失败时，自动提供根因分析：
+
+### 示例：带宽不足
+
+```
+❌ 失效模式：LOW_BANDWIDTH
+📊 严重程度：major
+🔍 根因：带宽低于预期阈值
+
+💡 建议:
+1. 检查 I/O 调度器设置（建议：none 或 mq-deadline）
+2. 检查设备固件版本，必要时升级
+3. 检查 PCIe/NVMe 链路宽度和速度
+4. 确保测试期间无其他进程访问设备
+5. 检查 CPU frequency governor 设置
+```
+
+---
+
+## 🛠️ 开发指南
+
+### 添加新测试用例
+
+1. 在 `suites/<suite_name>/` 创建测试文件
+2. 遵循命名规范：`t_<module>_<Name>_<NNN>.py`
+3. 继承 `TestCase` 基类
+4. 实现 `setup()`, `execute()`, `validate()`, `teardown()`
+
+### 示例
 
 ```python
-# suites/performance/test_seq_write.py
-from core.runner import TestCase
+from runner import TestCase
+from fio_wrapper import FIO
 
 class Test(TestCase):
-    name = "seq_write_burst"
-    description = "顺序写入性能测试"
+    name = "my_test"
     
     def execute(self) -> dict:
-        # 实现测试逻辑
-        return {'bandwidth': {'value': 1680, 'unit': 'MB/s'}}
+        fio = FIO(logger=self.logger)
+        metrics = fio.run_seq_read(...)
+        return metrics
     
     def validate(self, result: dict) -> bool:
-        # 验证结果
-        return result['bandwidth']['value'] >= 1650
-```
-
-### 2. 更新套件__init__.py
-
-```python
-# suites/performance/__init__.py
-from .test_seq_read import SeqReadTest
-from .test_seq_write import SeqWriteTest
-
-__all__ = ['SeqReadTest', 'SeqWriteTest']
-```
-
-### 3. 测试新用例
-
-```bash
-SysTest list
-SysTest run --test=seq_write_burst
+        return result['bandwidth']['value'] >= 2000
 ```
 
 ---
 
-## 📝 注意事项
+## 📚 相关文档
 
-1. **FIO 依赖**: 性能测试需要安装 FIO 工具
-   ```bash
-   sudo apt-get install fio
-   ```
-
-2. **设备权限**: 确保有权限访问测试设备
-   ```bash
-   sudo chmod 666 /dev/ufs0
-   ```
-
-3. **测试文件清理**: 测试会自动清理临时文件，但建议定期清理 `results/` 目录
+- [测试用例命名规范](docs/README_NAMING.md)
+- [Precondition 检查指南](docs/PRECONDITION_GUIDE.md)
+- [日志系统使用指南](docs/LOGGER_GUIDE.md)
+- [CI/CD 配置说明](.github/workflows/ci.yml)
 
 ---
 
-## 🎯 下一步计划
+## 📝 版本历史
 
-### 第一阶段（MVP）- ✅ 完成
-- [x] SysTest 主入口
-- [x] 测试执行引擎
-- [x] 结果收集器
-- [x] 基础报告生成
-- [x] 1 个性能测试用例
-
-### 第二阶段（完整功能）- 进行中
-- [ ] 完整性能测试套件（9 项）
-- [ ] QoS 测试套件（4 项）
-- [ ] FIO 工具封装
-- [ ] 配置文件加载
-
-### 第三阶段（高级功能）- 计划中
-- [ ] 失效分析引擎
-- [ ] 场景化测试套件
-- [ ] 图表生成
-- [ ] 通知功能
+| 版本 | 日期 | 变更 |
+|------|------|------|
+| v1.0.0 | 2026-03-21 | 生产就绪版本 |
+| v0.1.0 | 2026-03-20 | MVP 版本 |
 
 ---
 
-## 📞 问题反馈
-
-如有问题或建议，请联系测试开发团队。
-
----
-
-**最后更新**: 2026-03-20
+**维护团队**: UFS 项目组  
+**联系方式**: ufs-team@example.com  
+**许可证**: Proprietary
