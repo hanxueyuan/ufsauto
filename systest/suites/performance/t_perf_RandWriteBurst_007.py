@@ -2,20 +2,33 @@
 # -*- coding: utf-8 -*-
 """
 随机写性能测试
-测试 UFS 设备的随机写入性能（4K QD32）
+测试 UFS 设备的随机写入 IOPS（4K QD32）
+
+测试用例 ID: t_perf_RandWriteBurst_007
+测试目的：验证 UFS 设备随机写 IOPS 性能是否达标（≥330 KIOPS）
+前置条件：
+    1. UFS 设备已挂载
+    2. 有足够可用空间（≥2GB）
+    3. FIO 工具已安装
+测试步骤：
+    1. 执行 FIO 随机写测试（4K block, QD32, 60s）
+    2. 验证 IOPS 是否达标
+预期结果：IOPS ≥ 330,000
+测试耗时：约 60 秒
 """
 
-import subprocess
-import json
-import logging
-from pathlib import Path
 import sys
+import subprocess
+from pathlib import Path
 
 core_dir = Path(__file__).parent.parent.parent / 'core'
+tools_dir = Path(__file__).parent.parent.parent / 'tools'
 sys.path.insert(0, str(core_dir))
-from runner import TestCase
+sys.path.insert(0, str(tools_dir))
 
-logger = logging.getLogger(__name__)
+from runner import TestCase
+from fio_wrapper import FIO, FIOError
+from ufs_utils import UFSDevice
 
 
 class Test(TestCase):
@@ -24,76 +37,107 @@ class Test(TestCase):
     name = "rand_write_burst"
     description = "随机写入性能测试（4K QD32）"
     
-    def __init__(self, device: str = '/dev/ufs0', verbose: bool = False):
-        super().__init__(device, verbose)
+    def __init__(self, device: str = '/dev/ufs0', verbose: bool = False, logger=None):
+        super().__init__(device, verbose, logger)
         self.test_file = f"/tmp/ufs_test_rand_write"
         self.size = "1G"
         self.runtime = 60
-        self.block_size = "4k"
+        self.bs = '4k'
         self.iodepth = 32
-        self.target = 60000  # IOPS
+        self.target = 330000  # IOPS
+        
+        self.fio = FIO(timeout=self.runtime + 30, logger=self.logger)
+        self.ufs = UFSDevice(device, logger=self.logger)
     
     def setup(self) -> bool:
         """测试前准备"""
-        try:
-            Path('/tmp').mkdir(parents=True, exist_ok=True)
-            return True
-        except Exception as e:
-            logger.error(f"Setup 失败：{e}")
+        self.logger.info("开始检查前置条件...")
+        
+        if not self.ufs.exists():
+            self.logger.error(f"设备不存在：{self.device}")
             return False
+        
+        if not self.ufs.check_available_space(min_gb=2.0):
+            return False
+        
+        try:
+            result = subprocess.run(['which', 'fio'], capture_output=True)
+            if result.returncode != 0:
+                self.logger.error("FIO 工具未安装")
+                return False
+        except Exception as e:
+            self.logger.error(f"检查 FIO 失败：{e}")
+            return False
+        
+        import os
+        if not os.access(self.device, os.R_OK | os.W_OK):
+            self.logger.error(f"设备权限不足")
+            return False
+        
+        self.logger.info("✅ 前置条件检查通过")
+        return True
     
     def execute(self) -> dict:
         """执行 FIO 随机写测试"""
-        fio_cmd = [
-            'fio',
-            '--name=rand_write',
-            f'--filename={self.test_file}',
-            '--rw=randwrite',
-            '--bs=' + self.block_size,
-            '--size=' + self.size,
-            '--runtime=' + str(self.runtime),
-            '--time_based',
-            '--ioengine=sync',
-            '--direct=1',
-            '--iodepth=' + str(self.iodepth),
-            '--numjobs=1',
-            '--group_reporting',
-            '--output-format=json'
-        ]
+        self.logger.info("开始执行随机写性能测试...")
         
-        logger.info(f"执行 FIO 随机写测试 (4K QD{self.iodepth})...")
-        
-        result = subprocess.run(
-            fio_cmd,
-            capture_output=True,
-            text=True,
-            timeout=self.runtime + 30
-        )
-        
-        if result.returncode != 0:
-            raise RuntimeError(f"FIO 执行失败：{result.stderr}")
-        
-        fio_output = json.loads(result.stdout)
-        job = fio_output['jobs'][0]['write']
-        
-        return {
-            'iops': {'value': job['iops'], 'unit': 'IOPS'},
-            'bandwidth': {'value': job['bw_bytes'] / (1024 * 1024), 'unit': 'MB/s'},
-            'latency_avg': {'value': job['lat_ns']['mean'] / 1000, 'unit': 'μs'},
-        }
+        try:
+            metrics = self.fio.run_rand_write(
+                filename=self.test_file,
+                size=self.size,
+                runtime=self.runtime,
+                bs=self.bs,
+                iodepth=self.iodepth,
+                ioengine='sync'
+            )
+            
+            self.logger.info(f"📊 测试结果:")
+            self.logger.info(f"  IOPS: {metrics.iops['value']:.0f}")
+            self.logger.info(f"  带宽：{metrics.bandwidth['value']:.1f} MB/s")
+            self.logger.info(f"  平均延迟：{metrics.latency_ns['mean']/1000:.1f} μs")
+            
+            return {
+                'iops': metrics.iops,
+                'bandwidth': metrics.bandwidth,
+                'latency_avg': {
+                    'value': metrics.latency_ns['mean'] / 1000,
+                    'unit': 'μs'
+                }
+            }
+            
+        except FIOError as e:
+            self.logger.error(f"FIO 执行失败：{e}")
+            raise
     
     def validate(self, result: dict) -> bool:
+        """验证结果是否达标"""
         actual = result['iops']['value']
         passed = actual >= self.target
-        logger.info(f"{'✅' if passed else '❌'} {actual:.0f} IOPS {'≥' if passed else '<'} {self.target} IOPS")
+        
+        if passed:
+            self.logger.info(f"✅ 性能达标：{actual:.0f} IOPS ≥ {self.target} IOPS")
+        else:
+            self.logger.warning(f"❌ 性能不达标：{actual:.0f} IOPS < {self.target} IOPS")
+        
+        self.logger.log_assertion(
+            assertion='IOPS 达标',
+            expected=f'>= {self.target} IOPS',
+            actual=f'{actual:.0f} IOPS',
+            passed=passed
+        )
+        
         return passed
     
     def teardown(self) -> bool:
+        """清理测试文件"""
         try:
             test_path = Path(self.test_file)
             if test_path.exists():
                 test_path.unlink()
+            
+            self.ufs.flush_cache()
+            self.logger.info("测试清理完成")
             return True
         except Exception as e:
-            logger.warning(f"清理失败：{e}")
+            self.logger.warning(f"清理失败：{e}")
             return True
