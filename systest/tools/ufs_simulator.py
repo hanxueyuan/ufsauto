@@ -72,6 +72,10 @@ class UFSSimulator:
         self.logger = logger or logging.getLogger(__name__)
         self.initialized = False
     
+    def exists(self) -> bool:
+        """检查设备是否存在"""
+        return Path(self.device_path).exists()
+    
     def create_device(self, size_gb: int = 128) -> bool:
         """
         创建模拟设备文件

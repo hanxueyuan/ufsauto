@@ -31,6 +31,7 @@ sys.path.insert(0, str(tools_dir))
 from runner import TestCase
 from fio_wrapper import FIO, FIOError
 from ufs_utils import UFSDevice
+from ufs_simulator import UFSSimulator
 
 
 class Test(TestCase):
@@ -39,8 +40,9 @@ class Test(TestCase):
     name = "qos_latency_jitter"
     description = "QoS 延迟抖动测试（标准差）"
     
-    def __init__(self, device: str = '/dev/ufs0', verbose: bool = False, logger=None):
+    def __init__(self, device: str = '/dev/ufs0', verbose: bool = False, logger=None, simulate: bool = False):
         super().__init__(device, verbose, logger)
+        self.simulate = simulate
         self.test_file = f"/tmp/ufs_test_qos_jitter"
         self.size = "512M"
         self.runtime = 120
@@ -48,8 +50,9 @@ class Test(TestCase):
         self.iodepth = 1
         self.target_stddev = 500  # μs
         
+        self.sim = UFSSimulator(device, logger=self.logger)
         self.fio = FIO(timeout=self.runtime + 30, logger=self.logger)
-        self.ufs = UFSDevice(device, logger=self.logger)
+        self.ufs = self.sim if simulate else UFSDevice(device, logger=self.logger)
     
     def setup(self) -> bool:
         """测试前准备"""

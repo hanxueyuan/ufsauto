@@ -124,8 +124,16 @@ class TestRunner:
         for suite_dir in self.suites_dir.iterdir():
             if suite_dir.is_dir() and not suite_dir.name.startswith('_'):
                 suite_name = suite_dir.name
-                test_files = list(suite_dir.glob('test_*.py'))
-                tests = [f.stem.replace('test_', '') for f in test_files]
+                # 支持 test_*.py 和 t_*_*.py 两种命名
+                test_files = list(suite_dir.glob('*.py'))
+                tests = []
+                for f in test_files:
+                    name = f.stem
+                    if name.startswith('test_'):
+                        tests.append(name.replace('test_', ''))
+                    elif name.startswith('t_') and name.count('_') >= 2:
+                        # t_perf_SeqReadBurst_001.py → seq_read_burst_001
+                        tests.append(name)
                 suites[suite_name] = tests
         
         return suites
@@ -163,8 +171,11 @@ class TestRunner:
                 if str(suites_dir) not in sys.path:
                     sys.path.insert(0, str(suites_dir))
                 
-                # 导入测试模块
-                module_path = suites_dir / suite_name / f'test_{test_name}.py'
+                # 导入测试模块（支持 test_*.py 和 t_*_*.py）
+                if test_name.startswith('t_'):
+                    module_path = suites_dir / suite_name / f'{test_name}.py'
+                else:
+                    module_path = suites_dir / suite_name / f'test_{test_name}.py'
                 import importlib.util
                 spec = importlib.util.spec_from_file_location(f'{suite_name}.{test_name}', module_path)
                 module = importlib.util.module_from_spec(spec)
