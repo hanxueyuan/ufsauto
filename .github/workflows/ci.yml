@@ -144,11 +144,10 @@ jobs:
       id: ufs_test
       run: |
         cd systest
-        # 检查是否有 UFS 设备
-        if [ -b /dev/ufs0 ] || [ -b /dev/sda ]; then
-          DEVICE=$(ls /dev/ufs0 2>/dev/null || ls /dev/sda 2>/dev/null)
-          echo "✅ 发现 UFS 设备：$DEVICE"
-          python3 bin/SysTest run --suite=performance --device=$DEVICE -v
+        # 只检查 UFS 专用设备，不检查 /dev/sda（系统盘）
+        if [ -b /dev/ufs0 ]; then
+          echo "✅ 发现 UFS 设备：/dev/ufs0"
+          python3 bin/SysTest run --suite=performance --device=/dev/ufs0 -v
           echo "has_ufs=true" >> $GITHUB_OUTPUT
         else
           echo "⚠️ 未找到 UFS 设备，跳过性能测试"
