@@ -153,7 +153,6 @@ jobs:
         else
           echo "⚠️ 未找到 UFS 设备，跳过性能测试"
           echo "has_ufs=false" >> $GITHUB_OUTPUT
-          exit 0  # 成功退出，不失败
         fi
     
     - name: Upload test results
