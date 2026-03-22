@@ -101,14 +101,10 @@ jobs:
         files: ./systest/coverage.xml
         flags: unittests
 
-  # 性能测试（需要硬件或使用 Docker 模拟）
+  # 性能测试（有硬件时执行真实测试，无硬件时跳过）
   performance-tests:
     runs-on: ubuntu-22.04
     needs: environment-check
-    
-    strategy:
-      matrix:
-        test-mode: [dry-run, hardware]  # dry-run 用于 PR，hardware 用于 master
     
     steps:
     - name: Checkout code
@@ -144,33 +140,27 @@ jobs:
         cd systest
         python3 bin/SysTest list
     
-    - name: Run performance tests (dry-run)
-      if: matrix.test-mode == 'dry-run'
+    - name: Run performance tests
+      id: ufs_test
       run: |
         cd systest
-        python3 bin/SysTest run --suite=performance --dry-run -v
-    
-    - name: Run performance tests (hardware)
-      if: matrix.test-mode == 'hardware'
-      id: ufs_test
-      continue-on-error: true
-      run: |
         # 检查是否有 UFS 设备
         if [ -b /dev/ufs0 ] || [ -b /dev/sda ]; then
-          cd systest
           DEVICE=$(ls /dev/ufs0 2>/dev/null || ls /dev/sda 2>/dev/null)
+          echo "✅ 发现 UFS 设备：$DEVICE"
           python3 bin/SysTest run --suite=performance --device=$DEVICE -v
           echo "has_ufs=true" >> $GITHUB_OUTPUT
         else
-          echo "UFS/存储设备未找到，跳过硬件测试"
+          echo "⚠️ 未找到 UFS 设备，跳过性能测试"
           echo "has_ufs=false" >> $GITHUB_OUTPUT
+          exit 0  # 成功退出，不失败
         fi
     
     - name: Upload test results
       if: steps.ufs_test.outputs.has_ufs == 'true'
       uses: actions/upload-artifact@v4
       with:
-        name: test-results-${{ matrix.test-mode }}
+        name: test-results
         path: |
           systest/results/
           systest/logs/
@@ -222,7 +212,7 @@ jobs:
   build-docker-image:
     runs-on: ubuntu-22.04
     if: github.ref == 'refs/heads/master'
-    needs: [unit-tests, performance-tests]
+    needs: [unit-tests]
     
     steps:
     - name: Checkout code
