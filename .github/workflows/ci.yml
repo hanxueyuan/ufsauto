@@ -179,43 +179,43 @@ jobs:
       if: steps.ufs_test.outputs.has_ufs == 'true'
       run: |
         cd systest
-        python3 -c "
-import json
-from pathlib import Path
+        python3 << 'PYTHON_SCRIPT'
+        import json
+        from pathlib import Path
 
-# 加载配置
-with open('config/production.json') as f:
-    config = json.load(f)
+        # 加载配置
+        with open('config/production.json') as f:
+            config = json.load(f)
 
-# 加载最新测试结果
-results_dir = Path('results')
-latest = max(results_dir.iterdir(), key=lambda x: x.name)
-with open(latest / 'results.json') as f:
-    results = json.load(f)
+        # 加载最新测试结果
+        results_dir = Path('results')
+        latest = max(results_dir.iterdir(), key=lambda x: x.name)
+        with open(latest / 'results.json') as f:
+            results = json.load(f)
 
-# 检查阈值
-thresholds = config['thresholds']['performance']
-failed = []
+        # 检查阈值
+        thresholds = config['thresholds']['performance']
+        failed = []
 
-for test in results.get('test_cases', []):
-    name = test['name']
-    if name in thresholds:
-        threshold = thresholds[name]
-        metric = test['metrics'].get(threshold['metric'], {})
-        value = metric.get('value', 0)
-        target = threshold['target']
-        
-        if value < target * (1 - threshold['tolerance']):
-            failed.append(f'{name}: {value:.1f} {threshold[\"unit\"]} < {target} {threshold[\"unit\"]}')
+        for test in results.get('test_cases', []):
+            name = test['name']
+            if name in thresholds:
+                threshold = thresholds[name]
+                metric = test['metrics'].get(threshold['metric'], {})
+                value = metric.get('value', 0)
+                target = threshold['target']
+                
+                if value < target * (1 - threshold['tolerance']):
+                    failed.append(f'{name}: {value:.1f} {threshold["unit"]} < {target} {threshold["unit"]}')
 
-if failed:
-    print('❌ 阈值未达标:')
-    for f in failed:
-        print(f'  - {f}')
-    exit(1)
-else:
-    print('✅ 所有阈值测试通过')
-"
+        if failed:
+            print('❌ 阈值未达标:')
+            for f in failed:
+                print(f'  - {f}')
+            exit(1)
+        else:
+            print('✅ 所有阈值测试通过')
+        PYTHON_SCRIPT
 
   # Docker 镜像构建（可选，用于自托管 Runner）
   build-docker-image:
