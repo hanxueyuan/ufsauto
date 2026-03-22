@@ -159,6 +159,32 @@ def cmd_check_env(args):
     return result.returncode
 
 
+def cmd_compare_baseline(args):
+    """性能基线对比"""
+    import subprocess
+    
+    compare_script = script_dir / 'compare_baseline.py'
+    
+    if not compare_script.exists():
+        print(f"❌ 对比脚本不存在：{compare_script}")
+        return 1
+    
+    # 构建命令
+    cmd = [sys.executable, str(compare_script)]
+    if args.dev:
+        cmd.extend(['--dev', args.dev])
+    if args.ci:
+        cmd.extend(['--ci', args.ci])
+    if args.threshold:
+        cmd.extend(['--threshold', str(args.threshold)])
+    if args.output:
+        cmd.extend(['--output', args.output])
+    
+    # 执行对比
+    result = subprocess.run(cmd)
+    return result.returncode
+
+
 def main():
     """主函数"""
     parser = argparse.ArgumentParser(
@@ -171,7 +197,8 @@ def main():
   SysTest list
   SysTest report --latest
   SysTest config --show
-  SysTest check-env -v  # 检查 CI/CD 环境配置
+  SysTest check-env -v              # 检查 CI/CD 环境配置
+  SysTest compare-baseline --dev results/dev/ --ci results/ci/
         """
     )
     
@@ -211,6 +238,16 @@ def main():
     check_env_parser.add_argument('--output', default='env_check_report.json', help='报告输出路径')
     check_env_parser.add_argument('--verbose', '-v', action='store_true', help='详细输出')
     check_env_parser.set_defaults(func=cmd_check_env)
+    
+    # compare-baseline 命令
+    compare_parser = subparsers.add_parser('compare-baseline', help='对比性能基线')
+    compare_parser.add_argument('--dev', help='开发板测试结果目录')
+    compare_parser.add_argument('--ci', help='CI/CD 测试结果目录')
+    compare_parser.add_argument('--baseline1', help='第一个基线目录')
+    compare_parser.add_argument('--baseline2', help='第二个基线目录')
+    compare_parser.add_argument('--threshold', type=float, default=0.10, help='允许差异比例 (默认 0.10)')
+    compare_parser.add_argument('--output', help='报告输出路径')
+    compare_parser.set_defaults(func=cmd_compare_baseline)
     
     # 解析参数
     args = parser.parse_args()
