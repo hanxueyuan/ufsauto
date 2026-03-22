@@ -1,0 +1,18 @@
+# UFS SysTest 依赖
+# Python 3.10+
+
+# 核心依赖
+# (标准库已满足大部分需求)
+
+# 报告生成
+jinja2>=3.0
+
+# 测试
+pytest>=7.0
+pytest-cov>=4.0
+
+# 可选：图表生成
+# matplotlib>=3.5  # 用于性能趋势图表
+
+# 可选：JSON 处理增强
+# orjson>=3.8  # 更快的 JSON 处理
