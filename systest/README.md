@@ -20,6 +20,16 @@ git clone https://github.com/hanxueyuan/ufsauto.git
 cd ufsauto/systest
 ```
 
+### 0. 环境检查（推荐）
+
+```bash
+# 检查环境配置（开发板：Debian 12, ARM64, FIO 3.33）
+python3 bin/SysTest check-env -v
+
+# 生成环境报告
+python3 bin/SysTest check-env --report
+```
+
 ### 2. 查看可用测试
 
 ```bash
@@ -281,10 +291,23 @@ class Test(TestCase):
 
 ## 📚 相关文档
 
+### 快速开始
+- [快速参考卡](docs/QUICK_REFERENCE.md) - 5 分钟快速上手
+- [实战指南](docs/PRACTICAL_GUIDE.md) - 完整测试流程
+
+### 环境配置
+- [开发板环境](docs/DEV_BOARD_ENV.md) - 开发板配置详情 (Debian 12, ARM64)
+- [环境配置指南](docs/ENVIRONMENT_SETUP.md) - CI/CD 环境配置详解
+- [CI/CD 快速指南](docs/CI_CD_QUICKSTART.md) - Docker 和 GitHub Actions
+
+### 开发文档
 - [测试用例命名规范](docs/README_NAMING.md)
 - [Precondition 检查指南](docs/PRECONDITION_GUIDE.md)
 - [日志系统使用指南](docs/LOGGER_GUIDE.md)
-- [CI/CD 配置说明](.github/workflows/ci.yml)
+
+### 更新日志
+- [CI/CD 更新总结](docs/CI_CD_UPDATE_SUMMARY.md)
+- [开发板配置更新](docs/DEV_BOARD_CONFIG_UPDATE.md)
 
 ---
 
@@ -292,6 +315,7 @@ class Test(TestCase):
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| v1.1.0 | 2026-03-22 | CI/CD 环境配置、环境检查工具、基线对比 |
 | v1.0.0 | 2026-03-21 | 生产就绪版本 |
 | v0.1.0 | 2026-03-20 | MVP 版本 |
 
