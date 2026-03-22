@@ -14,21 +14,25 @@
 
 ### 硬件环境（开发板）
 
-```
-- 平台：Qualcomm / MediaTek / Hisilicon 等 SoC
-- UFS 版本：UFS 3.1 / 4.0
-- 存储容量：≥ 128GB
-- Linux 内核：≥ 5.10
+```yaml
+平台：ARM64 (车规级 SoC)
+操作系统：Debian 12 (Bookworm)
+Linux 内核：≥ 6.1
+UFS 版本：UFS 3.1 / 4.0
+存储容量：≥ 128GB
+Python: 3.11
+FIO: 3.33
 ```
 
 ### CI/CD 环境要求
 
 ```yaml
-操作系统：Ubuntu 22.04 LTS (与开发板一致)
-Linux 内核：≥ 5.15 (LTS)
-Python: 3.10+
+操作系统：Debian 12 (与开发板一致)
+Linux 内核：≥ 6.1
+Python: 3.11+
 FIO: 3.33+
 sg3_utils: 1.46+
+架构：arm64 (推荐) 或 x86_64
 ```
 
 ---

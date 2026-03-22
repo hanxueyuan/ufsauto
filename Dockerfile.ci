@@ -1,11 +1,12 @@
 # UFS SysTest CI/CD 环境镜像
 # 目标：与开发板环境保持一致
+# 开发板配置：ARM Debian 12, FIO 3.33, Python 3.11
 
-# 基础镜像 - 使用 Ubuntu 22.04 LTS (与多数开发板一致)
-FROM ubuntu:22.04
+# 基础镜像 - 使用 Debian 12 (与开发板一致)
+FROM debian:12-slim
 
 LABEL maintainer="UFS Auto Team"
-LABEL description="SysTest testing environment for UFS devices"
+LABEL description="SysTest testing environment for UFS devices (Debian 12)"
 LABEL version="1.0"
 
 # 避免交互式提示
@@ -25,7 +26,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # 安装 FIO (性能测试工具) - 使用与开发板相同的版本
-# 检查开发板版本：fio --version
+# 开发板版本：fio 3.33
+# Debian 12 默认版本：fio 3.33
 ARG FIO_VERSION=3.33
 RUN apt-get update && apt-get install -y \
     build-essential \
@@ -73,6 +75,7 @@ RUN chown -R testuser:testuser /workspace \
 ENV PYTHONPATH=/workspace/systest:$PYTHONPATH
 ENV UFS_TEST_ENV=ci
 ENV UFS_TEST_FIO_VERSION=${FIO_VERSION}
+ENV UFS_TEST_DEBIAN_VERSION=12
 
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

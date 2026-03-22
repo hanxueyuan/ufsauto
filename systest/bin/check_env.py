@@ -21,21 +21,24 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # 不使用自定义 Logger，直接用 print
 
 # 环境要求配置
+# 基于开发板环境：ARM Debian 12, FIO 3.33, Python 3.11, Kernel 6.1
 ENV_REQUIREMENTS = {
-    "python_min_version": (3, 10),
-    "fio_min_version": "3.30",
-    "kernel_min_version": (5, 10),
+    "python_min_version": (3, 11),      # Debian 12 默认 Python 3.11
+    "fio_min_version": "3.33",          # 开发板 FIO 版本
+    "kernel_min_version": (6, 1),       # Debian 12 默认内核 6.1
     "required_packages": ["sg3-utils", "hdparm"],
     "required_modules": ["ufshcd"],
     "required_groups": ["disk"],
 }
 
-# 开发板环境基线（需要根据实际开发板更新）
+# 开发板环境基线（根据实际开发板配置）
+# 开发板信息：ARM Debian 12, FIO 3.33
 BASELINE = {
-    "kernel_version": "5.15.0",
+    "kernel_version": "6.1",        # Debian 12 默认内核版本
     "fio_version": "3.33",
-    "python_version": "3.10.12",
-    "ubuntu_version": "22.04",
+    "python_version": "3.11",       # Debian 12 默认 Python 版本
+    "debian_version": "12",         # Debian 12 (Bookworm)
+    "arch": "arm64",                # ARM64 架构
 }
 
 
@@ -138,22 +141,23 @@ class EnvironmentChecker:
 
         self.log_check("Linux 内核版本", passed, details, critical=True)
 
-    def check_ubuntu_version(self):
-        """检查 Ubuntu 版本"""
+    def check_debian_version(self):
+        """检查 Debian 版本"""
         try:
             with open("/etc/os-release") as f:
                 content = f.read()
+                version_id = ""
                 for line in content.split("\n"):
-                    if line.startswith("VERSION="):
-                        version = line.split("=")[1].strip('"')
-                        passed = "22.04" in version or "20.04" in version
-                        baseline = BASELINE["ubuntu_version"]
-                        details = f"当前：{version}, 基线：{baseline}"
-                        self.log_check("Ubuntu 版本", passed, details, critical=False)
-                        return
-            self.log_check("Ubuntu 版本", False, "无法检测版本", critical=False)
+                    if line.startswith("VERSION_ID="):
+                        version_id = line.split("=")[1].strip('"')
+                        break
+                
+                baseline = BASELINE["debian_version"]
+                passed = version_id == baseline
+                details = f"当前：Debian {version_id}, 基线：Debian {baseline}"
+                self.log_check("Debian 版本", passed, details, critical=True)
         except Exception as e:
-            self.log_check("Ubuntu 版本", False, f"检查失败：{str(e)}", critical=False)
+            self.log_check("Debian 版本", False, f"检查失败：{str(e)}", critical=True)
 
     def check_required_packages(self):
         """检查必需的系统包"""
@@ -260,6 +264,21 @@ class EnvironmentChecker:
 
         self.log_check("FIO 权限", passed, details, critical=True)
 
+    def check_architecture(self):
+        """检查 CPU 架构"""
+        try:
+            arch = platform.machine()
+            baseline = BASELINE["arch"]
+            
+            # arm64/aarch64 都算 ARM
+            passed = arch in ["arm64", "aarch64"] if baseline == "arm64" else arch == baseline
+            details = f"当前：{arch}, 基线：{baseline}"
+        except Exception as e:
+            passed = False
+            details = f"检查失败：{str(e)}"
+
+        self.log_check("CPU 架构", passed, details, critical=False)
+
     def run_all_checks(self):
         """运行所有检查"""
         print("=" * 60)
@@ -270,7 +289,8 @@ class EnvironmentChecker:
         self.check_python_version()
         self.check_fio_version()
         self.check_kernel_version()
-        self.check_ubuntu_version()
+        self.check_debian_version()
+        self.check_architecture()
         self.check_required_packages()
         self.check_kernel_modules()
         self.check_user_groups()
