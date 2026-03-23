@@ -61,7 +61,7 @@ class Test(TestCase):
         target_bw_mbps: float = 2100,
         max_avg_latency_us: float = 200,
         max_tail_latency_us: float = 5000,  # p99.999
-        # === 可选��能 ===
+        # === 可选功能 ===
         verify: str = None,  # 'md5', 'crc32c', None
         prefill: bool = True,
     ):

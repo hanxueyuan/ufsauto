@@ -6,7 +6,7 @@
 |------|------|---------|
 | **PASS** | 测试完成，数据采集成功 | execute + validate 正常结束 |
 | **FAIL** | 验证不通过 | validate 返回 False，或有 record_failure 记录 |
-| **ERROR** | 执行过程异常 | execute 抛异常（FIO crash、IO error��� |
+| **ERROR** | 执行过程异常 | execute 抛异常（FIO crash、IO error 等） |
 | **SKIP** | 前置条件不满足，未执行 | setup 返回 False |
 | **ABORT** | 被中断或超时 | SIGINT / KeyboardInterrupt / 超时 |
 
@@ -37,7 +37,7 @@
 ## 4. Case 设计规范
 
 ### 参数化
-- 性能目标（target）、FIO 参数（bs/ioengine/iodepth��等通过 `__init__` 参数可配
+- 性能目标（target）、FIO 参数（bs/ioengine/iodepth 等）通过 `__init__` 参数可配
 - 不同 UFS 规格（3.0/3.1/4.0）对应不同目标值，不能硬编码
 
 ### 预热与预填充

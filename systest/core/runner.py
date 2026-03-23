@@ -79,7 +79,7 @@ class TestCase:
         所有 failure 记录会出现在结果的 'failures' 字段中。
         
         Args:
-            check: 检��项名称（如 "Pattern A 数据校验"）
+            check: 检查项名称（如 "Pattern A 数据校验"）
             expected: 期望值
             actual: 实际值
             reason: 附加说明（可选）
@@ -316,7 +316,7 @@ class TestRunner:
         for i, test_name in enumerate(tests, 1):
             # 如果之前有 Fail-Stop，后续 case 全部 SKIP
             if stopped:
-                logger.warning(f"[{i}/{len(tests)}] 跳���测试（前序 Fail-Stop）：{test_name}")
+                logger.warning(f"[{i}/{len(tests)}] 跳过测试（前序 Fail-Stop）：{test_name}")
                 results.append({
                     'name': test_name,
                     'status': 'SKIP',
@@ -408,107 +408,3 @@ class TestRunner:
                         return result
         
         raise ValueError(f"未知测试用例：{test_name}")
-
-
-# 示例测试用例（顺序读性能测试）
-class SeqReadTest(TestCase):
-    """顺序读性能测试"""
-    
-    name = "seq_read_burst"
-    description = "顺序读取性能测试（Burst）"
-    
-    def __init__(self, device: str = '/dev/ufs0', verbose: bool = False):
-        super().__init__(device, verbose)
-        self.test_file = f"{device}/test_seq_read"
-        self.size = "1G"
-        self.runtime = 60
-    
-    def setup(self) -> bool:
-        """确保测试设备可写"""
-        try:
-            # 检查设备是否存在
-            if not Path(self.device).exists():
-                logger.error(f"设备不存在：{self.device}")
-                return False
-            return True
-        except Exception as e:
-            logger.error(f"Setup 失败：{e}")
-            return False
-    
-    def execute(self) -> Dict[str, Any]:
-        """执行 FIO 顺序读测试"""
-        fio_cmd = [
-            'fio',
-            '--name=seq_read',
-            f'--filename={self.test_file}',
-            '--rw=read',
-            '--bs=128k',
-            '--size=' + self.size,
-            '--runtime=' + str(self.runtime),
-            '--time_based',
-            '--ioengine=libaio',
-            '--direct=1',
-            '--numjobs=1',
-            '--group_reporting',
-            '--output-format=json'
-        ]
-        
-        logger.debug(f"执行 FIO: {' '.join(fio_cmd)}")
-        
-        result = subprocess.run(
-            fio_cmd,
-            capture_output=True,
-            text=True,
-            timeout=self.runtime + 30
-        )
-        
-        if result.returncode != 0:
-            raise RuntimeError(f"FIO 执行失败：{result.stderr}")
-        
-        # 解析 FIO 输出
-        fio_output = json.loads(result.stdout)
-        job = fio_output['jobs'][0]['read']
-        
-        return {
-            'bandwidth': {
-                'value': job['bw_bytes'] / (1024 * 1024),  # MB/s
-                'unit': 'MB/s'
-            },
-            'iops': {
-                'value': job['iops'],
-                'unit': 'IOPS'
-            },
-            'latency_avg': {
-                'value': job['lat_ns']['mean'] / 1000,  # μs
-                'unit': 'μs'
-            },
-            'latency_99999': {
-                'value': job['lat_ns']['percentile']['99.999'] / 1000,  # μs
-                'unit': 'μs'
-            }
-        }
-    
-    def validate(self, result: Dict[str, Any]) -> bool:
-        """验证结果是否达标"""
-        # 目标值：顺序读 Burst ≥ 2100 MB/s
-        target = 2100  # MB/s
-        actual = result['bandwidth']['value']
-        
-        passed = actual >= target
-        
-        if not passed:
-            logger.warning(f"性能不达标：{actual:.1f} MB/s < {target} MB/s")
-        
-        return passed
-    
-    def teardown(self) -> bool:
-        """清理测试文件"""
-        try:
-            test_path = Path(self.test_file)
-            if test_path.exists():
-                test_path.unlink()
-                logger.debug(f"清理测试文件：{self.test_file}")
-            return True
-        except Exception as e:
-            logger.warning(f"清理失败：{e}")
-            return True

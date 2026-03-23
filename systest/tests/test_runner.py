@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.runner import TestRunner, TestCase
+from core.runner import TestRunner, TestCase, FailStop
 
 
 # --- TestCase 基类测试 ---
@@ -188,3 +188,160 @@ def test_runner_performance_test_names():
                 't_perf_RandReadBurst_005', 't_perf_RandWriteBurst_007', 
                 't_perf_MixedRw_009'}
     assert set(perf) == expected
+
+
+# --- Fail-Continue 测试 ---
+
+class DummyFailContinueTest(TestCase):
+    """模拟 Fail-Continue：多项校验，部分失败，继续跑完"""
+    name = "dummy_fail_continue"
+    
+    def execute(self):
+        results = {}
+        
+        # 第一项校验：失败
+        results['check_a'] = 'bad_value'
+        self.record_failure('Check A', expected='good_value', actual='bad_value')
+        
+        # 第二项校验：通过（继续执行到这里）
+        results['check_b'] = 'ok'
+        
+        # 第三项校验：也失败
+        results['check_c'] = 'wrong'
+        self.record_failure('Check C', expected='right', actual='wrong', reason='数据不一致')
+        
+        return results
+    
+    def validate(self, result):
+        # 返回 True，让框架根据 has_failures 自动判定 FAIL
+        return True
+
+
+def test_fail_continue_records_failures():
+    """Fail-Continue：记录失败但继续执行，最终 FAIL"""
+    tc = DummyFailContinueTest()
+    result = tc.run()
+    
+    assert result['status'] == 'FAIL'
+    assert 'failures' in result
+    assert len(result['failures']) == 2
+    assert result['failures'][0]['check'] == 'Check A'
+    assert result['failures'][1]['check'] == 'Check C'
+    assert result['failures'][1]['reason'] == '数据不一致'
+
+
+def test_fail_continue_executes_all_steps():
+    """Fail-Continue：即使有失败，后续步骤也执行了"""
+    tc = DummyFailContinueTest()
+    result = tc.run()
+    
+    # check_b 在 check_a 失败之后，应该也执行到了
+    assert result['metrics']['check_b'] == 'ok'
+    assert result['metrics']['check_c'] == 'wrong'
+
+
+# --- Fail-Stop 测试 ---
+
+class DummyFailStopTest(TestCase):
+    """模拟 Fail-Stop：遇到严重问题立刻终止"""
+    name = "dummy_fail_stop"
+    
+    def execute(self):
+        result = {}
+        result['step_1'] = 'done'
+        
+        # 严重问题，立刻停
+        raise FailStop("设备返回 IO error")
+        
+        # 这行不会执行
+        result['step_2'] = 'done'  # noqa: E501
+        return result
+    
+    def validate(self, result):
+        return True
+
+
+def test_fail_stop_terminates_case():
+    """Fail-Stop：立刻终止，状态为 FAIL"""
+    tc = DummyFailStopTest()
+    result = tc.run()
+    
+    assert result['status'] == 'FAIL'
+    assert result['fail_mode'] == 'stop'
+    assert 'IO error' in result['reason']
+
+
+# --- 性能测试 annotations 测试 ---
+
+class DummyPerfTest(TestCase):
+    """模拟性能测试：validate 永远返回 True，指标走 annotations"""
+    name = "dummy_perf"
+    
+    def execute(self):
+        return {
+            'bandwidth': {'value': 1800, 'unit': 'MB/s'},
+            'iops': {'value': 14000, 'unit': 'IOPS'},
+        }
+    
+    def validate(self, result):
+        annotations = []
+        
+        bw = result['bandwidth']['value']
+        annotations.append({
+            'metric': '带宽',
+            'actual': f'{bw} MB/s',
+            'target': '>= 2100 MB/s',
+            'met': bw >= 2100,
+        })
+        
+        iops = result['iops']['value']
+        annotations.append({
+            'metric': 'IOPS',
+            'actual': f'{iops}',
+            'target': '>= 15000',
+            'met': iops >= 15000,
+        })
+        
+        result['annotations'] = annotations
+        # 性能测试：永远返回 True
+        return True
+
+
+def test_perf_validate_always_pass():
+    """性能测试：即使指标未达标，状态仍为 PASS"""
+    tc = DummyPerfTest()
+    result = tc.run()
+    
+    assert result['status'] == 'PASS'
+    assert 'annotations' in result['metrics']
+    
+    annotations = result['metrics']['annotations']
+    assert len(annotations) == 2
+    
+    # 带宽未达标（1800 < 2100）
+    assert annotations[0]['met'] == False
+    # IOPS 未达标（14000 < 15000）
+    assert annotations[1]['met'] == False
+
+
+def test_perf_annotations_structure():
+    """性能测试：annotations 结构完整"""
+    tc = DummyPerfTest()
+    result = tc.run()
+    
+    for ann in result['metrics']['annotations']:
+        assert 'metric' in ann
+        assert 'actual' in ann
+        assert 'target' in ann
+        assert 'met' in ann
+        assert isinstance(ann['met'], bool)
+
+
+# --- record_failure 不影响无 failure 的 case ---
+
+def test_no_failures_means_pass():
+    """没有 record_failure 且 validate 返回 True → PASS"""
+    tc = DummyPassTest()
+    result = tc.run()
+    assert result['status'] == 'PASS'
+    assert 'failures' not in result
