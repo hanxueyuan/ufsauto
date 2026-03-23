@@ -91,11 +91,11 @@ def test_testcase_crash():
 
 
 def test_testcase_setup_fail():
-    """测试 setup 失败"""
+    """测试 setup 失败 → SKIP（前置条件不满足）"""
     tc = DummySetupFailTest()
     result = tc.run()
-    assert result['status'] == 'ERROR'
-    assert 'Setup' in result.get('error', '')
+    assert result['status'] == 'SKIP'
+    assert 'precondition' in result.get('reason', '').lower() or 'setup' in result.get('reason', '').lower()
 
 
 def test_testcase_with_device():

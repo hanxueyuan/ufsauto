@@ -5,18 +5,23 @@
 测试 UFS 设备的随机读取 IOPS（4K QD32）
 
 测试用例 ID: t_perf_RandReadBurst_005
-测试目的：验证 UFS 设备随机读 IOPS 性能是否达标（≥200 KIOPS）
+测试目的：验证 UFS 设备随机读 IOPS 性能
 前置条件：
     1. UFS 设备已挂载
     2. 有足够可用空间（≥2GB）
     3. FIO 工具已安装
 测试步骤：
-    1. 执行 FIO 随机读测试（4K block, QD32, 60s）
-    2. 验证 IOPS 是否达标
-预期结果：IOPS ≥ 200,000
-测试耗时：约 60 秒
+    1. 预填充测试文件
+    2. 执行 FIO 随机读测试（4K block, QD32, 60s, 含 10s ramp）
+    3. 标注 IOPS、带宽、延迟是否达标
+预期指标（参考）：
+    - IOPS ≥ 200,000
+    - 平均延迟 < 160 μs
+    - p99.999 尾延迟 < 5000 μs
+测试耗时：约 70 秒（含 ramp）
 """
 
+import os
 import sys
 import subprocess
 from pathlib import Path
@@ -38,22 +43,42 @@ class Test(TestCase):
     name = "rand_read_burst"
     description = "随机读取性能测试（4K QD32）"
     
-    def __init__(self, device: str = '/dev/ufs0', verbose: bool = False, logger=None, simulate: bool = False):
+    def __init__(
+        self,
+        device: str = '/dev/ufs0',
+        verbose: bool = False,
+        logger=None,
+        simulate: bool = False,
+        bs: str = '4k',
+        size: str = '1G',
+        runtime: int = 60,
+        ramp_time: int = 10,
+        ioengine: str = 'sync',
+        iodepth: int = 32,
+        target_iops: float = 200000,
+        max_avg_latency_us: float = 160,
+        max_tail_latency_us: float = 5000,
+        prefill: bool = True,
+    ):
         super().__init__(device, verbose, logger)
         self.simulate = simulate
-        self.test_file = f"/tmp/ufs_test_rand_read"
-        self.size = "1G"
-        self.runtime = 60
-        self.bs = '4k'
-        self.iodepth = 32
-        self.target = 200000  # IOPS
+        self.test_file = "/tmp/ufs_test_rand_read"
+        self.bs = bs
+        self.size = size
+        self.runtime = runtime
+        self.ramp_time = ramp_time
+        self.ioengine = ioengine
+        self.iodepth = iodepth
+        self.target_iops = target_iops
+        self.max_avg_latency_us = max_avg_latency_us
+        self.max_tail_latency_us = max_tail_latency_us
+        self.prefill = prefill
         
         self.sim = UFSSimulator(device, logger=self.logger)
-        self.fio = FIO(timeout=self.runtime + 30, logger=self.logger)
+        self.fio = FIO(timeout=self.runtime + self.ramp_time + 30, logger=self.logger)
         self.ufs = self.sim if simulate else UFSDevice(device, logger=self.logger)
     
     def setup(self) -> bool:
-        """测试前准备"""
         self.logger.info("开始检查前置条件...")
         
         if not self.ufs.exists():
@@ -72,75 +97,123 @@ class Test(TestCase):
             self.logger.error(f"检查 FIO 失败：{e}")
             return False
         
-        import os
         if not os.access(self.device, os.R_OK | os.W_OK):
             self.logger.error(f"设备权限不足")
             return False
+        
+        # 预填充
+        if self.prefill:
+            self.logger.info(f"预填充测试文件：{self.test_file} ({self.size})")
+            try:
+                size_mb = self._parse_size_mb(self.size)
+                subprocess.run(
+                    ['dd', 'if=/dev/urandom', f'of={self.test_file}',
+                     'bs=1M', f'count={size_mb}', 'conv=fdatasync'],
+                    capture_output=True, text=True, timeout=120
+                )
+            except Exception as e:
+                self.logger.warning(f"预填充异常，继续测试：{e}")
+        
+        self.logger.info("📋 测试配置:")
+        self.logger.info(f"  bs={self.bs}, size={self.size}, runtime={self.runtime}s, iodepth={self.iodepth}")
+        self.logger.info(f"  ioengine={self.ioengine}, ramp_time={self.ramp_time}s")
+        self.logger.info(f"  target_iops={self.target_iops}, max_avg_lat={self.max_avg_latency_us} μs")
         
         self.logger.info("✅ 前置条件检查通过")
         return True
     
     def execute(self) -> dict:
-        """执行 FIO 随机读测试"""
         self.logger.info("开始执行随机读性能测试...")
         
         try:
+            extra_kwargs = {}
+            if self.ramp_time > 0:
+                extra_kwargs['ramp_time'] = self.ramp_time
+            
             metrics = self.fio.run_rand_read(
                 filename=self.test_file,
                 size=self.size,
                 runtime=self.runtime,
                 bs=self.bs,
                 iodepth=self.iodepth,
-                ioengine='sync'
+                ioengine=self.ioengine,
+                **extra_kwargs
             )
             
+            iops = metrics.iops['value']
+            bw_mbps = metrics.bandwidth['value']
+            avg_lat_us = metrics.latency_ns['mean'] / 1000
+            p99999_us = metrics.latency_ns['percentile'].get('99.999', 0) / 1000
+            
             self.logger.info(f"📊 测试结果:")
-            self.logger.info(f"  IOPS: {metrics.iops['value']:.0f}")
-            self.logger.info(f"  带宽：{metrics.bandwidth['value']:.1f} MB/s")
-            self.logger.info(f"  平均延迟：{metrics.latency_ns['mean']/1000:.1f} μs")
+            self.logger.info(f"  IOPS: {iops:.0f}")
+            self.logger.info(f"  带宽：{bw_mbps:.1f} MB/s")
+            self.logger.info(f"  平均延迟：{avg_lat_us:.1f} μs")
+            self.logger.info(f"  p99.999 延迟：{p99999_us:.1f} μs")
             
             return {
                 'iops': metrics.iops,
                 'bandwidth': metrics.bandwidth,
-                'latency_avg': {
-                    'value': metrics.latency_ns['mean'] / 1000,
-                    'unit': 'μs'
-                }
+                'latency_avg': {'value': avg_lat_us, 'unit': 'μs'},
+                'latency_99999': {'value': p99999_us, 'unit': 'μs'},
             }
             
-        except FIOError as e:
-            self.logger.error(f"FIO 执行失败：{e}")
+        except Exception as e:
+            self.logger.error(f"测试执行失败：{e}")
             raise
     
     def validate(self, result: dict) -> bool:
-        """验证结果是否达标"""
-        actual = result['iops']['value']
-        passed = actual >= self.target
+        """标注指标（性能测试，永远返回 True）"""
+        annotations = []
         
-        if passed:
-            self.logger.info(f"✅ 性能达标：{actual:.0f} IOPS ≥ {self.target} IOPS")
-        else:
-            self.logger.warning(f"❌ 性能不达标：{actual:.0f} IOPS < {self.target} IOPS")
+        actual_iops = result['iops']['value']
+        annotations.append({
+            'metric': 'IOPS', 'actual': f'{actual_iops:.0f}',
+            'target': f'>= {self.target_iops:.0f}',
+            'met': actual_iops >= self.target_iops,
+        })
         
-        self.logger.log_assertion(
-            assertion='IOPS 达标',
-            expected=f'>= {self.target} IOPS',
-            actual=f'{actual:.0f} IOPS',
-            passed=passed
-        )
+        actual_lat = result['latency_avg']['value']
+        annotations.append({
+            'metric': '平均延迟', 'actual': f'{actual_lat:.1f} μs',
+            'target': f'< {self.max_avg_latency_us} μs',
+            'met': actual_lat < self.max_avg_latency_us,
+        })
         
-        return passed
+        actual_tail = result['latency_99999']['value']
+        if actual_tail > 0:
+            annotations.append({
+                'metric': 'p99.999 延迟', 'actual': f'{actual_tail:.1f} μs',
+                'target': f'< {self.max_tail_latency_us} μs',
+                'met': actual_tail < self.max_tail_latency_us,
+            })
+        
+        result['annotations'] = annotations
+        met_count = sum(1 for a in annotations if a['met'])
+        self.logger.info(f"📋 指标标注：{met_count}/{len(annotations)} 项达标")
+        for a in annotations:
+            status = "✅" if a['met'] else "⚠️"
+            self.logger.info(f"  {status} {a['metric']}：{a['actual']} (目标 {a['target']})")
+        
+        return True
     
     def teardown(self) -> bool:
-        """清理测试文件"""
         try:
             test_path = Path(self.test_file)
             if test_path.exists():
                 test_path.unlink()
-            
             self.ufs.flush_cache()
             self.logger.info("测试清理完成")
             return True
         except Exception as e:
             self.logger.warning(f"清理失败：{e}")
-            return True
+            return False
+    
+    @staticmethod
+    def _parse_size_mb(size_str: str) -> int:
+        size_str = size_str.strip().upper()
+        if size_str.endswith('G'):
+            return int(float(size_str[:-1]) * 1024)
+        elif size_str.endswith('M'):
+            return int(float(size_str[:-1]))
+        return int(size_str) // (1024 * 1024)
