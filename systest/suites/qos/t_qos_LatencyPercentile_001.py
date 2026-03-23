@@ -5,20 +5,24 @@ QoS 延迟百分位测试
 测试 UFS 设备的延迟分布（p99.99）
 
 测试用例 ID: t_qos_LatencyPercentile_001
-测试目的：验证 UFS 设备延迟百分位是否达标（p99.99 < 10ms）
+测试目的：验证 UFS 设备延迟百分位分布
 前置条件：
     1. UFS 设备已挂载
     2. 有足够可用空间（≥2GB）
     3. FIO 工具已安装
     4. 系统负载较低
 测试步骤：
-    1. 执行 FIO 延迟测试（4K block, QD1, 120s）
-    2. 收集延迟百分位数据（p50, p90, p99, p99.99）
-    3. 验证 p99.99 延迟是否达标
-预期结果：p99.99 延迟 < 10ms
-测试耗时：约 120 秒
+    1. 预填充测试文件
+    2. 执行 FIO 延迟测试（4K block, QD1, 120s, 含 10s ramp）
+    3. 收集延迟百分位数据（p50, p90, p99, p99.99, p99.999）
+    4. 标注各百分位延迟是否达标
+预期指标（参考）：
+    - p99.99 < 10ms
+    - p99.999 < 20ms
+测试耗时：约 130 秒（含 ramp）
 """
 
+import os
 import sys
 import subprocess
 from pathlib import Path
@@ -40,22 +44,40 @@ class Test(TestCase):
     name = "qos_latency_percentile"
     description = "QoS 延迟百分位测试（p99.99）"
     
-    def __init__(self, device: str = '/dev/ufs0', verbose: bool = False, logger=None, simulate: bool = False):
+    def __init__(
+        self,
+        device: str = '/dev/ufs0',
+        verbose: bool = False,
+        logger=None,
+        simulate: bool = False,
+        bs: str = '4k',
+        size: str = '512M',
+        runtime: int = 120,
+        ramp_time: int = 10,
+        ioengine: str = 'sync',
+        iodepth: int = 1,
+        target_p9999_us: float = 10000,
+        target_p99999_us: float = 20000,
+        prefill: bool = True,
+    ):
         super().__init__(device, verbose, logger)
         self.simulate = simulate
-        self.test_file = f"/tmp/ufs_test_qos_latency"
-        self.size = "512M"
-        self.runtime = 120
-        self.bs = '4k'
-        self.iodepth = 1  # QD=1 测延迟
-        self.target_p9999 = 10000  # μs (10ms)
+        self.test_file = "/tmp/ufs_test_qos_latency"
+        self.bs = bs
+        self.size = size
+        self.runtime = runtime
+        self.ramp_time = ramp_time
+        self.ioengine = ioengine
+        self.iodepth = iodepth
+        self.target_p9999_us = target_p9999_us
+        self.target_p99999_us = target_p99999_us
+        self.prefill = prefill
         
         self.sim = UFSSimulator(device, logger=self.logger)
-        self.fio = FIO(timeout=self.runtime + 30, logger=self.logger)
+        self.fio = FIO(timeout=self.runtime + self.ramp_time + 30, logger=self.logger)
         self.ufs = self.sim if simulate else UFSDevice(device, logger=self.logger)
     
     def setup(self) -> bool:
-        """测试前准备"""
         self.logger.info("开始检查前置条件...")
         
         if not self.ufs.exists():
@@ -74,38 +96,59 @@ class Test(TestCase):
             self.logger.error(f"检查 FIO 失败：{e}")
             return False
         
-        import os
         if not os.access(self.device, os.R_OK | os.W_OK):
             self.logger.error(f"设备权限不足")
             return False
         
-        # 检查系统负载（可选）
-        self.logger.debug("前置条件检查通过")
+        # 预填充
+        if self.prefill:
+            self.logger.info(f"预填充测试文件：{self.test_file} ({self.size})")
+            try:
+                size_mb = self._parse_size_mb(self.size)
+                subprocess.run(
+                    ['dd', 'if=/dev/urandom', f'of={self.test_file}',
+                     'bs=1M', f'count={size_mb}', 'conv=fdatasync'],
+                    capture_output=True, text=True, timeout=120
+                )
+            except Exception as e:
+                self.logger.warning(f"预填充异常，继续测试：{e}")
+        
+        self.logger.info("📋 测试配置:")
+        self.logger.info(f"  bs={self.bs}, size={self.size}, runtime={self.runtime}s, iodepth={self.iodepth}")
+        self.logger.info(f"  ioengine={self.ioengine}, ramp_time={self.ramp_time}s")
+        self.logger.info(f"  target_p99.99={self.target_p9999_us} μs, target_p99.999={self.target_p99999_us} μs")
+        
+        self.logger.info("✅ 前置条件检查通过")
         return True
     
     def execute(self) -> dict:
-        """执行 FIO 延迟测试"""
         self.logger.info("开始执行 QoS 延迟百分位测试...")
         
         try:
+            extra_kwargs = {}
+            if self.ramp_time > 0:
+                extra_kwargs['ramp_time'] = self.ramp_time
+            
             metrics = self.fio.run_latency_test(
                 filename=self.test_file,
                 size=self.size,
                 runtime=self.runtime,
                 bs=self.bs,
                 iodepth=self.iodepth,
-                ioengine='sync'
+                ioengine=self.ioengine,
+                **extra_kwargs
             )
             
-            # 提取延迟百分位数据
             percentiles = metrics.latency_ns.get('percentile', {})
-            p50 = percentiles.get('50.000000', 0) / 1000  # μs
+            p50 = percentiles.get('50.000000', 0) / 1000
             p90 = percentiles.get('90.000000', 0) / 1000
             p99 = percentiles.get('99.000000', 0) / 1000
             p9999 = percentiles.get('99.990000', 0) / 1000
             p99999 = percentiles.get('99.999000', 0) / 1000
+            avg = metrics.latency_ns['mean'] / 1000
             
             self.logger.info(f"📊 延迟分布:")
+            self.logger.info(f"  平均值：{avg:.1f} μs")
             self.logger.info(f"  p50:    {p50:.1f} μs")
             self.logger.info(f"  p90:    {p90:.1f} μs")
             self.logger.info(f"  p99:    {p99:.1f} μs")
@@ -113,47 +156,74 @@ class Test(TestCase):
             self.logger.info(f"  p99.999: {p99999:.1f} μs")
             
             return {
+                'latency_avg': {'value': avg, 'unit': 'μs'},
                 'latency_p50': {'value': p50, 'unit': 'μs'},
                 'latency_p90': {'value': p90, 'unit': 'μs'},
                 'latency_p99': {'value': p99, 'unit': 'μs'},
                 'latency_p9999': {'value': p9999, 'unit': 'μs'},
                 'latency_p99999': {'value': p99999, 'unit': 'μs'},
-                'latency_avg': metrics.latency_avg
             }
             
-        except FIOError as e:
-            self.logger.error(f"FIO 执行失败：{e}")
+        except Exception as e:
+            self.logger.error(f"测试执行失败：{e}")
             raise
     
     def validate(self, result: dict) -> bool:
-        """验证结果是否达标"""
-        actual = result['latency_p9999']['value']
-        passed = actual < self.target_p9999
+        """标注指标（性能测试，永远返回 True）"""
+        annotations = []
         
-        if passed:
-            self.logger.info(f"✅ 延迟达标：p99.99={actual:.1f}μs < {self.target_p9999/1000:.1f}ms")
-        else:
-            self.logger.warning(f"❌ 延迟不达标：p99.99={actual:.1f}μs ≥ {self.target_p9999/1000:.1f}ms")
+        p9999 = result['latency_p9999']['value']
+        annotations.append({
+            'metric': 'p99.99 延迟', 'actual': f'{p9999:.1f} μs',
+            'target': f'< {self.target_p9999_us} μs ({self.target_p9999_us/1000:.0f}ms)',
+            'met': p9999 < self.target_p9999_us,
+        })
         
-        self.logger.log_assertion(
-            assertion='p99.99 延迟达标',
-            expected=f'< {self.target_p9999/1000:.1f}ms',
-            actual=f'{actual/1000:.2f}ms',
-            passed=passed
-        )
+        p99999 = result['latency_p99999']['value']
+        if p99999 > 0:
+            annotations.append({
+                'metric': 'p99.999 延迟', 'actual': f'{p99999:.1f} μs',
+                'target': f'< {self.target_p99999_us} μs ({self.target_p99999_us/1000:.0f}ms)',
+                'met': p99999 < self.target_p99999_us,
+            })
         
-        return passed
+        # 延迟分布合理性：p50 应远小于 p99.99（尾部不应过于发散）
+        p50 = result['latency_p50']['value']
+        if p50 > 0 and p9999 > 0:
+            tail_ratio = p9999 / p50
+            ratio_ok = tail_ratio < 100  # p99.99 不应超过 p50 的 100 倍
+            annotations.append({
+                'metric': '尾部发散度', 'actual': f'p99.99/p50 = {tail_ratio:.1f}x',
+                'target': '< 100x',
+                'met': ratio_ok,
+            })
+        
+        result['annotations'] = annotations
+        met_count = sum(1 for a in annotations if a['met'])
+        self.logger.info(f"📋 指标标注：{met_count}/{len(annotations)} 项达标")
+        for a in annotations:
+            status = "✅" if a['met'] else "⚠️"
+            self.logger.info(f"  {status} {a['metric']}：{a['actual']} (目标 {a['target']})")
+        
+        return True
     
     def teardown(self) -> bool:
-        """清理测试文件"""
         try:
             test_path = Path(self.test_file)
             if test_path.exists():
                 test_path.unlink()
-            
             self.ufs.flush_cache()
             self.logger.info("测试清理完成")
             return True
         except Exception as e:
             self.logger.warning(f"清理失败：{e}")
-            return True
+            return False
+    
+    @staticmethod
+    def _parse_size_mb(size_str: str) -> int:
+        size_str = size_str.strip().upper()
+        if size_str.endswith('G'):
+            return int(float(size_str[:-1]) * 1024)
+        elif size_str.endswith('M'):
+            return int(float(size_str[:-1]))
+        return int(size_str) // (1024 * 1024)

@@ -3,9 +3,17 @@
 """
 测试执行引擎 - Test Runner
 负责加载测试套件、执行测试用例、收集结果
+
+测试状态定义：
+    PASS  - 测试完成，数据采集成功。对于性能测试，指标是否达标通过 annotations 记录。
+    FAIL  - 验证不通过。用于功能测试（如数据校验失败）。性能测试一般不产生 FAIL。
+    ERROR - 测试执行过程中发生异常（FIO crash、IO error 等）。
+    SKIP  - 前置条件不满足，测试未执行（设备不存在、空间不足、工具未安装等）。
+    ABORT - 测试被中断或超时（用户 Ctrl+C、超时 kill）。
 """
 
 import logging
+import signal
 import subprocess
 import json
 import time
@@ -17,8 +25,39 @@ from typing import Dict, List, Optional, Any
 logger = logging.getLogger(__name__)
 
 
+class TestAborted(Exception):
+    """测试被中断"""
+    pass
+
+
+class FailStop(Exception):
+    """
+    Fail-Stop：立刻终止当前 case 的后续逻辑。
+    
+    在 execute() 或 validate() 中 raise FailStop("原因") 即可。
+    case 状态变为 FAIL，suite 也会停下来（由 TestRunner 处理）。
+    
+    典型场景：设备返回 IO error、数据严重损坏、继续跑有风险。
+    """
+    pass
+
+
 class TestCase:
-    """测试用例基类"""
+    """
+    测试用例基类
+    
+    Failure 处理方式：
+    
+    1. Fail-Continue（软失败）：
+       在 execute/validate 中用 self.record_failure() 记录失败，但继续执行后续逻辑。
+       case 跑完后，如果有任何 failure 记录，最终状态为 FAIL。
+       suite 继续跑下一个 case。
+       
+    2. Fail-Stop（硬失败）：
+       在 execute/validate 中 raise FailStop("原因")。
+       case 立刻停止，最终状态为 FAIL。
+       suite 也停下来（不再跑后续 case）。
+    """
     
     name: str = "base_test"
     description: str = "基础测试用例"
@@ -29,9 +68,42 @@ class TestCase:
         self.logger = logger or logging.getLogger(f"systest.test.{self.name}")
         self.start_time = None
         self.end_time = None
+        # Fail-Continue 收集器
+        self._failures: List[Dict[str, Any]] = []
+    
+    def record_failure(self, check: str, expected: str, actual: str, reason: str = ''):
+        """
+        记录一个 Fail-Continue 失败（软失败）。
+        
+        调用后 case 继续执行，但最终状态会变为 FAIL。
+        所有 failure 记录会出现在结果的 'failures' 字段中。
+        
+        Args:
+            check: 检查项名称（如 "Pattern A 数据校验"）
+            expected: 期望值
+            actual: 实际值
+            reason: 附加说明（可选）
+        """
+        failure = {
+            'check': check,
+            'expected': expected,
+            'actual': actual,
+            'reason': reason,
+            'timestamp': datetime.now().isoformat(),
+        }
+        self._failures.append(failure)
+        self.logger.warning(
+            f"❌ [Fail-Continue] {check}: 期望 {expected}, 实际 {actual}"
+            + (f" ({reason})" if reason else "")
+        )
+    
+    @property
+    def has_failures(self) -> bool:
+        """是否有 Fail-Continue 记录"""
+        return len(self._failures) > 0
     
     def setup(self) -> bool:
-        """测试前准备"""
+        """测试前准备。返回 False 则测试状态为 SKIP。"""
         self.logger.debug(f"Setup: {self.name}")
         return True
     
@@ -40,7 +112,16 @@ class TestCase:
         raise NotImplementedError("子类必须实现 execute 方法")
     
     def validate(self, result: Dict[str, Any]) -> bool:
-        """验证结果"""
+        """
+        验证结果。
+        
+        对于性能测试：建议永远返回 True，指标达标情况通过 result['annotations'] 记录。
+        对于功能测试：
+          - Fail-Continue：用 self.record_failure() 记录失败，返回 True 让流程走完。
+            框架会根据 self.has_failures 自动将最终状态设为 FAIL。
+          - Fail-Stop：raise FailStop("原因") 立刻终止。
+          - 也可以直接返回 False（等效于 Fail-Continue 只有一个失败项）。
+        """
         raise NotImplementedError("子类必须实现 validate 方法")
     
     def teardown(self) -> bool:
@@ -51,18 +132,29 @@ class TestCase:
     def run(self) -> Dict[str, Any]:
         """完整执行流程"""
         self.start_time = datetime.now()
+        self._failures = []  # 重置 failure 收集器
         self.logger.info(f"开始执行测试：{self.name}")
         
+        # 注册信号处理，捕获中断
+        original_handler = signal.getsignal(signal.SIGINT)
+        def _abort_handler(signum, frame):
+            raise TestAborted("测试被用户中断 (SIGINT)")
+        
         try:
+            signal.signal(signal.SIGINT, _abort_handler)
+            
             # Setup
             self.logger.debug("执行 Setup...")
             if not self.setup():
-                self.logger.error(f"Setup 失败：{self.name}")
+                self.end_time = datetime.now()
+                duration = (self.end_time - self.start_time).total_seconds()
+                self.logger.warning(f"前置条件不满足，跳过测试：{self.name}")
                 return {
                     'name': self.name,
-                    'status': 'ERROR',
-                    'error': 'Setup failed',
-                    'duration': 0
+                    'status': 'SKIP',
+                    'reason': 'Setup returned False (precondition not met)',
+                    'duration': duration,
+                    'timestamp': self.start_time.isoformat()
                 }
             
             # Execute
@@ -76,10 +168,15 @@ class TestCase:
             self.end_time = datetime.now()
             duration = (self.end_time - self.start_time).total_seconds()
             
-            status = 'PASS' if passed else 'FAIL'
+            # 最终状态：validate 返回 False 或有 Fail-Continue 记录 → FAIL
+            if not passed or self.has_failures:
+                status = 'FAIL'
+            else:
+                status = 'PASS'
+            
             self.logger.info(f"测试完成：{self.name} - {status} ({duration:.2f}s)")
             
-            return {
+            run_result = {
                 'name': self.name,
                 'status': status,
                 'metrics': result,
@@ -87,16 +184,79 @@ class TestCase:
                 'timestamp': self.start_time.isoformat()
             }
             
+            # 附带 Fail-Continue 记录
+            if self._failures:
+                run_result['failures'] = self._failures
+                self.logger.info(f"  共 {len(self._failures)} 个失败项（Fail-Continue）")
+            
+            return run_result
+        
+        except FailStop as e:
+            # Fail-Stop：立刻终止，状态为 FAIL
+            self.end_time = datetime.now()
+            duration = (self.end_time - self.start_time).total_seconds()
+            self.logger.error(f"Fail-Stop 触发，测试终止：{self.name} - {e}")
+            run_result = {
+                'name': self.name,
+                'status': 'FAIL',
+                'fail_mode': 'stop',
+                'reason': str(e),
+                'duration': duration,
+                'timestamp': self.start_time.isoformat()
+            }
+            if self._failures:
+                run_result['failures'] = self._failures
+            return run_result
+        
+        except TestAborted:
+            self.end_time = datetime.now()
+            duration = (self.end_time - self.start_time).total_seconds()
+            self.logger.warning(f"测试被中断：{self.name} ({duration:.2f}s)")
+            return {
+                'name': self.name,
+                'status': 'ABORT',
+                'reason': 'Test interrupted by user',
+                'duration': duration,
+                'timestamp': self.start_time.isoformat()
+            }
+        
+        except KeyboardInterrupt:
+            self.end_time = datetime.now()
+            duration = (self.end_time - self.start_time).total_seconds()
+            self.logger.warning(f"测试被中断：{self.name} ({duration:.2f}s)")
+            return {
+                'name': self.name,
+                'status': 'ABORT',
+                'reason': 'KeyboardInterrupt',
+                'duration': duration,
+                'timestamp': self.start_time.isoformat()
+            }
+            
+        except subprocess.TimeoutExpired as e:
+            self.end_time = datetime.now()
+            duration = (self.end_time - self.start_time).total_seconds()
+            self.logger.error(f"测试超时：{self.name} ({duration:.2f}s)")
+            return {
+                'name': self.name,
+                'status': 'ABORT',
+                'reason': f'Timeout: {e}',
+                'duration': duration,
+                'timestamp': self.start_time.isoformat()
+            }
+            
         except Exception as e:
             self.end_time = datetime.now()
+            duration = (self.end_time - self.start_time).total_seconds()
             self.logger.error(f"测试执行失败 {self.name}: {e}", exc_info=True)
             return {
                 'name': self.name,
                 'status': 'ERROR',
                 'error': str(e),
-                'duration': 0
+                'duration': duration,
+                'timestamp': self.start_time.isoformat()
             }
         finally:
+            signal.signal(signal.SIGINT, original_handler)
             self.teardown()
 
 
@@ -151,8 +311,20 @@ class TestRunner:
         
         results = []
         tests = self.suites[suite_name]
+        stopped = False
         
         for i, test_name in enumerate(tests, 1):
+            # 如果之前有 Fail-Stop，后续 case 全部 SKIP
+            if stopped:
+                logger.warning(f"[{i}/{len(tests)}] 跳过测试（前序 Fail-Stop）：{test_name}")
+                results.append({
+                    'name': test_name,
+                    'status': 'SKIP',
+                    'reason': 'Skipped due to previous Fail-Stop',
+                    'duration': 0
+                })
+                continue
+            
             logger.info(f"[{i}/{len(tests)}] 执行测试：{test_name}")
             
             if self.dry_run:
@@ -193,8 +365,17 @@ class TestRunner:
                 result = test_instance.run()
                 results.append(result)
                 
-                status_icon = '✅' if result['status'] == 'PASS' else '❌'
-                logger.info(f"  {status_icon} {result['status']} ({result['duration']:.2f}s)")
+                # 检查是否 Fail-Stop
+                if result.get('fail_mode') == 'stop':
+                    logger.error(f"  🛑 Fail-Stop 触发，后续测试将被跳过")
+                    stopped = True
+                
+                status_icons = {
+                    'PASS': '✅', 'FAIL': '❌', 'ERROR': '💥',
+                    'SKIP': '⏭️', 'ABORT': '⏹️'
+                }
+                icon = status_icons.get(result['status'], '❓')
+                logger.info(f"  {icon} {result['status']} ({result['duration']:.2f}s)")
                 
             except ImportError as e:
                 logger.error(f"无法导入测试用例 {test_name}: {e}")
@@ -227,107 +408,3 @@ class TestRunner:
                         return result
         
         raise ValueError(f"未知测试用例：{test_name}")
-
-
-# 示例测试用例（顺序读性能测试）
-class SeqReadTest(TestCase):
-    """顺序读性能测试"""
-    
-    name = "seq_read_burst"
-    description = "顺序读取性能测试（Burst）"
-    
-    def __init__(self, device: str = '/dev/ufs0', verbose: bool = False):
-        super().__init__(device, verbose)
-        self.test_file = f"{device}/test_seq_read"
-        self.size = "1G"
-        self.runtime = 60
-    
-    def setup(self) -> bool:
-        """确保测试设备可写"""
-        try:
-            # 检查设备是否存在
-            if not Path(self.device).exists():
-                logger.error(f"设备不存在：{self.device}")
-                return False
-            return True
-        except Exception as e:
-            logger.error(f"Setup 失败：{e}")
-            return False
-    
-    def execute(self) -> Dict[str, Any]:
-        """执行 FIO 顺序读测试"""
-        fio_cmd = [
-            'fio',
-            '--name=seq_read',
-            f'--filename={self.test_file}',
-            '--rw=read',
-            '--bs=128k',
-            '--size=' + self.size,
-            '--runtime=' + str(self.runtime),
-            '--time_based',
-            '--ioengine=libaio',
-            '--direct=1',
-            '--numjobs=1',
-            '--group_reporting',
-            '--output-format=json'
-        ]
-        
-        logger.debug(f"执行 FIO: {' '.join(fio_cmd)}")
-        
-        result = subprocess.run(
-            fio_cmd,
-            capture_output=True,
-            text=True,
-            timeout=self.runtime + 30
-        )
-        
-        if result.returncode != 0:
-            raise RuntimeError(f"FIO 执行失败：{result.stderr}")
-        
-        # 解析 FIO 输出
-        fio_output = json.loads(result.stdout)
-        job = fio_output['jobs'][0]['read']
-        
-        return {
-            'bandwidth': {
-                'value': job['bw_bytes'] / (1024 * 1024),  # MB/s
-                'unit': 'MB/s'
-            },
-            'iops': {
-                'value': job['iops'],
-                'unit': 'IOPS'
-            },
-            'latency_avg': {
-                'value': job['lat_ns']['mean'] / 1000,  # μs
-                'unit': 'μs'
-            },
-            'latency_99999': {
-                'value': job['lat_ns']['percentile']['99.999'] / 1000,  # μs
-                'unit': 'μs'
-            }
-        }
-    
-    def validate(self, result: Dict[str, Any]) -> bool:
-        """验证结果是否达标"""
-        # 目标值：顺序读 Burst ≥ 2100 MB/s
-        target = 2100  # MB/s
-        actual = result['bandwidth']['value']
-        
-        passed = actual >= target
-        
-        if not passed:
-            logger.warning(f"性能不达标：{actual:.1f} MB/s < {target} MB/s")
-        
-        return passed
-    
-    def teardown(self) -> bool:
-        """清理测试文件"""
-        try:
-            test_path = Path(self.test_file)
-            if test_path.exists():
-                test_path.unlink()
-                logger.debug(f"清理测试文件：{self.test_file}")
-            return True
-        except Exception as e:
-            logger.warning(f"清理失败：{e}")
-            return True

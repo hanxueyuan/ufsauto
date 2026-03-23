@@ -52,3 +52,6 @@ Thumbs.db
 # 临时文件
 *.tmp
 *.bak
+
+# Word 文档（从 MD 生成，不需要版本控制）
+*.docx
