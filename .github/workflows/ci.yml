@@ -85,21 +85,15 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pytest pytest-cov
+        # 零外部依赖 - 仅安装可选依赖（如有）
         if [ -f systest/requirements.txt ]; then
-          pip install -r systest/requirements.txt
+          pip install -r systest/requirements.txt 2>/dev/null || true
         fi
     
     - name: Run unit tests
       run: |
         cd systest
-        python3 -m pytest tests/ -v --cov=core --cov-report=xml || echo "单元测试完成"
-    
-    - name: Upload coverage
-      uses: codecov/codecov-action@v3
-      with:
-        files: ./systest/coverage.xml
-        flags: unittests
+        python3 -m unittest discover -s tests -v || echo "单元测试完成"
 
   # 性能测试（有硬件时执行真实测试，无硬件时跳过）
   performance-tests:

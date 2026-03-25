@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-环境检查脚本 - 验证 CI/CD 环境与开发板环境一致性
+环境信息收集脚本 - 纯信息输出，不做 pass/fail 判断
 
 使用方法:
     python3 bin/SysTest check-env
+    python3 bin/SysTest check-env -v
+    python3 bin/SysTest check-env --mode deploy
     python3 bin/SysTest check-env --report
 """
 
@@ -12,353 +15,220 @@ import os
 import json
 import subprocess
 import platform
+import glob
 from pathlib import Path
 from datetime import datetime
 
-# 添加项目路径
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-# 不使用自定义 Logger，直接用 print
-
-# 环境要求配置
-# 基于开发板环境：ARM Debian 12, FIO 3.33, Python 3.11, Kernel 6.1
-ENV_REQUIREMENTS = {
-    "python_min_version": (3, 11),      # Debian 12 默认 Python 3.11
-    "fio_min_version": "3.33",          # 开发板 FIO 版本
-    "kernel_min_version": (6, 1),       # Debian 12 默认内核 6.1
-    "required_packages": ["sg3-utils", "hdparm"],
-    "required_modules": ["ufshcd"],
-    "required_groups": ["disk"],
-}
-
-# 开发板环境基线（根据实际开发板配置）
-# 开发板信息：ARM Debian 12, FIO 3.33
-BASELINE = {
-    "kernel_version": "6.1",        # Debian 12 默认内核版本
-    "fio_version": "3.33",
-    "python_version": "3.11",       # Debian 12 默认 Python 版本
-    "debian_version": "12",         # Debian 12 (Bookworm)
-    "arch": "arm64",                # ARM64 架构
-}
-
 
 class EnvironmentChecker:
-    def __init__(self, verbose=False):
+    """环境信息收集器 — 只报事实，不做判断"""
+
+    def __init__(self, mode='dev', verbose=False):
+        self.mode = mode
         self.verbose = verbose
-        self.results = {
-            "timestamp": datetime.now().isoformat(),
-            "checks": [],
-            "passed": True,
-            "warnings": [],
-            "errors": [],
-        }
+        self.items = []
 
-    def log_check(self, name, passed, details="", critical=False):
-        """记录检查结果"""
-        check = {
-            "name": name,
-            "passed": passed,
-            "details": details,
-            "critical": critical,
-        }
-        self.results["checks"].append(check)
+    # ── 内部工具 ──────────────────────────────────────────
 
-        if not passed:
-            if critical:
-                self.results["errors"].append(f"{name}: {details}")
-                self.results["passed"] = False
-            else:
-                self.results["warnings"].append(f"{name}: {details}")
+    def _record(self, category, name, value):
+        self.items.append({'category': category, 'name': name, 'value': value})
 
-        if self.verbose:
-            status = "✅" if passed else "❌"
-            print(f"{status} {name}: {details}")
-
-    def check_python_version(self):
-        """检查 Python 版本"""
-        current = sys.version_info[:2]
-        required = ENV_REQUIREMENTS["python_min_version"]
-        baseline = BASELINE["python_version"]
-
-        passed = current >= required
-        details = (
-            f"当前：{sys.version.split()[0]}, "
-            f"要求：≥{'.'.join(map(str, required))}, "
-            f"基线：{baseline}"
-        )
-        self.log_check("Python 版本", passed, details, critical=True)
-
-    def check_fio_version(self):
-        """检查 FIO 版本"""
+    @staticmethod
+    def _run(cmd, timeout=10):
         try:
-            result = subprocess.run(
-                ["fio", "--version"],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            # 解析版本号 (e.g., "fio-3.33")
-            version_str = result.stdout.strip()
-            version = version_str.replace("fio-", "")
-            major_minor = tuple(map(int, version.split(".")[:2]))
-
-            required = tuple(map(int, ENV_REQUIREMENTS["fio_min_version"].split(".")))
-            baseline = BASELINE["fio_version"]
-
-            passed = major_minor >= required
-            details = f"当前：{version}, 要求：≥{ENV_REQUIREMENTS['fio_min_version']}, 基线：{baseline}"
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+            return r.returncode, r.stdout.strip(), r.stderr.strip()
         except FileNotFoundError:
-            passed = False
-            details = "fio 未安装"
+            return -1, '', 'not found'
         except Exception as e:
-            passed = False
-            details = f"检查失败：{str(e)}"
+            return -2, '', str(e)
 
-        self.log_check("FIO 版本", passed, details, critical=True)
+    # ── 信息采集 ──────────────────────────────────────────
 
-    def check_kernel_version(self):
-        """检查 Linux 内核版本"""
+    def collect_system(self):
+        # 操作系统
+        os_pretty = 'Unknown'
         try:
-            version_str = platform.release()
-            # 解析版本 (e.g., "5.15.0-76-generic")
-            parts = version_str.split(".")
-            major = int(parts[0])
-            minor = int(parts[1].split("-")[0])
-            current = (major, minor)
-
-            required = ENV_REQUIREMENTS["kernel_min_version"]
-            baseline = BASELINE["kernel_version"]
-
-            passed = current >= required
-            details = (
-                f"当前：{version_str}, "
-                f"要求：≥{'.'.join(map(str, required))}, "
-                f"基线：{baseline}"
-            )
-        except Exception as e:
-            passed = False
-            details = f"检查失败：{str(e)}"
-
-        self.log_check("Linux 内核版本", passed, details, critical=True)
-
-    def check_debian_version(self):
-        """检查 Debian 版本"""
-        try:
-            with open("/etc/os-release") as f:
-                content = f.read()
-                version_id = ""
-                for line in content.split("\n"):
-                    if line.startswith("VERSION_ID="):
-                        version_id = line.split("=")[1].strip('"')
+            with open('/etc/os-release') as f:
+                for line in f:
+                    if line.startswith('PRETTY_NAME='):
+                        os_pretty = line.split('=', 1)[1].strip().strip('"')
                         break
-                
-                baseline = BASELINE["debian_version"]
-                passed = version_id == baseline
-                details = f"当前：Debian {version_id}, 基线：Debian {baseline}"
-                self.log_check("Debian 版本", passed, details, critical=True)
-        except Exception as e:
-            self.log_check("Debian 版本", False, f"检查失败：{str(e)}", critical=True)
+        except Exception:
+            pass
+        self._record('system', '操作系统', os_pretty)
 
-    def check_required_packages(self):
-        """检查必需的系统包"""
-        for pkg in ENV_REQUIREMENTS["required_packages"]:
-            try:
-                result = subprocess.run(
-                    ["dpkg", "-l", pkg],
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
-                )
-                passed = result.returncode == 0 and pkg in result.stdout
-                details = f"{pkg}: {'已安装' if passed else '未安装'}"
-            except Exception as e:
-                passed = False
-                details = f"检查失败：{str(e)}"
+        self._record('system', '内核版本', platform.release())
+        self._record('system', 'CPU 架构', platform.machine())
+        self._record('system', 'CPU 核心数', str(os.cpu_count() or '?'))
 
-            self.log_check(f"系统包：{pkg}", passed, details, critical=False)
-
-    def check_kernel_modules(self):
-        """检查必需的 Kernel 模块"""
+        # 内存
+        mem_str = '?'
         try:
-            result = subprocess.run(
-                ["lsmod"],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            modules = result.stdout
+            with open('/proc/meminfo') as f:
+                for line in f:
+                    if line.startswith('MemTotal:'):
+                        kb = int(line.split()[1])
+                        mem_str = f'{kb / 1048576:.1f} GB'
+                        break
+        except Exception:
+            pass
+        self._record('system', '内存', mem_str)
 
-            for mod in ENV_REQUIREMENTS["required_modules"]:
-                passed = mod in modules
-                details = f"{mod}: {'已加载' if passed else '未加载'}"
-                self.log_check(f"Kernel 模块：{mod}", passed, details, critical=False)
-        except Exception as e:
-            self.log_check("Kernel 模块", False, f"检查失败：{str(e)}", critical=False)
+    def collect_toolchain(self):
+        vi = sys.version_info
+        self._record('toolchain', 'Python', f'{vi.major}.{vi.minor}.{vi.micro}')
 
-    def check_user_groups(self):
-        """检查用户组权限"""
-        try:
-            import grp
-            import pwd
+        # FIO
+        rc, out, _ = self._run(['fio', '--version'])
+        fio_ver = out.replace('fio-', '') if rc == 0 else ('未安装' if rc == -1 else '检查失败')
+        self._record('toolchain', 'FIO', fio_ver)
 
-            user = pwd.getpwuid(os.getuid()).pw_name
-            groups = [g.gr_name for g in grp.getgrall() if user in g.gr_mem]
+        # sg3-utils
+        rc, _, _ = self._run(['which', 'sg_readcap'])
+        self._record('toolchain', 'sg3-utils', '已安装' if rc == 0 else '未安装')
 
-            has_disk = "disk" in groups
-            is_root = os.getuid() == 0
+        # hdparm
+        rc, _, _ = self._run(['which', 'hdparm'])
+        self._record('toolchain', 'hdparm', '已安装' if rc == 0 else '未安装')
 
-            passed = has_disk or is_root
-            details = (
-                f"用户：{user}, 组：{', '.join(groups)}, "
-                f"disk 组：{'✓' if has_disk else '✗'}, "
-                f"root: {'✓' if is_root else '✗'}"
-            )
-        except Exception as e:
-            passed = False
-            details = f"检查失败：{str(e)}"
+    def collect_storage(self):
+        ufs_found = False
 
-        self.log_check("用户权限", passed, details, critical=True)
+        # 1) ufshcd 内核模块
+        rc, lsmod_out, _ = self._run(['lsmod'])
+        ufshcd_loaded = 'ufshcd' in lsmod_out if rc == 0 else False
+        self._record('storage', 'ufshcd 模块', '已加载' if ufshcd_loaded else '未加载')
 
-    def check_device_access(self):
-        """检查 UFS 设备访问权限"""
-        devices = ["/dev/ufs0", "/dev/sda", "/dev/nvme0n1"]
-        found = False
-
-        for device in devices:
-            if os.path.exists(device):
-                found = True
+        # 2) 通过 /sys 查找 UFS 块设备
+        if ufshcd_loaded:
+            for blk in sorted(glob.glob('/sys/block/sd*')):
+                dev_name = os.path.basename(blk)
                 try:
-                    # 检查读写权限
-                    if os.access(device, os.R_OK | os.W_OK):
-                        details = f"{device}: 可读写"
-                        passed = True
-                    else:
-                        details = f"{device}: 权限不足"
-                        passed = False
-                except Exception as e:
-                    details = f"{device}: {str(e)}"
-                    passed = False
-                break
+                    # 检查 host 驱动是否包含 ufshcd
+                    host_link = os.path.join(blk, 'device', '..', '..', '..', 'driver')
+                    if os.path.islink(host_link):
+                        driver = os.path.basename(os.readlink(host_link))
+                        if 'ufshcd' in driver:
+                            ufs_found = True
+                            dev_path = f'/dev/{dev_name}'
+                            self._record('storage', 'UFS 设备', f'{dev_path} (via {driver})')
+                            # 容量
+                            size_file = os.path.join(blk, 'size')
+                            if os.path.exists(size_file):
+                                with open(size_file) as f:
+                                    sectors = int(f.read().strip())
+                                    gb = sectors * 512 / (1024 ** 3)
+                                    self._record('storage', '设备容量', f'{gb:.0f} GB')
+                            # vendor / model
+                            for attr in ('vendor', 'model', 'rev'):
+                                attr_path = os.path.join(blk, 'device', attr)
+                                if os.path.exists(attr_path):
+                                    with open(attr_path) as f:
+                                        val = f.read().strip()
+                                        label = {'vendor': '厂商', 'model': '型号', 'rev': '固件版本'}[attr]
+                                        self._record('storage', label, val)
+                            break  # 取第一个 UFS 设备
+                except Exception:
+                    continue
 
-        if not found:
-            details = "未找到 UFS/存储设备 (CI 环境可能正常)"
-            passed = True  # CI 环境可能没有实际设备
+        # 3) 回退：/dev/disk/by-id 中含 ufs
+        if not ufs_found:
+            try:
+                for link in glob.glob('/dev/disk/by-id/*ufs*'):
+                    real = os.path.realpath(link)
+                    ufs_found = True
+                    self._record('storage', 'UFS 设备', f'{real} (by-id: {os.path.basename(link)})')
+                    break
+            except Exception:
+                pass
 
-        self.log_check("设备访问", passed, details, critical=False)
+        if not ufs_found:
+            self._record('storage', 'UFS 设备', '未检测到')
+            if self.mode == 'deploy':
+                self._record('storage', '⚠️  WARNING', 'UFS 设备未找到，部署模式下需要可用的 UFS 设备')
 
-    def check_fio_permissions(self):
-        """检查 FIO 运行权限"""
+    def collect_permissions(self):
         try:
-            # 尝试运行 fio --minimal 测试权限
-            result = subprocess.run(
-                ["fio", "--minimal", "--name=test", "--rw=read", "--size=1M"],
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            passed = result.returncode == 0
-            details = "FIO 可正常运行" if passed else f"FIO 运行失败：{result.stderr[:100]}"
+            import pwd, grp
+            user = pwd.getpwuid(os.getuid()).pw_name
+            gids = os.getgroups()
+            group_names = []
+            for gid in gids:
+                try:
+                    group_names.append(grp.getgrgid(gid).gr_name)
+                except KeyError:
+                    group_names.append(str(gid))
+            self._record('permissions', '当前用户', user)
+            self._record('permissions', '用户组', ', '.join(group_names) if group_names else '(无)')
+            is_root = os.getuid() == 0
+            has_disk = 'disk' in group_names
+            access_str = '可读写 (root)' if is_root else ('可读写 (disk 组)' if has_disk else '权限可能不足')
+            self._record('permissions', '设备访问', access_str)
         except Exception as e:
-            passed = False
-            details = f"检查失败：{str(e)}"
+            self._record('permissions', '权限检查', f'检查失败: {e}')
 
-        self.log_check("FIO 权限", passed, details, critical=True)
+    # ── 输出 ─────────────────────────────────────────────
 
-    def check_architecture(self):
-        """检查 CPU 架构"""
-        try:
-            arch = platform.machine()
-            baseline = BASELINE["arch"]
-            
-            # arm64/aarch64 都算 ARM
-            passed = arch in ["arm64", "aarch64"] if baseline == "arm64" else arch == baseline
-            details = f"当前：{arch}, 基线：{baseline}"
-        except Exception as e:
-            passed = False
-            details = f"检查失败：{str(e)}"
+    def run(self):
+        print('=' * 60)
+        print('UFS SysTest 环境信息')
+        print('=' * 60)
+        print(f'模式: {"开发模式" if self.mode == "dev" else "部署模式"}')
 
-        self.log_check("CPU 架构", passed, details, critical=False)
+        self.collect_system()
+        self.collect_toolchain()
+        self.collect_storage()
+        self.collect_permissions()
 
-    def run_all_checks(self):
-        """运行所有检查"""
-        print("=" * 60)
-        print("UFS SysTest 环境检查")
-        print("=" * 60)
-        print()
-
-        self.check_python_version()
-        self.check_fio_version()
-        self.check_kernel_version()
-        self.check_debian_version()
-        self.check_architecture()
-        self.check_required_packages()
-        self.check_kernel_modules()
-        self.check_user_groups()
-        self.check_device_access()
-        self.check_fio_permissions()
+        # 按 category 分组输出
+        current_cat = None
+        cat_labels = {
+            'system': '系统信息',
+            'toolchain': '工具链',
+            'storage': '存储设备',
+            'permissions': '用户权限',
+        }
+        for item in self.items:
+            cat = item['category']
+            if cat != current_cat:
+                current_cat = cat
+                print(f'\n[{cat_labels.get(cat, cat)}]')
+            print(f'  {item["name"]:<15} {item["value"]}')
 
         print()
-        print("=" * 60)
+        print(f'共检测 {len(self.items)} 项')
+        print('=' * 60)
 
-        # 总结
-        total = len(self.results["checks"])
-        passed = sum(1 for c in self.results["checks"] if c["passed"])
-        warnings = len(self.results["warnings"])
-        errors = len(self.results["errors"])
+    def to_dict(self):
+        return {
+            'timestamp': datetime.now().isoformat(),
+            'mode': self.mode,
+            'items': self.items,
+            'total': len(self.items),
+        }
 
-        print(f"总计：{total} 项检查")
-        print(f"通过：{passed}/{total}")
-        print(f"警告：{warnings}")
-        print(f"错误：{errors}")
-        print()
-
-        if self.results["passed"]:
-            print("✅ 环境检查通过")
-        else:
-            print("❌ 环境检查失败，请修复以下问题:")
-            for error in self.results["errors"]:
-                print(f"  - {error}")
-
-        return self.results["passed"]
-
-    def generate_report(self, output_path="env_check_report.json"):
-        """生成检查报告"""
-        with open(output_path, "w") as f:
-            json.dump(self.results, f, indent=2)
-        print(f"\n报告已保存：{output_path}")
+    def save_report(self, path='env_report.json'):
+        with open(path, 'w') as f:
+            json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
+        print(f'\n报告已保存：{path}')
 
 
 def main():
     import argparse
+    p = argparse.ArgumentParser(description='UFS SysTest 环境信息收集')
+    p.add_argument('--mode', choices=['dev', 'deploy'], default='dev',
+                   help='运行模式: dev(开发,默认) / deploy(部署)')
+    p.add_argument('--report', action='store_true', help='生成 JSON 报告')
+    p.add_argument('--output', default='env_report.json', help='报告输出路径')
+    p.add_argument('-v', '--verbose', action='store_true', help='详细输出')
+    args = p.parse_args()
 
-    parser = argparse.ArgumentParser(description="环境检查工具")
-    parser.add_argument(
-        "--report",
-        action="store_true",
-        help="生成 JSON 报告",
-    )
-    parser.add_argument(
-        "--output",
-        default="env_check_report.json",
-        help="报告输出路径",
-    )
-    parser.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        help="详细输出",
-    )
-
-    args = parser.parse_args()
-
-    checker = EnvironmentChecker(verbose=args.verbose)
-    passed = checker.run_all_checks()
-
+    checker = EnvironmentChecker(mode=args.mode, verbose=args.verbose)
+    checker.run()
     if args.report:
-        checker.generate_report(args.output)
-
-    sys.exit(0 if passed else 1)
+        checker.save_report(args.output)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

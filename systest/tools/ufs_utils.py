@@ -375,3 +375,113 @@ def get_ufs_health(device_path: str = '/dev/ufs0') -> Dict[str, Any]:
     """获取 UFS 设备健康状态"""
     ufs = UFSDevice(device_path)
     return ufs.get_health_status()
+
+
+def auto_detect_ufs() -> Dict[str, Any]:
+    """
+    自动探测 UFS 设备节点
+
+    探测逻辑：
+    1. 扫描 /sys/class/scsi_host/ 下的 ufshcd 控制器
+    2. 通过 /sys/block/ 找到关联的块设备
+    3. 读取设备信息（vendor, model, capacity）
+    4. 如果找不到 ufshcd，回退检查 /dev/disk/by-id/ 中含 ufs 关键字的设备
+
+    Returns:
+        dict: 探测结果
+    """
+    import glob as _glob
+
+    result = {
+        'found': False,
+        'device': None,
+        'controller': None,
+        'vendor': None,
+        'model': None,
+        'capacity_gb': None,
+        'fw_version': None,
+        'reason': None,
+    }
+
+    def _read_attr(path):
+        try:
+            with open(path) as f:
+                return f.read().strip()
+        except Exception:
+            return None
+
+    # ── 方法 1：通过 ufshcd 驱动查找块设备 ──
+
+    # 检查 ufshcd 模块是否加载
+    try:
+        r = subprocess.run(['lsmod'], capture_output=True, text=True, timeout=5)
+        ufshcd_loaded = 'ufshcd' in r.stdout if r.returncode == 0 else False
+    except Exception:
+        ufshcd_loaded = False
+
+    if ufshcd_loaded:
+        for blk in sorted(_glob.glob('/sys/block/sd*')):
+            dev_name = os.path.basename(blk)
+            try:
+                # 往上找 driver，看是否是 ufshcd
+                # 典型路径: /sys/block/sda/device/../../..  指向 host adapter
+                for depth in range(2, 6):
+                    driver_link = os.path.join(blk, 'device', *(['..'] * depth), 'driver')
+                    driver_link = os.path.normpath(driver_link)
+                    if os.path.islink(driver_link):
+                        driver_name = os.path.basename(os.readlink(driver_link))
+                        if 'ufshcd' in driver_name:
+                            result['found'] = True
+                            result['device'] = f'/dev/{dev_name}'
+                            result['controller'] = driver_name
+
+                            # 读取 vendor / model / rev
+                            dev_dir = os.path.join(blk, 'device')
+                            result['vendor'] = _read_attr(os.path.join(dev_dir, 'vendor'))
+                            result['model'] = _read_attr(os.path.join(dev_dir, 'model'))
+                            result['fw_version'] = _read_attr(os.path.join(dev_dir, 'rev'))
+
+                            # 容量
+                            size_str = _read_attr(os.path.join(blk, 'size'))
+                            if size_str:
+                                try:
+                                    sectors = int(size_str)
+                                    result['capacity_gb'] = round(sectors * 512 / (1024 ** 3))
+                                except ValueError:
+                                    pass
+
+                            return result
+            except Exception:
+                continue
+
+    # ── 方法 2：回退检查 /dev/disk/by-id/ ──
+
+    try:
+        for link in sorted(_glob.glob('/dev/disk/by-id/*')):
+            basename = os.path.basename(link).lower()
+            if 'ufs' in basename:
+                real = os.path.realpath(link)
+                result['found'] = True
+                result['device'] = real
+                result['controller'] = 'by-id'
+                result['model'] = os.path.basename(link)
+
+                # 尝试读容量
+                dev_name = os.path.basename(real)
+                size_str = _read_attr(f'/sys/block/{dev_name}/size')
+                if size_str:
+                    try:
+                        result['capacity_gb'] = round(int(size_str) * 512 / (1024 ** 3))
+                    except ValueError:
+                        pass
+                return result
+    except Exception:
+        pass
+
+    # ── 没找到 ──
+    if ufshcd_loaded:
+        result['reason'] = 'ufshcd 模块已加载，但未找到关联块设备'
+    else:
+        result['reason'] = '未检测到 ufshcd 控制器'
+
+    return result

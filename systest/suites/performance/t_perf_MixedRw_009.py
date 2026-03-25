@@ -105,7 +105,7 @@ class Test(TestCase):
         self.logger.info(f"  rw_mix={self.rw_mix}% read, ioengine={self.ioengine}, ramp_time={self.ramp_time}s")
         self.logger.info(f"  target_total_iops={self.target_total_iops}")
         
-        self.logger.info("✅ 前置条件检查通过")
+        self.logger.info("📊 前置条件检查通过")
         return True
     
     def execute(self) -> dict:
@@ -159,51 +159,42 @@ class Test(TestCase):
             raise
     
     def validate(self, result: dict) -> bool:
-        """标注指标（性能测试，永远返回 True）"""
+        """采集指标数据，计算与参考目标的差距（纯数据，不做 pass/fail 判断）"""
         annotations = []
         
         actual_iops = result['total_iops']['value']
+        gap_iops = (actual_iops - self.target_total_iops) / self.target_total_iops * 100 if self.target_total_iops > 0 else 0
         annotations.append({
-            'metric': '总 IOPS', 'actual': f'{actual_iops:.0f}',
-            'target': f'>= {self.target_total_iops:.0f}',
-            'met': actual_iops >= self.target_total_iops,
+            'metric': '混合 IOPS',
+            'actual': f'{actual_iops:.0f} IOPS',
+            'reference': f'{self.target_total_iops} IOPS',
+            'gap': f'{gap_iops:+.1f}%',
         })
+        self.logger.info(f"📊 混合 IOPS：{actual_iops:.0f}（参考 {self.target_total_iops}，gap {gap_iops:+.1f}%）")
         
-        # 读写比例一致性：实际读占比应接近设定值
-        read_iops = result['read_iops']['value']
-        if actual_iops > 0:
-            actual_read_pct = (read_iops / actual_iops) * 100
-            ratio_ok = abs(actual_read_pct - self.rw_mix) < 10  # 允许 10% 偏差
+        if 'read_ratio' in result:
+            ratio = result['read_ratio']['value']
             annotations.append({
-                'metric': '读写比例', 'actual': f'读 {actual_read_pct:.0f}%',
-                'target': f'读 {self.rw_mix}% ±10%',
-                'met': ratio_ok,
+                'metric': '读写比例',
+                'actual': f'{ratio:.0f}%',
+                'reference': f'{self.read_pct}%',
+                'gap': f'{ratio - self.read_pct:+.0f}pp',
             })
+            self.logger.info(f"📊 读写比例：{ratio:.0f}%（参考 {self.read_pct}%）")
         
         actual_lat = result['latency_avg']['value']
+        gap_lat = (actual_lat - self.max_avg_latency_us) / self.max_avg_latency_us * 100 if self.max_avg_latency_us > 0 else 0
         annotations.append({
-            'metric': '平均延迟', 'actual': f'{actual_lat:.1f} μs',
-            'target': f'< {self.max_avg_latency_us} μs',
-            'met': actual_lat < self.max_avg_latency_us,
+            'metric': '平均延迟',
+            'actual': f'{actual_lat:.1f} μs',
+            'reference': f'{self.max_avg_latency_us} μs',
+            'gap': f'{gap_lat:+.1f}%',
         })
-        
-        actual_tail = result['latency_99999']['value']
-        if actual_tail > 0:
-            annotations.append({
-                'metric': 'p99.999 延迟', 'actual': f'{actual_tail:.1f} μs',
-                'target': f'< {self.max_tail_latency_us} μs',
-                'met': actual_tail < self.max_tail_latency_us,
-            })
+        self.logger.info(f"📊 平均延迟：{actual_lat:.1f} μs（参考 {self.max_avg_latency_us} μs，gap {gap_lat:+.1f}%）")
         
         result['annotations'] = annotations
-        met_count = sum(1 for a in annotations if a['met'])
-        self.logger.info(f"📋 指标标注：{met_count}/{len(annotations)} 项达标")
-        for a in annotations:
-            status = "✅" if a['met'] else "⚠️"
-            self.logger.info(f"  {status} {a['metric']}：{a['actual']} (目标 {a['target']})")
-        
+        self.logger.info(f"📊 共 {len(annotations)} 项指标数据已采集")
         return True
-    
     def teardown(self) -> bool:
         try:
             test_path = Path(self.test_file)

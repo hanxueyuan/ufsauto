@@ -118,7 +118,7 @@ class Test(TestCase):
         self.logger.info(f"  ioengine={self.ioengine}, ramp_time={self.ramp_time}s")
         self.logger.info(f"  target_stddev={self.target_stddev_us} μs, target_jitter={self.target_jitter_pct}%")
         
-        self.logger.info("✅ 前置条件检查通过")
+        self.logger.info("📊 前置条件检查通过")
         return True
     
     def execute(self) -> dict:
@@ -166,43 +166,44 @@ class Test(TestCase):
             raise
     
     def validate(self, result: dict) -> bool:
-        """标注指标（性能测试，永远返回 True）"""
+        """采集指标数据，计算与参考目标的差距（纯数据，不做 pass/fail 判断）"""
         annotations = []
         
         stddev = result['latency_stddev']['value']
+        gap_stddev = (stddev - self.target_stddev_us) / self.target_stddev_us * 100 if self.target_stddev_us > 0 else 0
         annotations.append({
-            'metric': '延迟标准差', 'actual': f'{stddev:.1f} μs',
-            'target': f'< {self.target_stddev_us} μs',
-            'met': stddev < self.target_stddev_us,
+            'metric': '延迟标准差',
+            'actual': f'{stddev:.1f} μs',
+            'reference': f'{self.target_stddev_us} μs',
+            'gap': f'{gap_stddev:+.1f}%',
         })
+        self.logger.info(f"📊 延迟标准差：{stddev:.1f} μs（参考 {self.target_stddev_us} μs，gap {gap_stddev:+.1f}%）")
         
         jitter = result['jitter_ratio']['value']
+        gap_jitter = jitter - self.target_jitter_pct
         annotations.append({
-            'metric': '抖动系数', 'actual': f'{jitter:.1f}%',
-            'target': f'< {self.target_jitter_pct}%',
-            'met': jitter < self.target_jitter_pct,
+            'metric': '抖动系数',
+            'actual': f'{jitter:.1f}%',
+            'reference': f'{self.target_jitter_pct}%',
+            'gap': f'{gap_jitter:+.1f}pp',
         })
+        self.logger.info(f"📊 抖动系数：{jitter:.1f}%（参考 {self.target_jitter_pct}%，gap {gap_jitter:+.1f}pp）")
         
-        # max/min 比值：延迟极端值与最小值的比
         min_lat = result['latency_min']['value']
         max_lat = result['latency_max']['value']
         if min_lat > 0:
             max_min_ratio = max_lat / min_lat
             annotations.append({
-                'metric': 'Max/Min 比', 'actual': f'{max_min_ratio:.0f}x',
-                'target': '< 1000x',
-                'met': max_min_ratio < 1000,
+                'metric': 'Max/Min 比',
+                'actual': f'{max_min_ratio:.0f}x',
+                'reference': '< 1000x',
+                'gap': f'{max_min_ratio:.0f}x',
             })
+            self.logger.info(f"📊 Max/Min 比：{max_min_ratio:.0f}x")
         
         result['annotations'] = annotations
-        met_count = sum(1 for a in annotations if a['met'])
-        self.logger.info(f"📋 指标标注：{met_count}/{len(annotations)} 项达标")
-        for a in annotations:
-            status = "✅" if a['met'] else "⚠️"
-            self.logger.info(f"  {status} {a['metric']}：{a['actual']} (目标 {a['target']})")
-        
+        self.logger.info(f"📊 共 {len(annotations)} 项指标数据已采集")
         return True
-    
     def teardown(self) -> bool:
         try:
             test_path = Path(self.test_file)

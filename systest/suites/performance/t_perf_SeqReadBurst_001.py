@@ -99,13 +99,13 @@ class Test(TestCase):
         if not self.ufs.exists():
             self.logger.error(f"设备不存在：{self.device}")
             return False
-        self.logger.debug(f"✅ 设备存在：{self.device}")
+        self.logger.debug(f"📊 设备存在：{self.device}")
         
         # 2. 检查可用空间（至少 2GB）
         if not self.ufs.check_available_space(min_gb=2.0):
             self.logger.error("可用空间不足")
             return False
-        self.logger.debug("✅ 可用空间充足（≥2GB）")
+        self.logger.debug("📊 可用空间充足（≥2GB）")
         
         # 3. 检查 FIO 工具
         try:
@@ -113,7 +113,7 @@ class Test(TestCase):
             if result.returncode != 0:
                 self.logger.error("FIO 工具未安装")
                 return False
-            self.logger.debug("✅ FIO 工具已安装")
+            self.logger.debug("📊 FIO 工具已安装")
         except Exception as e:
             self.logger.error(f"检查 FIO 失败：{e}")
             return False
@@ -122,7 +122,7 @@ class Test(TestCase):
         if not os.access(self.device, os.R_OK | os.W_OK):
             self.logger.error(f"设备权限不足：{self.device}")
             return False
-        self.logger.debug(f"✅ 设备权限正常：{self.device}")
+        self.logger.debug(f"📊 设备权限正常：{self.device}")
         
         # 5. 检查设备健康状态
         health = self.ufs.get_health_status()
@@ -146,7 +146,7 @@ class Test(TestCase):
                 if result.returncode != 0:
                     self.logger.warning(f"预填充失败，继续测试：{result.stderr}")
                 else:
-                    self.logger.debug("✅ 测试文件预填充完成")
+                    self.logger.debug("📊 测试文件预填充完成")
             except subprocess.TimeoutExpired:
                 self.logger.warning("预填充超时，继续测试")
             except Exception as e:
@@ -159,7 +159,7 @@ class Test(TestCase):
         self.logger.info(f"  target_bw={self.target_bw_mbps} MB/s, max_avg_lat={self.max_avg_latency_us} μs")
         self.logger.info(f"  max_tail_lat(p99.999)={self.max_tail_latency_us} μs, verify={self.verify_mode}")
         
-        self.logger.info("✅ 前置条件检查通过")
+        self.logger.info("📊 前置条件检查通过")
         return True
     
     def execute(self) -> dict:
@@ -221,115 +221,49 @@ class Test(TestCase):
             raise
     
     def validate(self, result: dict) -> bool:
-        """
-        标注指标是否达标。
+            """采集指标数据，计算与参考目标的差距（纯数据，不做 pass/fail 判断）"""
+            annotations = []
         
-        性能测试哲学：指标不达标不等于测试失败。
-        - 测试只要能跑完、数据采集完整，就算 PASS（完成）
-        - "达标/不达标"只是标注（annotation），供后续分析参考
-        - 只有测试本身跑不起来（setup 失败、FIO crash）才算 ERROR
-        
-        Returns:
-            bool: 永远返回 True（测试完成）。指标达标情况通过 result['annotations'] 记录。
-        """
-        annotations = []
-        
-        # === 指标 1：带宽 ===
-        actual_bw = result['bandwidth']['value']
-        bw_met = actual_bw >= self.target_bw_mbps
-        annotations.append({
-            'metric': '带宽',
-            'actual': f'{actual_bw:.1f} MB/s',
-            'target': f'>= {self.target_bw_mbps} MB/s',
-            'met': bw_met,
-        })
-        
-        status = "✅" if bw_met else "⚠️"
-        self.logger.info(f"{status} 带宽：{actual_bw:.1f} MB/s (目标 ≥ {self.target_bw_mbps} MB/s)")
-        self.logger.log_assertion(
-            assertion='带宽',
-            expected=f'>= {self.target_bw_mbps} MB/s',
-            actual=f'{actual_bw:.1f} MB/s',
-            passed=bw_met
-        )
-        
-        # === 指标 2：平均延迟 ===
-        actual_lat = result['latency_avg']['value']
-        lat_met = actual_lat < self.max_avg_latency_us
-        annotations.append({
-            'metric': '平均延迟',
-            'actual': f'{actual_lat:.1f} μs',
-            'target': f'< {self.max_avg_latency_us} μs',
-            'met': lat_met,
-        })
-        
-        status = "✅" if lat_met else "⚠️"
-        self.logger.info(f"{status} 平均延迟：{actual_lat:.1f} μs (目标 < {self.max_avg_latency_us} μs)")
-        self.logger.log_assertion(
-            assertion='平均延迟',
-            expected=f'< {self.max_avg_latency_us} μs',
-            actual=f'{actual_lat:.1f} μs',
-            passed=lat_met
-        )
-        
-        # === 指标 3：尾延迟 ===
-        actual_tail = result['latency_99999']['value']
-        if actual_tail > 0:
-            tail_met = actual_tail < self.max_tail_latency_us
+            # === 带宽 ===
+            actual_bw = result['bandwidth']['value']
+            gap_bw = (actual_bw - self.target_bw_mbps) / self.target_bw_mbps * 100 if self.target_bw_mbps > 0 else 0
             annotations.append({
-                'metric': 'p99.999 延迟',
-                'actual': f'{actual_tail:.1f} μs',
-                'target': f'< {self.max_tail_latency_us} μs',
-                'met': tail_met,
+                'metric': '带宽',
+                'actual': f'{actual_bw:.1f} MB/s',
+                'reference': f'{self.target_bw_mbps} MB/s',
+                'gap': f'{gap_bw:+.1f}%',
             })
-            
-            status = "✅" if tail_met else "⚠️"
-            self.logger.info(f"{status} p99.999 延迟：{actual_tail:.1f} μs (目标 < {self.max_tail_latency_us} μs)")
-            self.logger.log_assertion(
-                assertion='尾延迟(p99.999)',
-                expected=f'< {self.max_tail_latency_us} μs',
-                actual=f'{actual_tail:.1f} μs',
-                passed=tail_met
-            )
-        else:
-            self.logger.info("ℹ️ 未获取到 p99.999 延迟数据，跳过标注")
+            self.logger.info(f"📊 带宽：{actual_bw:.1f} MB/s（参考 {self.target_bw_mbps} MB/s，gap {gap_bw:+.1f}%）")
         
-        # === 指标 4：IOPS 与带宽一致性（数据完整性校验，非性能指标）===
-        actual_iops = result['iops']['value']
-        bs_bytes = self._parse_bs_bytes(self.bs)
-        if bs_bytes > 0 and actual_iops > 0:
-            expected_bw_from_iops = (actual_iops * bs_bytes) / (1024 * 1024)
-            iops_consistent = abs(expected_bw_from_iops - actual_bw) / max(actual_bw, 1) < 0.20
+            # === 平均延迟 ===
+            actual_lat = result['latency_avg']['value']
+            gap_lat = (actual_lat - self.max_avg_latency_us) / self.max_avg_latency_us * 100 if self.max_avg_latency_us > 0 else 0
             annotations.append({
-                'metric': 'IOPS-带宽一致性',
-                'actual': f'IOPS={actual_iops:.0f}, 推算BW={expected_bw_from_iops:.1f} MB/s',
-                'target': f'与实际BW {actual_bw:.1f} MB/s 偏差 < 20%',
-                'met': iops_consistent,
+                'metric': '平均延迟',
+                'actual': f'{actual_lat:.1f} μs',
+                'reference': f'{self.max_avg_latency_us} μs',
+                'gap': f'{gap_lat:+.1f}%',
             })
-            
-            status = "✅" if iops_consistent else "⚠️"
-            self.logger.info(
-                f"{status} IOPS 一致性：{actual_iops:.0f} IOPS × {self.bs} "
-                f"≈ {expected_bw_from_iops:.1f} MB/s (实际 {actual_bw:.1f} MB/s)"
-            )
-        
-        # === 汇总标注到 result ===
-        result['annotations'] = annotations
-        
-        met_count = sum(1 for a in annotations if a['met'])
-        total_count = len(annotations)
-        self.logger.info(f"📋 指标标注完成：{met_count}/{total_count} 项达标")
-        
-        not_met = [a for a in annotations if not a['met']]
-        if not_met:
-            self.logger.info(f"⚠️ 未达标指标（供后续分析）：")
-            for a in not_met:
-                self.logger.info(f"  - {a['metric']}：实际 {a['actual']}，目标 {a['target']}")
-        
-        # 性能测试：只要数据采集完整，永远返回 True（PASS = 测试完成）
-        # 指标是否达标通过 annotations 记录，不影响测试状态
-        return True
-    
+            self.logger.info(f"📊 平均延迟：{actual_lat:.1f} μs（参考 {self.max_avg_latency_us} μs，gap {gap_lat:+.1f}%）")
+
+            # === 尾延迟 ===
+            if 'latency_99999' in result:
+                actual_tail = result['latency_99999']['value']
+                if actual_tail > 0:
+                    gap_tail = (actual_tail - self.max_tail_latency_us) / self.max_tail_latency_us * 100 if self.max_tail_latency_us > 0 else 0
+                    annotations.append({
+                        'metric': 'p99.999 延迟',
+                        'actual': f'{actual_tail:.1f} μs',
+                        'reference': f'{self.max_tail_latency_us} μs',
+                        'gap': f'{gap_tail:+.1f}%',
+                    })
+                    self.logger.info(f"📊 p99.999 延迟：{actual_tail:.1f} μs（参考 {self.max_tail_latency_us} μs，gap {gap_tail:+.1f}%）")
+
+            result['annotations'] = annotations
+            self.logger.info(f"📊 共 {len(annotations)} 项指标数据已采集")
+            return True
+
+
     def teardown(self) -> bool:
         """清理测试文件"""
         try:

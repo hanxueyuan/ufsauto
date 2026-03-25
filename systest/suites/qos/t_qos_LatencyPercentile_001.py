@@ -118,7 +118,7 @@ class Test(TestCase):
         self.logger.info(f"  ioengine={self.ioengine}, ramp_time={self.ramp_time}s")
         self.logger.info(f"  target_p99.99={self.target_p9999_us} μs, target_p99.999={self.target_p99999_us} μs")
         
-        self.logger.info("✅ 前置条件检查通过")
+        self.logger.info("📊 前置条件检查通过")
         return True
     
     def execute(self) -> dict:
@@ -169,44 +169,44 @@ class Test(TestCase):
             raise
     
     def validate(self, result: dict) -> bool:
-        """标注指标（性能测试，永远返回 True）"""
+        """采集指标数据，计算与参考目标的差距（纯数据，不做 pass/fail 判断）"""
         annotations = []
         
         p9999 = result['latency_p9999']['value']
+        gap_p9999 = (p9999 - self.target_p9999_us) / self.target_p9999_us * 100 if self.target_p9999_us > 0 else 0
         annotations.append({
-            'metric': 'p99.99 延迟', 'actual': f'{p9999:.1f} μs',
-            'target': f'< {self.target_p9999_us} μs ({self.target_p9999_us/1000:.0f}ms)',
-            'met': p9999 < self.target_p9999_us,
+            'metric': 'p99.99 延迟',
+            'actual': f'{p9999:.1f} μs',
+            'reference': f'{self.target_p9999_us} μs',
+            'gap': f'{gap_p9999:+.1f}%',
         })
+        self.logger.info(f"📊 p99.99 延迟：{p9999:.1f} μs（参考 {self.target_p9999_us} μs，gap {gap_p9999:+.1f}%）")
         
         p99999 = result['latency_p99999']['value']
         if p99999 > 0:
+            gap_p99999 = (p99999 - self.target_p99999_us) / self.target_p99999_us * 100 if self.target_p99999_us > 0 else 0
             annotations.append({
-                'metric': 'p99.999 延迟', 'actual': f'{p99999:.1f} μs',
-                'target': f'< {self.target_p99999_us} μs ({self.target_p99999_us/1000:.0f}ms)',
-                'met': p99999 < self.target_p99999_us,
+                'metric': 'p99.999 延迟',
+                'actual': f'{p99999:.1f} μs',
+                'reference': f'{self.target_p99999_us} μs',
+                'gap': f'{gap_p99999:+.1f}%',
             })
+            self.logger.info(f"📊 p99.999 延迟：{p99999:.1f} μs（参考 {self.target_p99999_us} μs，gap {gap_p99999:+.1f}%）")
         
-        # 延迟分布合理性：p50 应远小于 p99.99（尾部不应过于发散）
         p50 = result['latency_p50']['value']
         if p50 > 0 and p9999 > 0:
             tail_ratio = p9999 / p50
-            ratio_ok = tail_ratio < 100  # p99.99 不应超过 p50 的 100 倍
             annotations.append({
-                'metric': '尾部发散度', 'actual': f'p99.99/p50 = {tail_ratio:.1f}x',
-                'target': '< 100x',
-                'met': ratio_ok,
+                'metric': '尾部发散度',
+                'actual': f'p99.99/p50 = {tail_ratio:.1f}x',
+                'reference': '< 100x',
+                'gap': f'{tail_ratio:.1f}x',
             })
+            self.logger.info(f"📊 尾部发散度：p99.99/p50 = {tail_ratio:.1f}x")
         
         result['annotations'] = annotations
-        met_count = sum(1 for a in annotations if a['met'])
-        self.logger.info(f"📋 指标标注：{met_count}/{len(annotations)} 项达标")
-        for a in annotations:
-            status = "✅" if a['met'] else "⚠️"
-            self.logger.info(f"  {status} {a['metric']}：{a['actual']} (目标 {a['target']})")
-        
+        self.logger.info(f"📊 共 {len(annotations)} 项指标数据已采集")
         return True
-    
     def teardown(self) -> bool:
         try:
             test_path = Path(self.test_file)

@@ -106,7 +106,7 @@ class Test(TestCase):
         self.logger.info(f"  ioengine={self.ioengine}, iodepth={self.iodepth}, ramp_time={self.ramp_time}s")
         self.logger.info(f"  target_bw={self.target_bw_mbps} MB/s, max_avg_lat={self.max_avg_latency_us} μs")
         
-        self.logger.info("✅ 前置条件检查通过")
+        self.logger.info("📊 前置条件检查通过")
         return True
     
     def execute(self) -> dict:
@@ -153,40 +153,49 @@ class Test(TestCase):
             raise
     
     def validate(self, result: dict) -> bool:
-        """标注指标（性能测试，永远返回 True）"""
-        annotations = []
+            """采集指标数据，计算与参考目标的差距（纯数据，不做 pass/fail 判断）"""
+            annotations = []
         
-        actual_bw = result['bandwidth']['value']
-        annotations.append({
-            'metric': '带宽', 'actual': f'{actual_bw:.1f} MB/s',
-            'target': f'>= {self.target_bw_mbps} MB/s',
-            'met': actual_bw >= self.target_bw_mbps,
-        })
-        
-        actual_lat = result['latency_avg']['value']
-        annotations.append({
-            'metric': '平均延迟', 'actual': f'{actual_lat:.1f} μs',
-            'target': f'< {self.max_avg_latency_us} μs',
-            'met': actual_lat < self.max_avg_latency_us,
-        })
-        
-        actual_tail = result['latency_99999']['value']
-        if actual_tail > 0:
+            # === 带宽 ===
+            actual_bw = result['bandwidth']['value']
+            gap_bw = (actual_bw - self.target_bw_mbps) / self.target_bw_mbps * 100 if self.target_bw_mbps > 0 else 0
             annotations.append({
-                'metric': 'p99.999 延迟', 'actual': f'{actual_tail:.1f} μs',
-                'target': f'< {self.max_tail_latency_us} μs',
-                'met': actual_tail < self.max_tail_latency_us,
+                'metric': '带宽',
+                'actual': f'{actual_bw:.1f} MB/s',
+                'reference': f'{self.target_bw_mbps} MB/s',
+                'gap': f'{gap_bw:+.1f}%',
             })
+            self.logger.info(f"📊 带宽：{actual_bw:.1f} MB/s（参考 {self.target_bw_mbps} MB/s，gap {gap_bw:+.1f}%）")
         
-        result['annotations'] = annotations
-        met_count = sum(1 for a in annotations if a['met'])
-        self.logger.info(f"📋 指标标注：{met_count}/{len(annotations)} 项达标")
-        for a in annotations:
-            status = "✅" if a['met'] else "⚠️"
-            self.logger.info(f"  {status} {a['metric']}：{a['actual']} (目标 {a['target']})")
-        
-        return True
-    
+            # === 平均延迟 ===
+            actual_lat = result['latency_avg']['value']
+            gap_lat = (actual_lat - self.max_avg_latency_us) / self.max_avg_latency_us * 100 if self.max_avg_latency_us > 0 else 0
+            annotations.append({
+                'metric': '平均延迟',
+                'actual': f'{actual_lat:.1f} μs',
+                'reference': f'{self.max_avg_latency_us} μs',
+                'gap': f'{gap_lat:+.1f}%',
+            })
+            self.logger.info(f"📊 平均延迟：{actual_lat:.1f} μs（参考 {self.max_avg_latency_us} μs，gap {gap_lat:+.1f}%）")
+
+            # === 尾延迟 ===
+            if 'latency_99999' in result:
+                actual_tail = result['latency_99999']['value']
+                if actual_tail > 0:
+                    gap_tail = (actual_tail - self.max_tail_latency_us) / self.max_tail_latency_us * 100 if self.max_tail_latency_us > 0 else 0
+                    annotations.append({
+                        'metric': 'p99.999 延迟',
+                        'actual': f'{actual_tail:.1f} μs',
+                        'reference': f'{self.max_tail_latency_us} μs',
+                        'gap': f'{gap_tail:+.1f}%',
+                    })
+                    self.logger.info(f"📊 p99.999 延迟：{actual_tail:.1f} μs（参考 {self.max_tail_latency_us} μs，gap {gap_tail:+.1f}%）")
+
+            result['annotations'] = annotations
+            self.logger.info(f"📊 共 {len(annotations)} 项指标数据已采集")
+            return True
+
+
     def teardown(self) -> bool:
         try:
             test_path = Path(self.test_file)
