@@ -70,6 +70,9 @@ class TestCase:
         self.end_time = None
         # Fail-Continue 收集器
         self._failures: List[Dict[str, Any]] = []
+        # 健康状态监控
+        self._pre_test_health = None
+        self._post_test_health = None
     
     def record_failure(self, check: str, expected: str, actual: str, reason: str = ''):
         """
@@ -105,6 +108,17 @@ class TestCase:
     def setup(self) -> bool:
         """测试前准备。返回 False 则测试状态为 SKIP。"""
         self.logger.debug(f"Setup: {self.name}")
+        
+        # 自动记录健康基线（Postcondition 对比用）
+        try:
+            from tools.ufs_utils import UFSDevice
+            ufs = UFSDevice(self.device, logger=self.logger)
+            self._pre_test_health = ufs.get_health_status()
+            self.logger.debug(f"📊 记录健康基线: {self._pre_test_health.get('status', 'Unknown')}")
+        except Exception as e:
+            self.logger.warning(f"⚠️  健康状态记录失败: {e}")
+            self._pre_test_health = None
+        
         return True
     
     def execute(self) -> Dict[str, Any]:
@@ -121,12 +135,81 @@ class TestCase:
             框架会根据 self.has_failures 自动将最终状态设为 FAIL。
           - Fail-Stop：raise FailStop("原因") 立刻终止。
           - 也可以直接返回 False（等效于 Fail-Continue 只有一个失败项）。
+        
+        Postcondition 检查（硬件可靠性验证）应在子类的 validate() 末尾调用
+        self._check_postcondition() 方法。
         """
         raise NotImplementedError("子类必须实现 validate 方法")
+    
+    def _check_postcondition(self) -> bool:
+        """
+        Postcondition 检查 - 硬件可靠性验证
+        
+        检查测试前后设备健康状态变化，确保无硬件损伤。
+        子类可在 validate() 末尾调用此方法。
+        
+        Returns:
+            bool: 检查通过返回 True，有硬件损伤记录 failure 但返回 True（让框架处理）
+        """
+        if not self._pre_test_health or not self._post_test_health:
+            self.logger.warning("⚠️  Postcondition 检查跳过：健康状态数据不完整")
+            return True
+        
+        # 检查健康状态恶化
+        pre_status = self._pre_test_health.get('status', 'OK')
+        post_status = self._post_test_health.get('status', 'OK')
+        
+        if pre_status == 'OK' and post_status != 'OK':
+            self.record_failure(
+                "设备健康状态",
+                "OK",
+                post_status,
+                f"测试后设备健康状态恶化"
+            )
+        
+        # 检查坏块增加（需要具体的坏块计数逻辑）
+        # 注意：当前 ufs_utils.py 的 get_health_status() 返回简化数据
+        # 实际项目中需要从 SMART 或 UFS 描述符读取具体坏块数
+        pre_warning = self._pre_test_health.get('critical_warning', 0)
+        post_warning = self._post_test_health.get('critical_warning', 0)
+        
+        if post_warning > pre_warning:
+            self.record_failure(
+                "严重警告标志",
+                f"{pre_warning}",
+                f"{post_warning}",
+                "设备出现新的严重警告"
+            )
+        
+        # 检查预 EOL 状态变化
+        pre_eol = self._pre_test_health.get('pre_eol_info', '0x00')
+        post_eol = self._post_test_health.get('pre_eol_info', '0x00')
+        
+        if pre_eol == '0x00' and post_eol != '0x00':
+            self.record_failure(
+                "预寿命结束状态",
+                "正常",
+                f"EOL 警告: {post_eol}",
+                "设备接近寿命终点"
+            )
+        
+        self.logger.info("✅ Postcondition 检查完成")
+        return True
     
     def teardown(self) -> bool:
         """测试后清理"""
         self.logger.debug(f"Teardown: {self.name}")
+        
+        # 自动记录测试后健康状态（Postcondition 对比用）
+        try:
+            from tools.ufs_utils import UFSDevice
+            ufs = UFSDevice(self.device, logger=self.logger)
+            self._post_test_health = ufs.get_health_status()
+            self.logger.debug(f"📊 记录测试后健康状态: {self._post_test_health.get('status', 'Unknown')}")
+        except Exception as e:
+            self.logger.warning(f"⚠️  测试后健康状态记录失败: {e}")
+            self._post_test_health = None
+        
         return True
     
     def run(self) -> Dict[str, Any]:
