@@ -25,6 +25,7 @@ import os
 import sys
 import subprocess
 from pathlib import Path
+from typing import Dict, Any
 
 # 添加 core 和 tools 模块路径
 core_dir = Path(__file__).parent.parent.parent / 'core'
@@ -33,7 +34,7 @@ sys.path.insert(0, str(core_dir))
 sys.path.insert(0, str(tools_dir))
 
 from runner import TestCase
-from fio_wrapper import FIO, FIOError
+from fio_wrapper import FIO, FIOError, FIOMetrics
 from ufs_utils import UFSDevice
 from ufs_simulator import UFSSimulator
 
@@ -160,3 +161,168 @@ class Test(TestCase):
         self.logger.info(f"  max_tail_lat(p99.999)={self.max_tail_latency_us} μs, verify={self.verify_mode}")
         
         self.logger.info("📊 前置条件检查通过")
+        return True
+    
+    def _parse_size_mb(self, size_str: str) -> int:
+        """解析大小字符串为 MB"""
+        size_str = size_str.lower()
+        if size_str.endswith('g'):
+            return int(size_str[:-1]) * 1024
+        elif size_str.endswith('m'):
+            return int(size_str[:-1])
+        elif size_str.endswith('k'):
+            return max(1, int(size_str[:-1]) // 1024)
+        else:
+            try:
+                return int(size_str) // 1024 // 1024
+            except ValueError:
+                return 1024  # 默认 1GB
+    
+    def execute(self) -> Dict[str, Any]:
+        """执行 FIO 顺序读测试"""
+        self.logger.info("🚀 开始执行顺序读性能测试...")
+        
+        if self.simulate:
+            # 模拟模式：生成模拟数据
+            self.logger.info("🔧 模拟模式：生成模拟测试结果")
+            return self.sim.generate_performance_result(
+                'seq_read',
+                target_bw=self.target_bw_mbps,
+                runtime=self.runtime
+            )
+        
+        try:
+            # 使用 fio_wrapper 便捷 API 执行
+            metrics_obj = self.fio.run_seq_read(
+                filename=self.test_file,
+                size=self.size,
+                runtime=self.runtime,
+                bs=self.bs,
+                ioengine=self.ioengine,
+                iodepth=self.iodepth,
+                ramp_time=self.ramp_time
+            )
+            
+            # 转换为标准 metrics 格式（利用 FIOMetrics 已解析的数据）
+            lat = metrics_obj.latency_ns
+            metrics = {
+                'bandwidth': {
+                    'value': metrics_obj.bandwidth['value'],
+                    'unit': 'MB/s',
+                    'target': self.target_bw_mbps
+                },
+                'iops': {
+                    'value': metrics_obj.iops['value'],
+                    'unit': 'IOPS'
+                },
+                'latency_avg': {
+                    'value': lat['mean'] / 1000,  # ns → μs
+                    'unit': 'μs',
+                    'target': self.max_avg_latency_us
+                },
+                'latency_p99': {
+                    'value': lat['percentile'].get('99.0', 0) / 1000,
+                    'unit': 'μs'
+                },
+                'latency_p9999': {
+                    'value': lat['percentile'].get('99.99', 0) / 1000,
+                    'unit': 'μs'
+                },
+                'latency_p99999': {
+                    'value': lat['percentile'].get('99.999', 0) / 1000,
+                    'unit': 'μs',
+                    'target': self.max_tail_latency_us
+                },
+                'runtime': {
+                    'value': metrics_obj.raw['jobs'][0]['elapsed'],
+                    'unit': 's'
+                }
+            }
+            
+            # 日志输出结果
+            self.logger.info("📊 测试完成，结果汇总:")
+            self.logger.info(f"  带宽: {metrics['bandwidth']['value']:.1f} MB/s (目标: ≥{self.target_bw_mbps})")
+            self.logger.info(f"  IOPS: {metrics['iops']['value']:.0f}")
+            self.logger.info(f"  平均延迟: {metrics['latency_avg']['value']:.1f} μs (目标: <{self.max_avg_latency_us})")
+            self.logger.info(f"  p99.999 尾延迟: {metrics['latency_p99999']['value']:.1f} μs (目标: <{self.max_tail_latency_us})")
+            
+            return metrics
+            
+        except FIOError as e:
+            self.logger.error(f"FIO 执行失败: {e}")
+            raise
+    
+    def validate(self, result: Dict[str, Any]) -> bool:
+        """验证测试结果是否达标
+        
+        对于性能测试：
+        - 永远返回 True（框架会根据 annotations 判断）
+        - 不达标项通过 annotations 记录，不直接 FAIL
+        - 只有硬件损伤才会导致 FAIL
+        """
+        self.logger.info("🔍 验证测试结果...")
+        
+        all_ok = True
+        
+        # 验证带宽 - 低于 90% 目标才算失败
+        bw = result['bandwidth']['value']
+        target = self.target_bw_mbps
+        if bw < target * 0.9:
+            self.record_failure(
+                "顺序读带宽",
+                f"≥ {target} MB/s",
+                f"{bw:.1f} MB/s",
+                "带宽显著低于目标值"
+            )
+            all_ok = False
+        elif bw < target:
+            # 在目标 90%-100% 之间，记录警告但不算失败
+            self.logger.warning(
+                f"⚠️  带宽未达标: {bw:.1f} MB/s < {target} MB/s，"
+                "但在容忍范围内（≥90%），测试继续"
+            )
+        
+        # 验证平均延迟
+        avg_lat = result['latency_avg']['value']
+        if avg_lat > self.max_avg_latency_us:
+            self.record_failure(
+                "平均延迟",
+                f"< {self.max_avg_latency_us} μs",
+                f"{avg_lat:.1f} μs",
+                "平均延迟超出限制"
+            )
+            all_ok = False
+        
+        # 验证尾延迟（p99.999）
+        tail_lat = result['latency_p99999']['value']
+        if tail_lat > self.max_tail_latency_us:
+            self.record_failure(
+                "p99.999 尾延迟",
+                f"< {self.max_tail_latency_us} μs",
+                f"{tail_lat:.1f} μs",
+                "尾延迟发散超出限制"
+            )
+            all_ok = False
+        
+        # Postcondition 检查（硬件健康）
+        self._check_postcondition()
+        
+        if all_ok:
+            self.logger.info("✅ 所有验证通过")
+        else:
+            self.logger.warning(f"⚠️  共有 {len(self._failures)} 项验证不通过")
+        
+        return True  # 性能测试始终返回 True，由框架根据 failures 判断最终状态
+    
+    def teardown(self) -> bool:
+        """测试后清理"""
+        # 清理测试文件
+        if not self.simulate and Path(self.test_file).exists():
+            try:
+                os.unlink(self.test_file)
+                self.logger.debug(f"🧹 已清理测试文件: {self.test_file}")
+            except Exception as e:
+                self.logger.warning(f"清理测试文件失败: {e}")
+        
+        # 调用父类清理（记录测试后健康状态）
+        return super().teardown()

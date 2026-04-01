@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-混合读写性能测试
+混合读写性能测试 - 修复版
 测试 UFS 设备的混合随机读写 IOPS（70% 读/30% 写，4K QD32）
 
 测试用例 ID: t_perf_MixedRw_009
@@ -24,6 +24,7 @@ import os
 import sys
 import subprocess
 from pathlib import Path
+from typing import Dict, Any
 
 core_dir = Path(__file__).parent.parent.parent / 'core'
 tools_dir = Path(__file__).parent.parent.parent / 'tools'
@@ -106,3 +107,143 @@ class Test(TestCase):
         self.logger.info(f"  target_total_iops={self.target_total_iops}")
         
         self.logger.info("📊 前置条件检查通过")
+        return True
+    
+    def execute(self) -> Dict[str, Any]:
+        """执行测试逻辑"""
+        try:
+            # 构建FIO测试参数
+            fio_args = {
+                'filename': self.device if not self.simulate else self.test_file,
+                'bs': self.bs,
+                'size': self.size,
+                'runtime': self.runtime,
+                'ramp_time': self.ramp_time,
+                'ioengine': self.ioengine,
+                'iodepth': self.iodepth,
+                'rw': 'randrw',
+                'rwmixread': self.rw_mix,
+                'output-format': 'json'
+            }
+            
+            # 执行FIO测试
+            result = self.fio.run(**fio_args)
+            
+            # 解析结果
+            job_data = result.get('jobs', [{}])[0]
+            
+            # 提取读写IOPS
+            read_iops = job_data.get('read', {}).get('iops', 0)
+            write_iops = job_data.get('write', {}).get('iops', 0)
+            total_iops = read_iops + write_iops
+            
+            # 提取延迟数据
+            read_lat_ns = job_data.get('read', {}).get('lat_ns', {})
+            write_lat_ns = job_data.get('write', {}).get('lat_ns', {})
+            
+            avg_read_latency_us = read_lat_ns.get('mean', 0) / 1000  # 转换为μs
+            avg_write_latency_us = write_lat_ns.get('mean', 0) / 1000  # 转换为μs
+            avg_latency_us = (avg_read_latency_us + avg_write_latency_us) / 2
+            
+            # 提取尾部延迟
+            read_clat_ns = job_data.get('read', {}).get('clat_ns', {}).get('percentile', {})
+            write_clat_ns = job_data.get('write', {}).get('clat_ns', {}).get('percentile', {})
+            
+            p99999_read_latency_us = read_clat_ns.get('99.999', 0) / 1000
+            p99999_write_latency_us = write_clat_ns.get('99.999', 0) / 1000
+            p99999_latency_us = max(p99999_read_latency_us, p99999_write_latency_us)
+            
+            # 清理测试文件（如果使用模拟）
+            if self.simulate and os.path.exists(self.test_file):
+                os.remove(self.test_file)
+                
+            return {
+                'total_iops': total_iops,
+                'read_iops': read_iops,
+                'write_iops': write_iops,
+                'avg_latency_us': avg_latency_us,
+                'avg_read_latency_us': avg_read_latency_us,
+                'avg_write_latency_us': avg_write_latency_us,
+                'p99999_latency_us': p99999_latency_us,
+                'p99999_read_latency_us': p99999_read_latency_us,
+                'p99999_write_latency_us': p99999_write_latency_us,
+                'raw_fio_result': result
+            }
+            
+        except FIOError as e:
+            self.logger.error(f"FIO 测试失败: {e}")
+            return {'error': str(e), 'pass': False}
+        except Exception as e:
+            self.logger.error(f"测试执行异常: {e}")
+            return {'error': str(e), 'pass': False}
+    
+    def validate(self, result: Dict[str, Any]) -> bool:
+        """
+        验证结果。
+        对于性能测试，返回 True，指标达标情况通过 annotations 记录。
+        """
+        # 检查是否有错误
+        if 'error' in result:
+            self.record_failure(
+                "FIO 执行",
+                "成功完成",
+                "执行失败",
+                result['error']
+            )
+            return True  # 让框架处理failure记录
+        
+        # 验证性能指标
+        total_iops = result.get('total_iops', 0)
+        avg_latency_us = result.get('avg_latency_us', float('inf'))
+        p99999_latency_us = result.get('p99999_latency_us', float('inf'))
+        
+        # 记录指标达标情况（作为annotations）
+        annotations = []
+        
+        if total_iops >= self.target_total_iops:
+            annotations.append(f"✅ 总IOPS: {total_iops:.0f} ≥ {self.target_total_iops}")
+        else:
+            annotations.append(f"❌ 总IOPS: {total_iops:.0f} < {self.target_total_iops}")
+            self.record_failure(
+                "总IOPS性能",
+                f"≥ {self.target_total_iops}",
+                f"{total_iops:.0f}",
+                "混合读写性能不达标"
+            )
+        
+        if avg_latency_us <= self.max_avg_latency_us:
+            annotations.append(f"✅ 平均延迟: {avg_latency_us:.1f}μs ≤ {self.max_avg_latency_us}μs")
+        else:
+            annotations.append(f"❌ 平均延迟: {avg_latency_us:.1f}μs > {self.max_avg_latency_us}μs")
+            self.record_failure(
+                "平均延迟",
+                f"≤ {self.max_avg_latency_us}μs",
+                f"{avg_latency_us:.1f}μs",
+                "平均延迟超出预期"
+            )
+        
+        if p99999_latency_us <= self.max_tail_latency_us:
+            annotations.append(f"✅ 尾部延迟(p99.999): {p99999_latency_us:.0f}μs ≤ {self.max_tail_latency_us}μs")
+        else:
+            annotations.append(f"❌ 尾部延迟(p99.999): {p99999_latency_us:.0f}μs > {self.max_tail_latency_us}μs")
+            self.record_failure(
+                "尾部延迟(p99.999)",
+                f"≤ {self.max_tail_latency_us}μs",
+                f"{p99999_latency_us:.0f}μs",
+                "尾部延迟超出预期"
+            )
+        
+        # 记录详细的性能数据
+        self.logger.info("📊 性能测试结果:")
+        for annotation in annotations:
+            self.logger.info(f"  {annotation}")
+        
+        self.logger.info(f"  读IOPS: {result.get('read_iops', 0):.0f}")
+        self.logger.info(f"  写IOPS: {result.get('write_iops', 0):.0f}")
+        self.logger.info(f"  读写比例: {self.rw_mix}%/{100-self.rw_mix}%")
+        
+        # 执行Postcondition检查（硬件可靠性验证）
+        self._check_postcondition()
+        
+        # 性能测试总是返回True，让框架根据failure记录判断最终状态
+        return True
