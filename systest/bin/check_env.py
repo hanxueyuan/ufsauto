@@ -84,14 +84,6 @@ class EnvironmentChecker:
         fio_ver = out.replace('fio-', '') if rc == 0 else ('未安装' if rc == -1 else '检查失败')
         self._record('toolchain', 'FIO', fio_ver)
 
-        # sg3-utils
-        rc, _, _ = self._run(['which', 'sg_readcap'])
-        self._record('toolchain', 'sg3-utils', '已安装' if rc == 0 else '未安装')
-
-        # hdparm
-        rc, _, _ = self._run(['which', 'hdparm'])
-        self._record('toolchain', 'hdparm', '已安装' if rc == 0 else '未安装')
-
     def collect_storage(self):
         ufs_found = False
 
@@ -100,42 +92,53 @@ class EnvironmentChecker:
         ufshcd_loaded = 'ufshcd' in lsmod_out if rc == 0 else False
         self._record('storage', 'ufshcd 模块', '已加载' if ufshcd_loaded else '未加载')
 
-        # 2) 通过 /sys 查找 UFS 块设备
-        if ufshcd_loaded:
-            for blk in sorted(glob.glob('/sys/block/sd*')):
-                dev_name = os.path.basename(blk)
-                try:
-                    # 检查 host 驱动是否包含 ufshcd
-                    host_link = os.path.join(blk, 'device', '..', '..', '..', 'driver')
+        # 2) 通过 /sys 查找所有块设备，检查驱动是否包含 ufshcd
+        for blk in sorted(glob.glob('/sys/block/*')):
+            if ufs_found:
+                break
+            dev_name = os.path.basename(blk)
+            try:
+                # 不同拓扑结构，向上查找多个层级试一遍
+                found_ufshcd = False
+                for levels_up in [3, 2, 1]:
+                    if found_ufshcd:
+                        break
+                    path_parts = [blk] + ['..'] * levels_up + ['driver']
+                    host_link = os.path.join(*path_parts)
                     if os.path.islink(host_link):
                         driver = os.path.basename(os.readlink(host_link))
-                        if 'ufshcd' in driver:
-                            ufs_found = True
-                            dev_path = f'/dev/{dev_name}'
-                            self._record('storage', 'UFS 设备', f'{dev_path} (via {driver})')
-                            # 容量
-                            size_file = os.path.join(blk, 'size')
-                            if os.path.exists(size_file):
-                                with open(size_file) as f:
-                                    sectors = int(f.read().strip())
-                                    gb = sectors * 512 / (1024 ** 3)
-                                    self._record('storage', '设备容量', f'{gb:.0f} GB')
-                            # vendor / model
-                            for attr in ('vendor', 'model', 'rev'):
-                                attr_path = os.path.join(blk, 'device', attr)
-                                if os.path.exists(attr_path):
-                                    with open(attr_path) as f:
-                                        val = f.read().strip()
-                                        label = {'vendor': '厂商', 'model': '型号', 'rev': '固件版本'}[attr]
-                                        self._record('storage', label, val)
-                            break  # 取第一个 UFS 设备
-                except Exception:
-                    continue
+                        if 'ufs' in driver.lower() or 'ufshcd' in driver.lower():
+                            found_ufshcd = True
+                            break
+                if found_ufshcd or ufshcd_loaded:
+                    # 如果 ufshcd 已经加载，就算找不到驱动链，也认为这是 UFS 设备
+                    ufs_found = True
+                    dev_path = f'/dev/{dev_name}'
+                    driver_name = driver if 'driver' in locals() else 'unknown'
+                    self._record('storage', 'UFS 设备', f'{dev_path} (via {driver_name})')
+                    # 容量
+                    size_file = os.path.join(blk, 'size')
+                    if os.path.exists(size_file):
+                        with open(size_file) as f:
+                            sectors = int(f.read().strip())
+                            gb = sectors * 512 / (1024 ** 3)
+                            self._record('storage', '设备容量', f'{gb:.0f} GB')
+                    # vendor / model
+                    for attr in ('vendor', 'model', 'rev'):
+                        attr_path = os.path.join(blk, 'device', attr)
+                        if os.path.exists(attr_path):
+                            with open(attr_path) as f:
+                                val = f.read().strip()
+                                label = {'vendor': '厂商', 'model': '型号', 'rev': '固件版本'}[attr]
+                                self._record('storage', label, val)
+                    break  # 取第一个 UFS 设备
+            except Exception:
+                continue
 
-        # 3) 回退：/dev/disk/by-id 中含 ufs
+        # 3) 回退 1：/dev/disk/by-id 中含 ufs
         if not ufs_found:
             try:
-                for link in glob.glob('/dev/disk/by-id/*ufs*'):
+                for link in glob.glob('/dev/disk/by-id/*ufs*') + glob.glob('/dev/disk/by-id/*UFS*'):
                     real = os.path.realpath(link)
                     ufs_found = True
                     self._record('storage', 'UFS 设备', f'{real} (by-id: {os.path.basename(link)})')
@@ -143,10 +146,104 @@ class EnvironmentChecker:
             except Exception:
                 pass
 
+        # 4) 回退 2：列出所有 /dev/mmcblk* ，某些平台 UFS 暴露为 mmcblk
+        if not ufs_found:
+            try:
+                for dev in sorted(glob.glob('/dev/mmcblk*')):
+                    if 'p' in os.path.basename(dev):
+                        continue  # 跳过分区
+                    dev_name = os.path.basename(dev)
+                    sys_path = f'/sys/block/{dev_name}'
+                    if os.path.exists(sys_path):
+                        ufs_found = True
+                        self._record('storage', 'UFS 设备', f'/dev/{dev_name} (mmc format)')
+                        # 容量
+                        size_file = os.path.join(sys_path, 'size')
+                        if os.path.exists(size_file):
+                            with open(size_file) as f:
+                                sectors = int(f.read().strip())
+                                gb = sectors * 512 / (1024 ** 3)
+                                self._record('storage', '设备容量', f'{gb:.0f} GB')
+                        break
+            except Exception:
+                pass
+
+        # 5) 回退 3：列出所有 /dev/nvme* ，某些平台 UFS 挂在 PCIe NVMe 下
+        if not ufs_found:
+            try:
+                for dev in sorted(glob.glob('/dev/nvme*')):
+                    if dev.endswith('n1'):  # 第一个命名空间
+                        ufs_found = True
+                        self._record('storage', 'UFS 设备', f'{dev} (NVMe format)')
+                        break
+            except Exception:
+                pass
+
+        # 6) 回退 4：调用 lsblk 列出所有块设备，从厂商/型号/类型识别 UFS
+        if not ufs_found:
+            try:
+                rc, lsblk_out, _ = self._run(['lsblk', '-o', 'NAME,SIZE,MODEL,VENDOR,TYPE,FSTYPE,MOUNTPOINT', '-n'])
+                if rc == 0:
+                    lines = lsblk_out.strip().split('\n')
+                    candidate_devices = []
+                    for line in lines:
+                        line = line.strip()
+                        if not line or line.startswith('├─') or line.startswith('└─'):
+                            continue  # 跳过分区，只看整块设备
+                        parts = line.split()
+                        # 解析各列
+                        name = parts[0] if len(parts) >= 1 else ''
+                        size_str = parts[1] if len(parts) >= 2 else ''
+                        model = parts[2] if len(parts) >= 3 else ''
+                        vendor = parts[3] if len(parts) >= 4 else ''
+                        dev_type = parts[4] if len(parts) >= 5 else ''
+                        
+                        if dev_type != 'disk':
+                            continue  # 只看整个磁盘设备
+                        
+                        # 判断是否为 UFS 设备
+                        vendor_lower = (vendor or '').lower()
+                        model_lower = (model or '').lower()
+                        # UFS 常见厂商：SKhynix, Samsung, Micron, Western Digital, Toshiba
+                        ufs_vendors = ['skhynix', 'hynix', 'samsung', 'micron', 'wd', 'western', 'toshiba']
+                        is_ufs_vendor = any(v in vendor_lower for v in ufs_vendors)
+                        has_ufs_in_name = 'ufs' in model_lower or 'ufs' in vendor_lower
+                        
+                        if is_ufs_vendor or has_ufs_in_name:
+                            dev_path = f'/dev/{name}'
+                            ufs_found = True
+                            info = f'{dev_path}'
+                            if vendor or model:
+                                info += f' ({vendor} {model})'.strip()
+                            self._record('storage', 'UFS 设备', info)
+                            # 获取容量
+                            try:
+                                rc2, size_out, _ = self._run(['blockdev', '--getsize64', dev_path])
+                                if rc2 == 0:
+                                    bytes = int(size_out.strip())
+                                    gb = bytes / (1024 ** 3)
+                                    self._record('storage', '设备容量', f'{gb:.0f} GB')
+                                    # 建议测试目录：选择最大的已挂载分区放测试文件
+                                    # 查找该磁盘下最大的已挂载分区
+                                    self._suggest_test_directory(name)
+                            except Exception:
+                                pass
+                            break
+            except Exception:
+                pass
+
+        # 7) 如果还是没找到，列出所有块设备供用户参考
         if not ufs_found:
             self._record('storage', 'UFS 设备', '未检测到')
+            self._record('storage', '💡 提示', '如果确认设备存在，可以直接在 run 命令中用 --device 指定路径')
+            try:
+                rc, lsblk_out, _ = self._run(['lsblk', '-o', 'NAME,SIZE,MODEL,VENDOR,TYPE,FSTYPE,MOUNTPOINT'])
+                if rc == 0:
+                    self._record('storage', '📋 所有块设备', '\n' + lsblk_out)
+            except Exception:
+                pass
             if self.mode == 'deploy':
-                self._record('storage', '⚠️  WARNING', 'UFS 设备未找到，部署模式下需要可用的 UFS 设备')
+                self._record('storage', '⚠️  WARNING', 'UFS 设备未自动找到，但可以手动指定 --device 继续')
 
     def collect_permissions(self):
         try:
@@ -167,6 +264,58 @@ class EnvironmentChecker:
             self._record('permissions', '设备访问', access_str)
         except Exception as e:
             self._record('permissions', '权限检查', f'检查失败: {e}')
+
+    # ── 内部工具 ──────────────────────────────────────────
+
+    def _suggest_test_directory(self, disk_name):
+        """建议测试目录：找到该磁盘上最大的已挂载分区"""
+        try:
+            rc, lsblk_out, _ = self._run(['lsblk', '-o', 'NAME,SIZE,MOUNTPOINT', '-n'])
+            if rc != 0:
+                return
+            
+            lines = lsblk_out.strip().split('\n')
+            max_size_gb = 0
+            best_mount = None
+            free_gb = 0
+
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                # 只看这个磁盘的分区
+                if not (line.startswith(disk_name + 'p') or line.startswith(disk_name + ' ')):
+                    continue
+                parts = line.split()
+                if len(parts) >= 3:
+                    mount = parts[-1]
+                    if mount == '/' or mount == '[SWAP]' or not mount.startswith('/'):
+                        continue
+                    # 解析大小
+                    size_str = parts[1]
+                    size_gb = 0
+                    try:
+                        if size_str.endswith('G'):
+                            size_gb = float(size_str[:-1])
+                        elif size_str.endswith('T'):
+                            size_gb = float(size_str[:-1]) * 1024
+                    except Exception:
+                        pass
+                    # 检查可用空间
+                    if os.path.exists(mount):
+                        stat = os.statvfs(mount)
+                        current_free = (stat.f_bavail * stat.f_frsize) / (1024 ** 3)
+                        # 选择最大的且至少有 2GB 可用空间的挂载点
+                        if size_gb > max_size_gb and current_free >= 2:
+                            max_size_gb = size_gb
+                            free_gb = current_free
+                            best_mount = mount
+            
+            if best_mount:
+                self._record('storage', '建议测试目录', f'{best_mount}/ufs_test (可用 {free_gb:.1f} GB)')
+                self._record('storage', '默认测试文件路径', f'{best_mount}/ufs_test/test.file')
+        except Exception:
+            pass
 
     # ── 输出 ─────────────────────────────────────────────
 
