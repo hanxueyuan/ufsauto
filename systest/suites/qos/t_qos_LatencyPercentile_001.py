@@ -48,6 +48,7 @@ class Test(TestCase):
     def __init__(
         self,
         device: str = '/dev/ufs0',
+        test_dir: Path = None,
         verbose: bool = False,
         logger=None,
         simulate: bool = False,
@@ -61,7 +62,7 @@ class Test(TestCase):
         target_p99999_us: float = 20000,
         prefill: bool = True,
     ):
-        super().__init__(device, verbose, logger)
+        super().__init__(device, test_dir, verbose, logger)
         self.simulate = simulate
         self.test_file = "/tmp/ufs_test_qos_latency"
         self.bs = bs
