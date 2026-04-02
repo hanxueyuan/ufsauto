@@ -60,9 +60,9 @@ class Test(TestCase):
         max_avg_latency_us: float = 200,
         max_tail_latency_us: float = 8000,
     ):
-        super().__init__(device, verbose, logger)
+        super().__init__(device, test_dir, verbose, logger)
         self.simulate = simulate
-        self.test_file = "/tmp/ufs_test_mixed_rw"
+        self.test_file = self.get_test_file_path('mixed_rw')
         self.bs = bs
         self.size = size
         self.runtime = runtime

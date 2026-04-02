@@ -62,8 +62,9 @@ class TestCase:
     name: str = "base_test"
     description: str = "基础测试用例"
     
-    def __init__(self, device: str = '/dev/ufs0', verbose: bool = False, logger=None):
+    def __init__(self, device: str = '/dev/ufs0', test_dir: Path = None, verbose: bool = False, logger=None):
         self.device = device
+        self.test_dir = test_dir  # 全局测试目录，所有测试共用
         self.verbose = verbose
         self.logger = logger or logging.getLogger(f"systest.test.{self.name}")
         self.start_time = None
@@ -73,6 +74,22 @@ class TestCase:
         # 健康状态监控
         self._pre_test_health = None
         self._post_test_health = None
+        
+        # 如果测试目录已指定，确保它存在
+        if self.test_dir and not self.test_dir.exists():
+            self.test_dir.mkdir(parents=True, exist_ok=True)
+    
+    def get_test_file_path(self, name: str) -> Path:
+        """获取测试文件路径，统一放在全局测试目录下
+        
+        Args:
+            name: 测试文件名称（如 "seq_read"）
+        """
+        if self.test_dir:
+            return self.test_dir / f'ufs_test_{name}'
+        else:
+            # 回退到 /tmp
+            return Path(f'/tmp/ufs_test_{name}')
     
     def record_failure(self, check: str, expected: str, actual: str, reason: str = ''):
         """
@@ -199,6 +216,15 @@ class TestCase:
     def teardown(self) -> bool:
         """测试后清理"""
         self.logger.debug(f"Teardown: {self.name}")
+        
+        # 自动清理测试文件
+        if hasattr(self, 'test_file') and self.test_file and isinstance(self.test_file, Path):
+            if self.test_file.exists():
+                try:
+                    self.test_file.unlink()
+                    self.logger.debug(f"🧹 已清理测试文件: {self.test_file}")
+                except Exception as e:
+                    self.logger.warning(f"⚠️  清理测试文件失败: {e}")
         
         # 自动记录测试后健康状态（Postcondition 对比用）
         try:
@@ -346,15 +372,92 @@ class TestCase:
 class TestRunner:
     """测试执行引擎"""
     
-    def __init__(self, device: str = '/dev/ufs0', verbose: bool = False, dry_run: bool = False, simulate: bool = False):
+    def __init__(self, device: str = '/dev/ufs0', test_dir: str = None, verbose: bool = False, dry_run: bool = False, simulate: bool = False):
         self.device = device
+        self.test_dir_override = test_dir  # 用户手动指定
         self.verbose = verbose
         self.dry_run = dry_run
         self.simulate = simulate  # 模拟模式（无硬件）
         self.suites_dir = Path(__file__).parent.parent / 'suites'
+        self.test_dir = None  # 最终确定的测试目录
+        
+        # 自动选择测试目录
+        self._resolve_test_dir()
         
         # 加载测试套件
         self.suites = self._load_suites()
+    
+    def _resolve_test_dir(self):
+        """自动选择测试目录：用户指定 > 最大可用空间挂载点 > /tmp"""
+        if self.test_dir_override:
+            # 用户手动指定，直接使用
+            self.test_dir = Path(self.test_dir_override).absolute()
+            # 自动创建目录
+            if not self.test_dir.exists():
+                self.test_dir.mkdir(parents=True, exist_ok=True)
+            return
+        
+        if self.simulate:
+            # 模拟模式，用 /tmp
+            self.test_dir = Path('/tmp/ufs_test').absolute()
+            if not self.test_dir.exists():
+                self.test_dir.mkdir(parents=True, exist_ok=True)
+            return
+        
+        # 自动查找：列出所有已挂载挂载点，选择可用空间最大的那个
+        try:
+            import subprocess
+            # findmnt 列出所有挂载点
+            rc, out, _ = self._run(['findmnt', '-n', '-o', 'TARGET,SIZE,FSUSED,FSAVAIL', '-t', 'ext4,xfs,btrfs'])
+            if rc == 0 and out.strip():
+                max_avail_gb = 0
+                best_mount = None
+                lines = out.strip().split('\n')
+                for line in lines:
+                    parts = line.strip().split()
+                    if len(parts) < 4:
+                        continue
+                    mount = parts[0]
+                    avail_str = parts[3]
+                    # 解析可用大小
+                    avail_gb = 0
+                    try:
+                        if avail_str.endswith('G'):
+                            avail_gb = float(avail_str[:-1])
+                        elif avail_str.endswith('T'):
+                            avail_gb = float(avail_str[:-1]) * 1024
+                        elif avail_str.endswith('M'):
+                            avail_gb = float(avail_str[:-1]) / 1024
+                    except Exception:
+                        continue
+                    # 需要至少 2GB 可用空间
+                    if avail_gb >= 2 and avail_gb > max_avail_gb:
+                        max_avail_gb = avail_gb
+                        best_mount = mount
+                if best_mount:
+                    # 选择可用空间最大的挂载点
+                    candidate = Path(best_mount) / 'ufs_test'
+                    if not candidate.exists():
+                        candidate.mkdir(parents=True, exist_ok=True)
+                    self.test_dir = candidate.absolute()
+                    return
+        except Exception:
+            pass
+        
+        # 回退：/tmp
+        self.test_dir = Path('/tmp/ufs_test').absolute()
+        if not self.test_dir.exists():
+            self.test_dir.mkdir(parents=True, exist_ok=True)
+    
+    @staticmethod
+    def _run(cmd, timeout=10):
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+            return r.returncode, r.stdout.strip(), r.stderr.strip()
+        except FileNotFoundError:
+            return -1, '', 'not found'
+        except Exception as e:
+            return -2, '', str(e)
     
     def _load_suites(self) -> Dict[str, List[str]]:
         """加载可用测试套件"""
@@ -443,7 +546,12 @@ class TestRunner:
                     test_class = getattr(module, class_name, None)
                 if not test_class:
                     raise ImportError(f"未找到测试类（Test 或 {class_name}）")
-                test_instance = test_class(device=self.device, verbose=self.verbose, simulate=self.simulate)
+                test_instance = test_class(
+                    device=self.device,
+                    test_dir=self.test_dir,
+                    verbose=self.verbose,
+                    simulate=self.simulate
+                )
                 
                 result = test_instance.run()
                 results.append(result)

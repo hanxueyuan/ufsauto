@@ -66,8 +66,8 @@ class Test(TestCase):
         verify: str = None,  # 'md5', 'crc32c', None
         prefill: bool = True,
     ):
-        super().__init__(device, verbose, logger)
-        self.test_file = "/tmp/ufs_test_seq_read"
+        super().__init__(device, test_dir, verbose, logger)
+        self.test_file = self.get_test_file_path('seq_read')
         self.bs = bs
         self.size = size
         self.runtime = runtime
@@ -315,14 +315,5 @@ class Test(TestCase):
         return True  # 性能测试始终返回 True，由框架根据 failures 判断最终状态
     
     def teardown(self) -> bool:
-        """测试后清理"""
-        # 清理测试文件
-        if not self.simulate and Path(self.test_file).exists():
-            try:
-                os.unlink(self.test_file)
-                self.logger.debug(f"🧹 已清理测试文件: {self.test_file}")
-            except Exception as e:
-                self.logger.warning(f"清理测试文件失败: {e}")
-        
-        # 调用父类清理（记录测试后健康状态）
+        """测试后清理 - 父类会自动清理测试文件"""
         return super().teardown()

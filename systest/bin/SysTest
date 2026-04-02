@@ -42,11 +42,15 @@ def cmd_run(args):
     )
     
     logger.info(f"开始执行测试 - Suite: {args.suite}, Device: {args.device}")
+    if args.test_dir:
+        logger.info(f"测试目录: {args.test_dir} (手动指定)")
+    else:
+        logger.info(f"测试目录: 自动选择 (基于设备挂载点)")
     logger.info(f"测试 ID: {test_id}")
     logger.debug(f"日志文件：{logger.get_log_file()}")
     
     # 初始化组件
-    runner = TestRunner(device=args.device, verbose=args.verbose, simulate=args.simulate)
+    runner = TestRunner(device=args.device, test_dir=args.test_dir, verbose=args.verbose, simulate=args.simulate)
     collector = ResultCollector(output_dir=args.output)
     reporter = ReportGenerator(template='default')
     
@@ -209,6 +213,7 @@ def main():
     run_parser.add_argument('--suite', '-s', required=True, help='测试套件名称')
     run_parser.add_argument('--test', '-t', help='单个测试项名称')
     run_parser.add_argument('--device', '-d', default='/tmp/ufs_sim.img', help='测试设备路径')
+    run_parser.add_argument('--test-dir', '-tdir', default=None, help='测试文件目录（默认自动选择，所有测试共用）')
     run_parser.add_argument('--output', '-o', default='./results', help='输出目录')
     run_parser.add_argument('--format', '-f', default='html,json', help='报告格式 (html/json/pdf)')
     run_parser.add_argument('--verbose', '-v', action='store_true', help='详细输出')

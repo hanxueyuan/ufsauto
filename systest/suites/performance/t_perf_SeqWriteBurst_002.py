@@ -60,9 +60,9 @@ class Test(TestCase):
         max_tail_latency_us: float = 8000,
         verify: str = None,
     ):
-        super().__init__(device, verbose, logger)
+        super().__init__(device, test_dir, verbose, logger)
         self.simulate = simulate
-        self.test_file = "/tmp/ufs_test_seq_write"
+        self.test_file = self.get_test_file_path('seq_write')
         self.bs = bs
         self.size = size
         self.runtime = runtime
@@ -267,14 +267,5 @@ class Test(TestCase):
         return True
     
     def teardown(self) -> bool:
-        """测试后清理"""
-        # 清理测试文件
-        if not self.simulate and Path(self.test_file).exists():
-            try:
-                os.unlink(self.test_file)
-                self.logger.debug(f"🧹 已清理测试文件: {self.test_file}")
-            except Exception as e:
-                self.logger.warning(f"清理测试文件失败: {e}")
-        
-        # 调用父类清理（记录测试后健康状态）
+        """测试后清理 - 父类会自动清理测试文件"""
         return super().teardown()
