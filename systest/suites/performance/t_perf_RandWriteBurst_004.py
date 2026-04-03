@@ -34,7 +34,6 @@ sys.path.insert(0, str(tools_dir))
 from runner import TestCase
 from fio_wrapper import FIO, FIOError, FIOMetrics
 from ufs_utils import UFSDevice
-from ufs_simulator import UFSSimulator
 
 
 class Test(TestCase):
@@ -48,8 +47,7 @@ class Test(TestCase):
         device: str = '/dev/ufs0',
         test_dir: Path = None,
         verbose: bool = False,
-        logger=None,
-        simulate: bool = False,
+        logger = None,
         bs: str = '4k',
         size: str = '1G',
         runtime: int = 60,
@@ -61,7 +59,6 @@ class Test(TestCase):
         max_tail_latency_us: float = 8000,
     ):
         super().__init__(device, test_dir, verbose, logger)
-        self.simulate = simulate
         self.test_file = self.get_test_file_path('rand_write')
         self.bs = bs
         self.size = size
@@ -73,13 +70,9 @@ class Test(TestCase):
         self.max_avg_latency_us = max_avg_latency_us
         self.max_tail_latency_us = max_tail_latency_us
         
-        self.sim = UFSSimulator(device_path=device, logger=self.logger)
+        # 初始化工具（生产模式）
         self.fio = FIO(timeout=self.runtime + self.ramp_time + 30, logger=self.logger)
-        self.ufs = self.sim if simulate else UFSDevice(device, logger=self.logger)
-        # 模拟模式：自动创建模拟设备文件
-        if simulate and self.sim is not None:
-            if not self.sim.exists():
-                self.sim.create_device(size_gb=128)
+        self.ufs = UFSDevice(device, logger=self.logger)
     
     def setup(self) -> bool:
         self.logger.info("开始检查前置条件...")
@@ -117,32 +110,9 @@ class Test(TestCase):
         self.logger.info("📊 前置条件检查通过")
         return True
     
-    def _parse_size_mb(self, size_str: str) -> int:
-        """解析大小字符串为 MB"""
-        size_str = size_str.lower()
-        if size_str.endswith('g'):
-            return int(size_str[:-1]) * 1024
-        elif size_str.endswith('m'):
-            return int(size_str[:-1])
-        elif size_str.endswith('k'):
-            return max(1, int(size_str[:-1]) // 1024)
-        else:
-            try:
-                return int(size_str) // 1024 // 1024
-            except ValueError:
-                return 1024
-    
     def execute(self) -> Dict[str, Any]:
         """执行 FIO 随机写测试"""
         self.logger.info("🚀 开始执行随机写性能测试...")
-        
-        if self.simulate:
-            self.logger.info("🔧 模拟模式：生成模拟测试结果")
-            return self.sim.generate_performance_result(
-                'rand_write',
-                target_iops=self.target_iops,
-                runtime=self.runtime
-            )
         
         try:
             # 删除已存在的测试文件

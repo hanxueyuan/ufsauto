@@ -387,59 +387,123 @@ class TestRunner:
         self.suites = self._load_suites()
     
     def _resolve_test_dir(self):
-        """自动选择测试目录：用户指定 > 最大可用空间挂载点 > /tmp"""
+        """自动选择测试目录：用户指定 > 最大可用空间挂载点 > /tmp
+        
+        生产模式（默认）：自动根据存储情况选择测试目录
+        测试模式（CI/CD）：用户手动指定 --test-dir
+        
+        环境检查警告：
+            - 找不到 ≥2GB 可用空间 → 报 warning，回退到 /tmp
+            - findmnt 命令失败 → 报 warning，回退到 /tmp
+        """
         if self.test_dir_override:
-            # 用户手动指定，直接使用
+            # 用户手动指定（测试模式）
             self.test_dir = Path(self.test_dir_override).absolute()
-            # 自动创建目录
             if not self.test_dir.exists():
                 self.test_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"✅ 测试目录：{self.test_dir} (手动指定 - 测试模式)")
             return
         
-        # 自动查找：列出所有已挂载挂载点，选择可用空间最大的那个
-        try:
-            import subprocess
-            # findmnt 列出所有挂载点
-            rc, out, _ = self._run(['findmnt', '-n', '-o', 'TARGET,SIZE,FSUSED,FSAVAIL', '-t', 'ext4,xfs,btrfs'])
-            if rc == 0 and out.strip():
-                max_avail_gb = 0
-                best_mount = None
-                lines = out.strip().split('\n')
-                for line in lines:
-                    parts = line.strip().split()
-                    if len(parts) < 4:
-                        continue
-                    mount = parts[0]
-                    avail_str = parts[3]
-                    # 解析可用大小
-                    avail_gb = 0
-                    try:
-                        if avail_str.endswith('G'):
-                            avail_gb = float(avail_str[:-1])
-                        elif avail_str.endswith('T'):
-                            avail_gb = float(avail_str[:-1]) * 1024
-                        elif avail_str.endswith('M'):
-                            avail_gb = float(avail_str[:-1]) / 1024
-                    except Exception:
-                        continue
-                    # 需要至少 2GB 可用空间
-                    if avail_gb >= 2 and avail_gb > max_avail_gb:
-                        max_avail_gb = avail_gb
-                        best_mount = mount
-                if best_mount:
-                    # 选择可用空间最大的挂载点
-                    candidate = Path(best_mount) / 'ufs_test'
-                    if not candidate.exists():
-                        candidate.mkdir(parents=True, exist_ok=True)
-                    self.test_dir = candidate.absolute()
-                    return
-        except Exception:
-            pass
+        # 生产模式：自动查找最大可用空间挂载点
+        logger.info("🔍 生产模式：自动选择测试目录 (根据存储情况)")
         
-        # 回退：/tmp
-        self.test_dir = Path('/tmp/ufs_test').absolute()
-        if not self.test_dir.exists():
-            self.test_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            rc, out, err = self._run(['findmnt', '-n', '-o', 'TARGET,SIZE,FSUSED,FSAVAIL', '-t', 'ext4,xfs,btrfs'])
+            
+            if rc != 0:
+                logger.warning("⚠️  环境检查警告：findmnt 命令执行失败")
+                logger.warning(f"    原因：{err if err else '命令不存在或权限不足'}")
+                logger.warning("    建议：检查 findmnt 工具是否安装，或手动指定 --test-dir")
+                self.test_dir = Path('/tmp/ufs_test').absolute()
+                if not self.test_dir.exists():
+                    self.test_dir.mkdir(parents=True, exist_ok=True)
+                logger.warning(f"⚠️  回退到：{self.test_dir} (临时目录，不推荐用于生产测试)")
+                return
+            
+            if not out.strip():
+                logger.warning("⚠️  环境检查警告：未找到合适的挂载点")
+                logger.warning("    原因：系统中没有 ext4/xfs/btrfs 类型的挂载点")
+                logger.warning("    建议：检查存储设备是否正确挂载，或手动指定 --test-dir")
+                self.test_dir = Path('/tmp/ufs_test').absolute()
+                if not self.test_dir.exists():
+                    self.test_dir.mkdir(parents=True, exist_ok=True)
+                logger.warning(f"⚠️  回退到：{self.test_dir} (临时目录，不推荐用于生产测试)")
+                return
+            
+            # 遍历所有挂载点，找可用空间最大的
+            max_avail_gb = 0
+            best_mount = None
+            candidate_mounts = []
+            lines = out.strip().split('\n')
+            
+            for line in lines:
+                parts = line.strip().split()
+                if len(parts) < 4:
+                    continue
+                mount = parts[0]
+                avail_str = parts[3]
+                
+                # 解析可用大小
+                avail_gb = 0
+                try:
+                    if avail_str.endswith('G'):
+                        avail_gb = float(avail_str[:-1])
+                    elif avail_str.endswith('T'):
+                        avail_gb = float(avail_str[:-1]) * 1024
+                    elif avail_str.endswith('M'):
+                        avail_gb = float(avail_str[:-1]) / 1024
+                except Exception:
+                    continue
+                
+                candidate_mounts.append((mount, avail_gb))
+                
+                # 需要至少 2GB 可用空间
+                if avail_gb >= 2 and avail_gb > max_avail_gb:
+                    max_avail_gb = avail_gb
+                    best_mount = mount
+            
+            if best_mount:
+                # ✅ 找到合适空间
+                candidate = Path(best_mount) / 'ufs_test'
+                if not candidate.exists():
+                    candidate.mkdir(parents=True, exist_ok=True)
+                self.test_dir = candidate.absolute()
+                logger.info(f"✅ 测试目录：{self.test_dir} (自动选择 - 生产模式)")
+                logger.info(f"    挂载点：{best_mount}，可用空间：{max_avail_gb:.1f}GB")
+                return
+            else:
+                # ⚠️ 找不到 ≥2GB 空间
+                logger.warning("⚠️  环境检查警告：未找到合适的测试目录")
+                logger.warning("    原因：所有挂载点可用空间 < 2GB (测试最低要求)")
+                
+                if candidate_mounts:
+                    logger.warning("    当前挂载点列表：")
+                    for mount, avail in sorted(candidate_mounts, key=lambda x: x[1], reverse=True)[:5]:
+                        logger.warning(f"      {mount}: {avail:.1f}GB 可用")
+                else:
+                    logger.warning("    当前无可用挂载点")
+                
+                logger.warning("    建议：")
+                logger.warning("      1. 检查存储设备是否正确挂载")
+                logger.warning("      2. 清理磁盘空间或扩展存储容量")
+                logger.warning("      3. 手动指定测试目录：SysTest run --test-dir=/path/to/dir")
+                
+                self.test_dir = Path('/tmp/ufs_test').absolute()
+                if not self.test_dir.exists():
+                    self.test_dir.mkdir(parents=True, exist_ok=True)
+                logger.warning(f"⚠️  回退到：{self.test_dir} (临时目录，不推荐用于生产测试)")
+                logger.warning("    注意：/tmp 目录可能空间不足或为内存文件系统，可能导致测试失败")
+                return
+                
+        except Exception as e:
+            logger.warning("⚠️  环境检查警告：自动选择测试目录失败")
+            logger.warning(f"    原因：{e}")
+            logger.warning("    建议：手动指定测试目录 --test-dir")
+            self.test_dir = Path('/tmp/ufs_test').absolute()
+            if not self.test_dir.exists():
+                self.test_dir.mkdir(parents=True, exist_ok=True)
+            logger.warning(f"⚠️  回退到：{self.test_dir} (临时目录，不推荐用于生产测试)")
+            return
     
     @staticmethod
     def _run(cmd, timeout=10):
