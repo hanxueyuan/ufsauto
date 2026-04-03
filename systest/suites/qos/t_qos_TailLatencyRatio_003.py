@@ -159,8 +159,8 @@ class Test(TestCase):
                 **extra_kwargs
             )
             
-            p50 = metrics.latency_ns['percentile'].get('50.000000', 0) / 1000 /  # ns → µs
-            p9999 = metrics.latency_ns['percentile'].get('99.990000', 0) / 1000 /  # ns → µs
+            p50 = metrics.latency_ns['percentile'].get('50.000000', 0) / 1000  # ns → µs
+            p9999 = metrics.latency_ns['percentile'].get('99.990000', 0) / 1000  # ns → µs
             
             result = {
                 'latency_p50_ns': {'value': p50, 'unit': 'ns'},

@@ -170,8 +170,8 @@ class Test(TestCase):
                 )
                 
                 percentiles = metrics.latency_ns.get('percentile', {})
-                avg_lat = percentiles.get('50.0', 0) / 1000 /  # ns → ms
-                p9999_lat = percentiles.get('99.99', 0) / 1000 /  # ns → ms
+                avg_lat = percentiles.get('50.0', 0) / 1000  # ns → μs
+                p9999_lat = percentiles.get('99.99', 0) / 1000  # ns → μs
                 
                 avg_latencies.append(avg_lat)
                 p9999_latencies.append(p9999_lat)
@@ -195,8 +195,8 @@ class Test(TestCase):
         avg_stdev = statistics.stdev(valid_avg) if len(valid_avg) > 1 else 0
         avg_cv = (avg_stdev / avg_mean * 100) if avg_mean > 0 else 0
         
-        p9999_mean = statistics.mean(valid_p999) if len(valid_p999) > 0 else 0
-        p9999_stdev = statistics.stdev(valid_p999) if len(valid_p999) > 1 else 0
+        p9999_mean = statistics.mean(valid_p9999) if len(valid_p9999) > 0 else 0
+        p9999_stdev = statistics.stdev(valid_p9999) if len(valid_p9999) > 1 else 0
         p9999_cv = (p9999_stdev / p9999_mean * 100) if p9999_mean > 0 else 0
         
         result = {

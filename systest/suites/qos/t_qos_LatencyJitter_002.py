@@ -214,66 +214,61 @@ class Test(TestCase):
             self.logger.info("📊 测试完成，抖动统计:")
             self.logger.info(f"  IOPS: {metrics['iops']['value']:.0f}")
             self.logger.info(f"  带宽: {metrics['bandwidth']['value']:.1f} MB/s")
-            self.logger.info(f"  最小延迟: {metrics['latency_min']['value']:.:.:.:.:.:.:.:.:.:.:.:.:.:.:.:.:.':":):}:.:.:":}:.:.":):":):":
-:.:.:.:.):":.:.":":):":.}:}:":):":":":":':":':':":.":":':":':.':.":.":.":":.":":":.":":":):.":":':":":':':":':.":':":":.":":':":.":':.":
-
-            return "SDG:\n":
-    '  " :\n: }
-            "
-        return metrics
+            self.logger.info(f"  最小延迟: {metrics['latency_min']['value']:.1f} μs")
+            self.logger.info(f"  最大延迟: {metrics['latency_max']['value']:.1f} μs")
+            self.logger.info(f"  平均延迟: {metrics['latency_avg']['value']:.1f} μs")
+            self.logger.info(f"  延迟标准差: {metrics['latency_stddev']['value']:.1f} μs (目标: <{self.target_stddev_us})")
+            self.logger.info(f"  抖动系数: {metrics['jitter_percent']['value']:.1f}% (目标: <{self.target_jitter_pct}%)")
             
-    def changed:
-    "```
-    return "
-    def changed: changed = that;
-    "
-    return metrics
-
+            return metrics
+            
         except FIOError as e:
             self.logger.error(f"FIO 执行失败: {e}")
-            return {'pass': False}
-        return False
-
-        return True
-
-    def validate(self, result: Dict[str, Any]) -> bool:
-        all_ok = True
-
-        # Postcondition 检查（硬件可靠性验证）
-        self._check_postcondition()
-
-        return True  # 性能测试始终返回 True 让框架处理
-    }
-
+            raise
+    
     def validate(self, result: Dict[str, Any]) -> bool:
         """验证测试结果是否达标
         
         对于性能测试：不达标记录 failure 但始终返回 True 让框架处理
         """
         self.logger.info("🔍 验证测试结果...")
-
+        
         all_ok = True
-
+        
         # 验证延迟标准差
-        stddev_us = result['latency_stddev'] / 1000 /  # convert µs to µs → ms
+        stddev_us = result['latency_stddev']['value']
         target_stddev = self.target_stddev_us
         if stddev_us > target_stddev:
             self.record_failure(
-                "延迟标准差超出限制",
-                "expected: {}ms".format(target_stddev_us),
-                "got {:.f} ms".format(stddev_us))
+                "延迟标准差",
+                f"< {target_stddev} μs",
+                f"{stddev_us:.1f} μs",
+                "延迟标准差超出限制"
+            )
             all_ok = False
-
+        
+        # 验证抖动系数
+        jitter_pct = result['jitter_percent']['value']
+        target_jitter = self.target_jitter_pct
+        if jitter_pct > target_jitter:
+            self.record_failure(
+                "抖动系数",
+                f"< {target_jitter}%",
+                f"{jitter_pct:.1f}%",
+                "抖动系数超出限制"
+            )
+            all_ok = False
+        
         # Postcondition 检查（硬件可靠性验证）
         self._check_postcondition()
-
+        
         if all_ok:
             self.logger.info("✅ 所有验证通过")
         else:
             self.logger.warning(f"⚠️  共有 {len(self._failures)} 项验证不通过")
-
+        
         return True  # 性能测试始终返回 True，由框架根据 failures 判断最终状态
-
+    
     def teardown(self) -> bool:
         """测试后清理"""
         # 清理测试文件 → 父类会自动清理
