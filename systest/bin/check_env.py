@@ -103,13 +103,14 @@ class EnvironmentChecker:
         
         设备类型判断方法（辅助判断，不阻断测试）：
         1. dmesg 中查找 ufshcd 关键字（最可靠）
-        2. 列出所有块设备供用户参考
+        2. 列出所有块设备，识别 UFS 设备路径
         
         注意：不管设备类型如何，测试都应该继续
         """
         import re
         ufs_found = False
         ufs_info = {}
+        device_path = None
 
         # ========== 方法 1: dmesg 检测 ufshcd（最可靠）==========
         rc, out, _ = self._run(['dmesg'])
@@ -150,15 +151,64 @@ class EnvironmentChecker:
             self._record('storage', '设备类型', '未检测到 UFS（dmesg 无 ufshcd）')
             self._record('storage', '💡 提示', '设备类型检测仅作辅助参考，不影响测试执行')
 
-        # ========== 方法 2: 列出所有块设备 ==========
+        # ========== 方法 2: 列出所有块设备，检测 UFS 设备路径 ==========
         rc, out, _ = self._run(['lsblk', '-d', '-o', 'NAME,SIZE,TYPE,ROTA', '--noheadings'])
         if rc == 0:
             self._record('storage', '📋 块设备', '\n' + out)
+            
+            # 解析块设备列表，找到 UFS 设备
+            for line in out.strip().split('\n'):
+                parts = line.split()
+                if len(parts) >= 3 and parts[2] == 'disk':
+                    dev_name = parts[0]
+                    # 检查是否是 UFS 设备（通过 /sys/block 检查驱动）
+                    driver_path = f'/sys/block/{dev_name}/device/driver'
+                    if os.path.exists(driver_path):
+                        try:
+                            driver = os.path.basename(os.readlink(driver_path))
+                            if 'ufs' in driver.lower() or 'ufshcd' in driver.lower():
+                                device_path = f'/dev/{dev_name}'
+                                self._record('storage', 'UFS 设备路径', f'{device_path} (via {driver})')
+                                break
+                        except Exception:
+                            pass
+        
+        # 如果没找到 UFS 设备，尝试通过 SCSI host 查找
+        if not device_path and 'scsi_host' in ufs_info:
+            # SCSI host0 通常对应 /dev/sda
+            host_num = ufs_info['scsi_host'].replace('host', '')
+            # 尝试查找对应的块设备
+            rc, out, _ = self._run(['lsblk', '-d', '-o', 'NAME,MAJ:MIN', '--noheadings'])
+            if rc == 0:
+                for line in out.strip().split('\n'):
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        dev_name = parts[0]
+                        # 检查设备是否通过 SCSI host 连接
+                        sys_path = f'/sys/block/{dev_name}'
+                        if os.path.exists(sys_path):
+                            try:
+                                # 向上查找 host
+                                for _ in range(5):
+                                    sys_path = os.path.dirname(sys_path)
+                                    if 'host' in os.path.basename(sys_path):
+                                        if f'host{host_num}' in os.path.basename(sys_path):
+                                            device_path = f'/dev/{dev_name}'
+                                            self._record('storage', 'UFS 设备路径', f'{device_path} (via SCSI {ufs_info["scsi_host"]})')
+                                            break
+                            except Exception:
+                                pass
+                    if device_path:
+                        break
+        
+        # 保存设备路径到配置
+        if device_path:
+            self.runtime_config['device'] = device_path
         else:
-            # 备选方案：/proc/scsi/ufs/ 目录
-            proc_ufs_dir = '/proc/scsi/ufs'
-            has_proc_ufs = os.path.isdir(proc_ufs_dir)
-            self._record('storage', '/proc/scsi/ufs', '存在 ✓' if has_proc_ufs else '不存在')
+            # 如果仍然没找到，使用默认值并提示用户
+            self._record('storage', '⚠️  设备路径', '未自动检测到，将使用默认值 /dev/ufs0')
+            self._record('storage', '💡 提示', '请手动指定设备路径: --device=/dev/sdX')
+            self.runtime_config['device'] = '/dev/ufs0'
     
     def collect_permissions(self):
         try:
