@@ -346,3 +346,4 @@ cython_debug/
 
 # PyScaffold
 src/*/.gitignore
+\n# Markdown 文档（只保留根 README.md）\n*.md\n!/README.md\nsystest/**/*.md\nsystest/docs/\nsystest/reports/*.md\nsystest/results/**/*.md
