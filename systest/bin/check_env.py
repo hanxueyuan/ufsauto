@@ -241,6 +241,10 @@ class EnvironmentChecker:
             if mount == '/':
                 continue
             
+            # 检查挂载点是否可读写
+            if not os.access(mount, os.W_OK):
+                continue
+            
             if avail_gb >= 2 and avail_gb > max_avail_gb:
                 max_avail_gb = avail_gb
                 best_mount = mount
