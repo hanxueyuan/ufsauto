@@ -47,19 +47,30 @@ jobs:
           pip install -r systest/requirements.txt
         fi
     
+    - name: CI environment validation
+      id: ci_check
+      run: |
+        cd systest
+        # CI环境快速验证 - 检查关键工具和配置
+        python3 bin/check_env.py --ci
+        
     - name: Run environment check
       id: check
       continue-on-error: true  # GitHub-hosted runner 不是 Debian 12，允许失败
       run: |
         cd systest
-        python3 bin/check_env.py --report --output ../env_report.json -v || true
+        python3 bin/check_env.py --report --output ../env_report.json --save-config -v || true
         
         # 输出报告摘要
         echo "=== 环境检查报告 ==="
-        jq '.checks[] | "\(.name): \(.passed)"' ../env_report.json
+        if [ -f ../env_report.json ]; then
+          jq '.checks[] | "\(.name): \(.passed)"' ../env_report.json || true
+        fi
         
         # 保存报告用于后续作业
-        echo "report=$(cat ../env_report.json | base64 -w 0)" >> $GITHUB_OUTPUT
+        if [ -f ../env_report.json ]; then
+          echo "report=$(cat ../env_report.json | base64 -w 0)" >> $GITHUB_OUTPUT
+        fi
     
     - name: Upload environment report
       uses: actions/upload-artifact@v4
@@ -141,7 +152,8 @@ jobs:
         # 只检查 UFS 专用设备，不检查 /dev/sda（系统盘）
         if [ -b /dev/ufs0 ]; then
           echo "✅ 发现 UFS 设备：/dev/ufs0"
-          python3 bin/SysTest run --suite=performance --device=/dev/ufs0 -v
+          # CI 模式：启用环境验证，失败时报错
+          python3 bin/SysTest run --suite=performance --device=/dev/ufs0 --ci -v
           echo "has_ufs=true" >> $GITHUB_OUTPUT
         else
           echo "⚠️ 未找到 UFS 设备，跳过性能测试"

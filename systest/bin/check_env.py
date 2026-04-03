@@ -437,17 +437,90 @@ class EnvironmentChecker:
         return config_path
 
 
+def check_ci_environment(config_path=None):
+    """CI/CD 环境验证 - 检测常见低级配置错误
+
+    专门用于 GitHub Actions 等CI 环境中，快速验证环境是否合规。
+    返回码: 0 = 合规, 1 = 存在问题
+    """
+    import sys
+    from pathlib import Path
+
+    errors = []
+    warnings = []
+
+    # 1. 检查 runtime.json 是否存在
+    if config_path:
+        runtime_path = Path(config_path)
+    else:
+        runtime_path = Path(__file__).parent.parent / 'config' / 'runtime.json'
+
+    if not runtime_path.exists():
+        errors.append(f"runtime.json 配置文件不存在: {runtime_path}")
+    else:
+        # 读取配置并验证关键字段
+        try:
+            with open(runtime_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+
+            if not config.get('device'): errors.append("runtime.json 中未配置 device 字段")
+
+            test_dir = config.get('test_dir', '')
+            if not test_dir:
+                warnings.append("runtime.json 中未配置 test_dir 字段")
+            elif test_dir.startswith('/tmp'): errors.append(f"测试目录为临时目录: {test_dir} (CI 环境应使用持久存储)")
+
+        except Exception as e:
+            errors.append(f"runtime.json 解析失败: {e}")
+
+    # 2. 检查关键工具是否安装
+    required_tools = ['fio', 'python3']
+    for tool in required_tools:
+        rc, _, _ = EnvironmentChecker._run([tool, '--version'])
+        if rc != 0: errors.append(f"关键工具未安装: {tool}")
+
+    # 输出结果
+    print("" + "=" * 60)
+    print("CI 环境验证")
+    print("=" * 60)
+
+    if errors:
+        print("❌ 验证失败:")
+        for i, err in enumerate(errors, 1):
+            print(f"   {i}. {err}")
+
+    if warnings:
+        print("⚠️  警告:")
+        for i, warn in enumerate(warnings, 1):
+            print(f"   {i}. {warn}")
+
+    if not errors and not warnings:
+        print("✅ CI 环境验证通过")
+
+    print("=" * 60)
+
+    # 返回码：有问题则返回 1
+    return 1 if errors else 0
+
+
 def main():
     import argparse
+    import sys
     p = argparse.ArgumentParser(description='UFS SysTest 环境信息收集')
     p.add_argument('--mode', choices=['dev', 'deploy'], default='dev',
                    help='运行模式: dev(开发,默认) / deploy(部署)')
     p.add_argument('--report', action='store_true', help='生成 JSON 报告')
     p.add_argument('--output', default='env_report.json', help='报告输出路径')
     p.add_argument('--save-config', action='store_true', help='将检测结果保存为 runtime.json 配置文件')
+    p.add_argument('--ci', action='store_true', help='CI/CD 环境验证模式 (快速检查配置合规性)')
     p.add_argument('-v', '--verbose', action='store_true', help='详细输出')
     args = p.parse_args()
 
+    # CI 模式：快速验证环境合规性
+    if args.ci:
+        sys.exit(check_ci_environment())
+
+    # 正常模式：收集环境信息
     checker = EnvironmentChecker(mode=args.mode, verbose=args.verbose)
     checker.run()
     if args.report:

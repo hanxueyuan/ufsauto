@@ -372,11 +372,13 @@ class TestCase:
 class TestRunner:
     """测试执行引擎"""
 
-    def __init__(self, device: str = None, test_dir: str = None, verbose: bool = False, dry_run: bool = False):
+    def __init__(self, device: str = None, test_dir: str = None, verbose: bool = False, dry_run: bool = False,
+                 ci_mode: bool = False):
         self.device_override = device  # 用户手动指定
         self.test_dir_override = test_dir  # 用户手动指定
         self.verbose = verbose
         self.dry_run = dry_run
+        self.ci_mode = ci_mode  # CI/CD 环境模式
         self.suites_dir = Path(__file__).parent.parent / 'suites'
         self.config_dir = Path(__file__).parent.parent / 'config'
         self.test_dir = None  # 最终确定的测试目录
@@ -398,6 +400,10 @@ class TestRunner:
 
         # 确定测试目录
         self._resolve_test_dir()
+
+        # CI 环境验证（仅在 CI 模式下执行）
+        if self.ci_mode:
+            self._validate_ci_environment()
 
         # 加载测试套件
         self.suites = self._load_suites()
@@ -578,6 +584,61 @@ class TestRunner:
                 self.test_dir.mkdir(parents=True, exist_ok=True)
             logger.warning(f"⚠️  回退到:{self.test_dir} (临时目录,不推荐用于生产测试)")
             return
+
+    def _validate_ci_environment(self):
+        """CI/CD 环境验证 - 检测常见低级配置错误
+
+        检查项:
+        1. 测试目录是否回退到 /tmp (CI 应手动指定)
+        2. 设备路径是否为默认值 (CI 应手动指定)
+        3. runtime.json 是否存在 (CI 应有配置文件)
+
+        Returns:
+            bool: True = 环境合规, False = 存在问题
+        """
+        errors = []
+        warnings = []
+
+        # 1. 检查测试目录回退
+        if self.test_dir == Path('/tmp/ufs_test').absolute():
+            errors.append("测试目录回退到 /tmp (CI 环境应手动指定 --test-dir)")
+
+        # 2. 检查设备路径是否为默认值
+        if self.device == '/dev/ufs0' and not self.device_override and not self.runtime_config.get('device'): errors.append("设备路径为默认值 /dev/ufs0 (CI 环境应手动指定 --device 或运行 check-env --save-config)")
+
+        # 3. 检查 runtime.json 是否存在
+        config_path = self.config_dir / 'runtime.json'
+        if not config_path.exists():
+            warnings.append("runtime.json 配置文件不存在 (建议运行 check-env --save-config)")
+
+        # 输出结果
+        if errors:
+            logger.error("" + "=" * 60)
+            logger.error("CI 环境验证失败")
+            logger.error("=" * 60)
+            for i, err in enumerate(errors, 1):
+                logger.error(f"  {i}. {err}")
+            logger.error("")
+            logger.error("建议修复方案:")
+            logger.error("  1. 在 GitHub Actions 中添加 check-env --save-config 步骤")
+            logger.error("  2. 或手动指定参数: --test-dir=/path --device=/dev/xxx")
+            logger.error("=" * 60)
+
+            # CI 模式下抛异常（阻止继续执行）
+            raise RuntimeError("CI 环境验证失败，请检查上述错误并修复")
+
+        if warnings:
+            logger.warning("" + "=" * 60)
+            logger.warning("CI 环境验证警告")
+            logger.warning("=" * 60)
+            for i, warn in enumerate(warnings, 1):
+                logger.warning(f"  {i}. {warn}")
+            logger.warning("=" * 60)
+
+        if not errors and not warnings:
+            logger.info("✅ CI 环境验证通过")
+
+        return len(errors) == 0
 
     @staticmethod
     def _run(cmd, timeout=10):
