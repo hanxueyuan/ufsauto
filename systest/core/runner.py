@@ -542,7 +542,7 @@ class TestRunner:
                     device=self.device,
                     test_dir=self.test_dir,
                     verbose=self.verbose,
-                    simulate=self.simulate
+                    logger=logger
                 )
                 
                 result = test_instance.run()
