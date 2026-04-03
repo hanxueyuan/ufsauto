@@ -4,7 +4,7 @@
 随机写性能测试
 测试 UFS 设备的随机写入 IOPS（4K QD32）
 
-测试用例 ID: t_perf_RandWriteBurst_007
+测试用例 ID: t_perf_RandWriteBurst_004
 测试目的：验证 UFS 设备随机写 IOPS 性能
 前置条件：
     1. UFS 设备已挂载
@@ -46,6 +46,7 @@ class Test(TestCase):
     def __init__(
         self,
         device: str = '/dev/ufs0',
+        test_dir: Path = None,
         verbose: bool = False,
         logger=None,
         simulate: bool = False,

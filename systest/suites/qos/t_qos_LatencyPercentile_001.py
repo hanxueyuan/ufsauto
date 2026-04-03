@@ -64,7 +64,7 @@ class Test(TestCase):
     ):
         super().__init__(device, test_dir, verbose, logger)
         self.simulate = simulate
-        self.test_file = "/tmp/ufs_test_qos_latency"
+        self.test_file = self.get_test_file_path('qos_latency')
         self.bs = bs
         self.size = size
         self.runtime = runtime

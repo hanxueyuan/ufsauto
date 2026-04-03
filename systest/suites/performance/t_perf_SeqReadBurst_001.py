@@ -48,6 +48,7 @@ class Test(TestCase):
     def __init__(
         self,
         device: str = '/dev/ufs0',
+        test_dir: Path = None,
         verbose: bool = False,
         logger=None,
         simulate: bool = False,

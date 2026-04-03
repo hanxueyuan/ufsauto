@@ -47,6 +47,7 @@ class Test(TestCase):
     def __init__(
         self,
         device: str = '/dev/ufs0',
+        test_dir: Path = None,
         verbose: bool = False,
         logger=None,
         simulate: bool = False,
@@ -60,8 +61,8 @@ class Test(TestCase):
         max_ecc_error_increase: float = 0.0,  # ECC 错误不允许增加
         prefill: bool = True,
     ):
-        super().__init__(device, verbose, logger)
-        self.test_file = "/tmp/ufs_test_reliability_ecc"
+        super().__init__(device, test_dir, verbose, logger)
+        self.test_file = self.get_test_file_path('reliability_ecc')
         self.runtime = runtime
         self.ramp_time = ramp_time
         self.ioengine = ioengine

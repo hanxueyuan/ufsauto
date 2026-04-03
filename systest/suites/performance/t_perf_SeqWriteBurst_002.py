@@ -4,7 +4,7 @@
 顺序写性能测试
 测试 UFS 设备的顺序写入带宽（Burst 模式）
 
-测试用例 ID: t_perf_SeqWriteBurst_003
+测试用例 ID: t_perf_SeqWriteBurst_002
 测试目的：验证 UFS 设备顺序写 Burst 性能
 前置条件：
     1. UFS 设备已挂载
@@ -46,6 +46,7 @@ class Test(TestCase):
     def __init__(
         self,
         device: str = '/dev/ufs0',
+        test_dir: Path = None,
         verbose: bool = False,
         logger=None,
         simulate: bool = False,

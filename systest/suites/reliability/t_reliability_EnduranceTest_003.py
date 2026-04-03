@@ -48,6 +48,7 @@ class Test(TestCase):
     def __init__(
         self,
         device: str = '/dev/ufs0',
+        test_dir: Path = None,
         verbose: bool = False,
         logger=None,
         simulate: bool = False,
@@ -57,11 +58,11 @@ class Test(TestCase):
         ioengine: str = 'sync',
         iodepth: int = 8,
         # === 可靠性阈值 ===
-        max_life_consumption: float = 5.0,  # 最大寿命消耗百分比
+        max_life_consumption_pct: float = 5.0,  # 最大寿命消耗百分比
         prefill: bool = True,
     ):
-        super().__init__(device, verbose, logger)
-        self.test_file = "/tmp/ufs_test_reliability_endurance"
+        super().__init__(device, test_dir, verbose, logger)
+        self.test_file = self.get_test_file_path('reliability_endurance')
         self.runtime = runtime
         self.ramp_time = ramp_time
         self.ioengine = ioengine

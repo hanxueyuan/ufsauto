@@ -104,7 +104,9 @@ def cmd_list(args):
 def cmd_report(args):
     """生成/查看报告"""
     from core.reporter import ReportGenerator
+    from core.logger import get_logger
     
+    logger = get_logger(test_id='report', log_dir='logs', console_level=logging.INFO, file_level=logging.DEBUG)
     reporter = ReportGenerator()
     
     if args.latest:
@@ -112,7 +114,7 @@ def cmd_report(args):
     elif args.id:
         report_path = reporter.get_report(args.id)
     else:
-        logger.error("请指定 --latest 或 --id")
+        print("❌ 请指定 --latest 或 --id")
         return 1
     
     if report_path:
@@ -136,7 +138,7 @@ def cmd_config(args):
             with open(config_path, 'r', encoding='utf-8') as f:
                 print(f.read())
         else:
-            logger.warning(f"配置文件不存在：{config_path}")
+            print(f"⚠️  配置文件不存在：{config_path}")
     else:
         print(f"配置文件路径：{config_path}")
 

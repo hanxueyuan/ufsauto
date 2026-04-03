@@ -49,6 +49,7 @@ class Test(TestCase):
     def __init__(
         self,
         device: str = '/dev/ufs0',
+        test_dir: Path = None,
         verbose: bool = False,
         logger=None,
         simulate: bool = False,
@@ -63,9 +64,9 @@ class Test(TestCase):
         max_p9999_cv_percent: float = 15.0,
         prefill: bool = True,
     ):
-        super().__init__(device, verbose, logger)
+        super().__init__(device, test_dir, verbose, logger)
         self.simulate = simulate
-        self.test_file = "/tmp/ufs_test_qos_stability"
+        self.test_file = self.get_test_file_path('qos_stability')
         self.bs = bs
         self.size = size
         self.runtime = runtime

@@ -48,6 +48,7 @@ class Test(TestCase):
     def __init__(
         self,
         device: str = '/dev/ufs0',
+        test_dir: Path = None,
         verbose: bool = False,
         logger=None,
         simulate: bool = False,
@@ -61,9 +62,9 @@ class Test(TestCase):
         target_p9999_us: float = 2000,  # 2ms
         prefill: bool = True,
     ):
-        super().__init__(device, verbose, logger)
+        super().__init__(device, test_dir, verbose, logger)
         self.simulate = simulate
-        self.test_file = "/tmp/ufs_test_qos_tail_ratio"
+        self.test_file = self.get_test_file_path('qos_tail_ratio')
         self.bs = bs
         self.size = size
         self.runtime = runtime

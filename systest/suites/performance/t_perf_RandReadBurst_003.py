@@ -4,7 +4,7 @@
 随机读性能测试
 测试 UFS 设备的随机读取 IOPS（4K QD32）
 
-测试用例 ID: t_perf_RandReadBurst_005
+测试用例 ID: t_perf_RandReadBurst_003
 测试目的：验证 UFS 设备随机读 IOPS 性能
 前置条件：
     1. UFS 设备已挂载
@@ -47,6 +47,7 @@ class Test(TestCase):
     def __init__(
         self,
         device: str = '/dev/ufs0',
+        test_dir: Path = None,
         verbose: bool = False,
         logger=None,
         simulate: bool = False,

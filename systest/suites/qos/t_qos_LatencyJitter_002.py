@@ -5,7 +5,7 @@ QoS 延迟抖动测试
 测试 UFS 设备的延迟稳定性（标准差）
 
 测试用例 ID: t_qos_LatencyJitter_002
-测试目的：验证 UFS 设备延迟抖动
+测试目的：验证 UFS 设备延迟抖动（标准差）
 前置条件：
     1. UFS 设备已挂载
     2. 有足够可用空间（≥2GB）
@@ -20,6 +20,10 @@ QoS 延迟抖动测试
     - 延迟标准差 < 500 μs
     - 抖动系数 < 50%
 测试耗时：约 130 秒（含 ramp）
+
+注意：
+    - 使用 get_test_file_path() 获取测试文件路径
+    - teardown 时基类会自动清理测试文件
 """
 
 import os
@@ -48,6 +52,7 @@ class Test(TestCase):
     def __init__(
         self,
         device: str = '/dev/ufs0',
+        test_dir: Path = None,
         verbose: bool = False,
         logger=None,
         simulate: bool = False,
@@ -61,9 +66,9 @@ class Test(TestCase):
         target_jitter_pct: float = 50,
         prefill: bool = True,
     ):
-        super().__init__(device, verbose, logger)
+        super().__init__(device, test_dir, verbose, logger)
         self.simulate = simulate
-        self.test_file = "/tmp/ufs_test_qos_jitter"
+        self.test_file = self.get_test_file_path('qos_jitter')
         self.bs = bs
         self.size = size
         self.runtime = runtime
