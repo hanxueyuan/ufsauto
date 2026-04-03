@@ -99,194 +99,67 @@ class EnvironmentChecker:
         self._record('toolchain', 'FIO', fio_ver)
 
     def collect_storage(self):
-        """检测 UFS 存储设备
+        """检测存储设备
         
-        根据 Linux 内核文档和搜索结果，UFS 设备的正确识别方法：
-        1. 检查 /proc/scsi/ufs/ 目录是否存在（最可靠）
-        2. 通过 /sys/class/scsi_host/ 检查 SCSI 主机
-        3. 列出块设备供用户选择
+        设备类型判断方法（辅助判断，不阻断测试）：
+        1. dmesg 中查找 ufshcd 关键字（最可靠）
+        2. 列出所有块设备供用户参考
         
-        注意：测试板 ufshcd 模块未加载，已移除该检测方法
+        注意：不管设备类型如何，测试都应该继续
         """
+        import re
         ufs_found = False
+        ufs_info = {}
 
-        # ========== 方法 1: 检查 /proc/scsi/ufs/ 目录（最可靠）==========
-        proc_ufs_dir = '/proc/scsi/ufs'
-        has_proc_ufs = os.path.isdir(proc_ufs_dir)
-        self._record('storage', '/proc/scsi/ufs', '存在 ✓' if has_proc_ufs else '不存在')
-        
-        if has_proc_ufs:
-            try:
-                ufs_files = [f for f in os.listdir(proc_ufs_dir) if f.startswith('ufshcd')]
-                if ufs_files:
+        # ========== 方法 1: dmesg 检测 ufshcd（最可靠）==========
+        rc, out, _ = self._run(['dmesg'])
+        if rc == 0:
+            for line in out.split('\n'):
+                line_lower = line.lower()
+                if 'ufshcd' in line_lower:
                     ufs_found = True
-                    self._record('storage', 'UFS 控制器', f'{ufs_files[0]} ✓')
-                    # 读取控制器信息
-                    ctrl_file = os.path.join(proc_ufs_dir, ufs_files[0])
-                    try:
-                        with open(ctrl_file, 'r') as f:
-                            content = f.read(1024)  # 只读前 1 KB
-                            for line in content.split('\n')[:15]:
-                                line = line.strip()
-                                if ':' in line:
-                                    parts = line.split(':')
-                                    name = parts[0]
-                                    value = parts[1].strip() if len(parts) > 1 else ''
-                                    self._record('storage', f'  {name}', value)
-                    except Exception:
-                        pass
-            except Exception as e:
-                self._record('storage', '⚠️ 访问失败', str(e))
+                    # 提取设备地址 (如 39410000.ufs)
+                    match = re.search(r'([0-9a-f]+\.ufs)', line)
+                    if match:
+                        ufs_info['address'] = match.group(1)
+                    # 提取 SCSI host (如 scsi host0)
+                    match = re.search(r'scsi host([0-9]+)', line_lower)
+                    if match:
+                        ufs_info['scsi_host'] = f'host{match.group(1)}'
+                    # 提取 gear/lane 配置 (如 gear[4, 4], lane[2, 2])
+                    match = re.search(r'gear\[([0-9, ]+)\], lane\[([0-9, ]+)\]', line_lower)
+                    if match:
+                        ufs_info['gear'] = match.group(1).replace(' ', '')
+                        ufs_info['lane'] = match.group(2).replace(' ', '')
+                    # 提取 rate (如 rate(1))
+                    match = re.search(r'rate\(([0-9]+)\)', line_lower)
+                    if match:
+                        ufs_info['rate'] = match.group(1)
         
-        # ========== 方法 2: 检查 /sys/class/scsi_host/ proc_name ==========
-        scsi_host_dir = '/sys/class/scsi_host'
-        if os.path.isdir(scsi_host_dir) and not ufs_found:
-            try:
-                hosts = os.listdir(scsi_host_dir)
-                for host in hosts:
-                    proc_name_path = os.path.join(scsi_host_dir, host, 'proc_name')
-                    if os.path.exists(proc_name_path):
-                        with open(proc_name_path, 'r') as f:
-                            proc_name = f.read().strip()
-                        if 'ufs' in proc_name.lower() or 'ufshcd' in proc_name.lower():
-                            ufs_found = True
-                            self._record('storage', 'SCSI 主机', f'{host} (proc_name={proc_name})')
-                            self._record('storage', '检测方法', '/sys/class/scsi_host proc_name 包含 ufs')
-                            break
-            except Exception:
-                pass
-        
-        # ========== 方法 3: 检查 /sys/class/ufs/ 目录（新版内核）==========
-        sys_ufs_dir = '/sys/class/ufs'
-        if os.path.isdir(sys_ufs_dir) and not ufs_found:
-            try:
-                ufs_devices = os.listdir(sys_ufs_dir)
-                if ufs_devices:
-                    ufs_found = True
-                    self._record('storage', 'sysfs UFS 类', f'{ufs_devices[0]} ✓')
-                    self._record('storage', '检测方法', '/sys/class/ufs 目录存在')
-            except Exception:
-                pass
-        
-        # ========== 方法 4: 通过 /sys/block 检查驱动链 ==========
-        for blk in sorted(glob.glob('/sys/block/*')):
-            if ufs_found:
-                break
-            dev_name = os.path.basename(blk)
-            try:
-                # 不同拓扑结构，向上查找多个层级试一遍
-                found_ufshcd = False
-                for levels_up in [3, 2, 1]:
-                    if found_ufshcd:
-                        break
-                    path_parts = [blk] + ['..'] * levels_up + ['driver']
-                    host_link = os.path.join(*path_parts)
-                    if os.path.islink(host_link):
-                        driver = os.path.basename(os.readlink(host_link))
-                        if 'ufs' in driver.lower() or 'ufshcd' in driver.lower():
-                            found_ufshcd = True
-                            break
-                if found_ufshcd:
-                    # 必须通过驱动链识别，不能只看模块是否加载
-                    ufs_found = True
-                    dev_path = f'/dev/{dev_name}'
-                    self._record('storage', 'UFS 设备', f'{dev_path} (via {driver})')
-                    self.runtime_config['device'] = dev_path
-                    # 容量
-                    size_file = os.path.join(blk, 'size')
-                    if os.path.exists(size_file):
-                        with open(size_file) as f:
-                            sectors = int(f.read().strip())
-                            gb = sectors * 512 / (1024 ** 3)
-                            self._record('storage', '设备容量', f'{gb:.0f} GB')
-                            self.runtime_config['device_capacity_gb'] = round(gb, 0)
-                    # vendor / model
-                    for attr in ('vendor', 'model', 'rev'):
-                        attr_path = os.path.join(blk, 'device', attr)
-                        if os.path.exists(attr_path):
-                            with open(attr_path) as f:
-                                val = f.read().strip()
-                                label = {'vendor': '厂商', 'model': '型号', 'rev': '固件版本'}[attr]
-                                self._record('storage', label, val)
-                    break  # 取第一个 UFS 设备
-            except Exception:
-                continue
+        if ufs_found:
+            self._record('storage', '设备类型', 'UFS ✓')
+            if 'address' in ufs_info:
+                self._record('storage', 'UFS 地址', ufs_info['address'])
+            if 'scsi_host' in ufs_info:
+                self._record('storage', 'SCSI Host', ufs_info['scsi_host'])
+            if 'gear' in ufs_info and 'lane' in ufs_info:
+                self._record('storage', 'UFS 配置', f'Gear {ufs_info["gear"]}, Lane {ufs_info["lane"]}')
+            if 'rate' in ufs_info:
+                self._record('storage', 'Rate', f'Rate {ufs_info["rate"]}')
+        else:
+            self._record('storage', '设备类型', '未检测到 UFS（dmesg 无 ufshcd）')
+            self._record('storage', '💡 提示', '设备类型检测仅作辅助参考，不影响测试执行')
 
-        # 3) 回退 1：/dev/disk/by-id 中含 ufs
-        if not ufs_found:
-            try:
-                for link in glob.glob('/dev/disk/by-id/*ufs*') + glob.glob('/dev/disk/by-id/*UFS*'):
-                    real = os.path.realpath(link)
-                    ufs_found = True
-                    self._record('storage', 'UFS 设备', f'{real} (by-id: {os.path.basename(link)})')
-                    break
-            except Exception:
-                pass
-
-        # 4) 回退 2：列出所有 /dev/mmcblk* ，某些平台 UFS 暴露为 mmcblk
-        if not ufs_found:
-            try:
-                for dev in sorted(glob.glob('/dev/mmcblk*')):
-                    if 'p' in os.path.basename(dev):
-                        continue  # 跳过分区
-                    dev_name = os.path.basename(dev)
-                    sys_path = f'/sys/block/{dev_name}'
-                    if os.path.exists(sys_path):
-                        ufs_found = True
-                        self._record('storage', 'UFS 设备', f'/dev/{dev_name} (mmc format)')
-                        # 容量
-                        size_file = os.path.join(sys_path, 'size')
-                        if os.path.exists(size_file):
-                            with open(size_file) as f:
-                                sectors = int(f.read().strip())
-                                gb = sectors * 512 / (1024 ** 3)
-                                self._record('storage', '设备容量', f'{gb:.0f} GB')
-                        break
-            except Exception:
-                pass
-
-        # 5) 回退 3：列出所有 /dev/nvme* ，某些平台 UFS 挂在 PCIe NVMe 下
-        if not ufs_found:
-            try:
-                for dev in sorted(glob.glob('/dev/nvme*')):
-                    if dev.endswith('n1'):  # 第一个命名空间
-                        ufs_found = True
-                        self._record('storage', 'UFS 设备', f'{dev} (NVMe format)')
-                        break
-            except Exception:
-                pass
-
-        # 6) 回退 4：列出所有块设备供用户参考，不做厂商名推断
-        # 注意：SKhynix/Samsung/Micron 既生产 UFS 也生产普通 SSD/NVMe
-        #       不能只看厂商名判断设备类型
-        if not ufs_found:
-            self._record('storage', 'UFS 设备', '未检测到')
-            self._record('storage', '💡 提示', '如果确认设备存在，可以直接在 run 命令中用 --device 指定路径')
-            self._record('storage', '检测方法', '驱动链识别（需 ufshcd 饭动已加载）')
-            try:
-                rc, lsblk_out, _ = self._run(['lsblk', '-o', 'NAME,SIZE,MODEL,VENDOR,TYPE,FSTYPE,MOUNTPOINT'])
-                if rc == 0:
-                    self._record('storage', '📋 所有块设备', '\n' + lsblk_out)
-            except Exception:
-                pass
-            # 检查是否有 UFS 常见厂商的设备（提示而非判断）
-            try:
-                rc, lsblk_out, _ = self._run(['lsblk', '-o', 'NAME,VENDOR,MODEL,TYPE', '-n'])
-                if rc == 0:
-                    for line in lsblk_out.strip().split('\n'):
-                        parts = line.strip().split()
-                        if len(parts) >= 4 and parts[3] == 'disk':
-                            vendor = parts[1].lower()
-                            model = parts[2].lower()
-                            ufs_vendors = ['skhynix', 'hynix', 'samsung', 'micron', 'wd', 'western', 'toshiba', 'kioxia']
-                            if any(v in vendor for v in ufs_vendors) or 'ufs' in model:
-                                self._record('storage', '⚠️  疑似 UFS 厂商设备', f'/dev/{parts[0]} ({parts[1]} {parts[2]}) - 请确认驱动类型')
-                                break
-            except Exception:
-                pass
-            if self.mode == 'deploy':
-                self._record('storage', '⚠️  WARNING', 'UFS 设备未自动找到，但可以手动指定 --device 继续')
-
+        # ========== 方法 2: 列出所有块设备 ==========
+        rc, out, _ = self._run(['lsblk', '-d', '-o', 'NAME,SIZE,TYPE,ROTA', '--noheadings'])
+        if rc == 0:
+            self._record('storage', '📋 块设备', '\n' + out)
+        else:
+            # 备选方案：/proc/scsi/ufs/ 目录
+            proc_ufs_dir = '/proc/scsi/ufs'
+            has_proc_ufs = os.path.isdir(proc_ufs_dir)
+            self._record('storage', '/proc/scsi/ufs', '存在 ✓' if has_proc_ufs else '不存在')
+    
     def collect_permissions(self):
         try:
             import pwd, grp
