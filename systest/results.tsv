@@ -1,6 +1,0 @@
-commit	tests	passed	coverage	status	description
-baseline	4	4	16%	keep	初始基线
-e1a22c8	44	44	43%	keep	core+tools基础测试
-06b1e1b	54	54	46%	keep	runner深度测试(TestCase生命周期)
-0be6b0a	65	65	48%	keep	FIO配置深度测试(块大小/读写类型)
-7c53e1c	72	72	50%	keep	UFS工具深度测试(设备信息/空间检查)
