@@ -75,9 +75,13 @@ class Test(TestCase):
         self.max_tail_latency_us = max_tail_latency_us
         self.verify_mode = verify
         
-        self.sim = UFSSimulator(device, logger=self.logger)
+        self.sim = UFSSimulator(device_path=device, logger=self.logger)
         self.fio = FIO(timeout=self.runtime + self.ramp_time + 30, logger=self.logger)
         self.ufs = self.sim if simulate else UFSDevice(device, logger=self.logger)
+        # 模拟模式：自动创建模拟设备文件
+        if simulate and self.sim is not None:
+            if not self.sim.exists():
+                self.sim.create_device(size_gb=128)
     
     def setup(self) -> bool:
         """检查前置条件"""

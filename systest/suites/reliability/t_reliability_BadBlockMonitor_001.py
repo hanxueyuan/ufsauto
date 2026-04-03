@@ -74,6 +74,9 @@ class Test(TestCase):
         if simulate:
             self.logger.info("🔧 模拟模式：使用 UFS 模拟器")
             self.sim = UFSSimulator(device_path='/tmp/ufs_sim.img', logger=self.logger)
+            # 自动创建模拟设备文件
+            if not self.sim.exists():
+                self.sim.create_device(size_gb=128)
             self.fio = None
             self.ufs = self.sim
         else:
