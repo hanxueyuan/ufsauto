@@ -99,14 +99,44 @@ class EnvironmentChecker:
         self._record('toolchain', 'FIO', fio_ver)
 
     def collect_storage(self):
+        """检测 UFS 存储设备
+        
+        根据 Linux 内核文档和搜索结果，UFS 设备的正确识别方法：
+        1. 检查 /proc/scsi/ufs/ 目录是否存在（最可靠）
+        2. 通过 /sys/class/scsi_host/ 检查 SCSI 主机
+        3. 列出块设备供用户选择
+        
+        注意：测试板 ufshcd 模块未加载，已移除该检测方法
+        """
         ufs_found = False
 
-        # 1) ufshcd 内核模块
-        rc, lsmod_out, _ = self._run(['lsmod'])
-        ufshcd_loaded = 'ufshcd' in lsmod_out if rc == 0 else False
-        self._record('storage', 'ufshcd 模块', '已加载' if ufshcd_loaded else '未加载')
-
-        # 2) 通过 /sys 查找所有块设备，检查驱动是否包含 ufshcd
+        # ========== 方法 1: 检查 /proc/scsi/ufs/ 目录（最可靠）==========
+        proc_ufs_dir = '/proc/scsi/ufs'
+        has_proc_ufs = os.path.isdir(proc_ufs_dir)
+        self._record('storage', '/proc/scsi/ufs', '存在 ✓' if has_proc_ufs else '不存在')
+        
+        if has_proc_ufs:
+            try:
+                ufs_files = [f for f in os.listdir(proc_ufs_dir) if f.startswith('ufshcd')]
+                if ufs_files:
+                    ufs_found = True
+                    self._record('storage', 'UFS 控制器', f'{ufs_files[0]} ✓')
+                    # 读取控制器信息
+                    ctrl_file = os.path.join(proc_ufs_dir, ufs_files[0])
+                    try:
+                        with open(ctrl_file, 'r') as f:
+                            content = f.read(1024)  # 只读前 1KB
+                            for line in content.split('\n')[:15]:
+                                line = line.strip()
+                                if ':' in line:
+                                    self._record('storage', f'  {line.split(':')[0]}', line.split(':')[1].strip() if len(line.split(':')) > 1 else '')
+                    except Exception:
+                        pass
+            except Exception as e:
+                self._record('storage', '⚠️ 访问失败', str(e))
+        
+        # ========== 方法 2: 通过 /sys 查找块设备，检查驱动链 ==========
+        # 保留原逻辑作为备选
         for blk in sorted(glob.glob('/sys/block/*')):
             if ufs_found:
                 break
