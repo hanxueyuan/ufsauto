@@ -133,7 +133,7 @@ class UFSUnitDescriptor:
     number_of_allocation_units: int # 分配单元数量
     allocation_unit_size: int       # 分配单元大小
     provisioning_type: int          # 配置类型
-    thin provisioning_threshold: int # 薄配置阈值
+    thin_provisioning_threshold: int # 薄配置阈值
     device_max_write_buffer_size: int # 最大写缓冲
     device_max_read_buffer_size: int  # 最大读缓冲
     logical_block_size: int         # 逻辑块大小

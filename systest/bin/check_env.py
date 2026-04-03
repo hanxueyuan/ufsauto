@@ -264,6 +264,70 @@ class EnvironmentChecker:
             self._record('permissions', '设备访问', access_str)
         except Exception as e:
             self._record('permissions', '权限检查', f'检查失败: {e}')
+    
+    def collect_test_directory(self):
+        """检查测试目录可用性"""
+        # 检查 findmnt 命令兼容性
+        rc, out, err = self._run(['findmnt', '--version'])
+        findmnt_ver = out if rc == 0 else ('未安装' if rc == -1 else '检查失败')
+        self._record('test_dir', 'findmnt 版本', findmnt_ver)
+        
+        # 尝试新版 findmnt
+        rc, out, err = self._run(['findmnt', '-n', '-o', 'TARGET,SIZE,FSUSED,FSAVAIL', '-t', 'ext4,xfs,btrfs'])
+        
+        if rc != 0 and 'unknown column' in (err or '').lower():
+            self._record('test_dir', 'findmnt 兼容性', '旧版 (不支持 FSUSED/FSAVAIL)')
+            # 尝试旧版格式
+            rc, out, err = self._run(['findmnt', '-n', '-o', 'TARGET,AVAIL', '-t', 'ext4,xfs,btrfs'])
+            use_simple = True
+        elif rc != 0:
+            self._record('test_dir', 'findmnt 兼容性', f'不可用: {err}')
+            self._record('test_dir', '建议测试目录', '/tmp/ufs_test (findmnt 不可用，回退)')
+            return
+        else:
+            self._record('test_dir', 'findmnt 兼容性', '新版 (支持所有列)')
+            use_simple = False
+        
+        if rc != 0 or not out.strip():
+            self._record('test_dir', '建议测试目录', '/tmp/ufs_test (无挂载点)')
+            return
+        
+        # 找可用空间最大的挂载点
+        max_avail_gb = 0
+        best_mount = None
+        for line in out.strip().split('\n'):
+            parts = line.strip().split()
+            if use_simple:
+                if len(parts) >= 2:
+                    mount, avail_str = parts[0], parts[1]
+                else:
+                    continue
+            else:
+                if len(parts) >= 4:
+                    mount, avail_str = parts[0], parts[3]
+                else:
+                    continue
+            
+            # 解析可用大小
+            avail_gb = 0
+            try:
+                if avail_str.endswith('G'):
+                    avail_gb = float(avail_str[:-1])
+                elif avail_str.endswith('T'):
+                    avail_gb = float(avail_str[:-1]) * 1024
+                elif avail_str.endswith('M'):
+                    avail_gb = float(avail_str[:-1]) / 1024
+            except Exception:
+                continue
+            
+            if avail_gb >= 2 and avail_gb > max_avail_gb:
+                max_avail_gb = avail_gb
+                best_mount = mount
+        
+        if best_mount:
+            self._record('test_dir', '建议测试目录', f'{best_mount}/ufs_test (可用 {max_avail_gb:.1f} GB)')
+        else:
+            self._record('test_dir', '建议测试目录', '/tmp/ufs_test (所有挂载点 < 2GB)')
 
     # ── 内部工具 ──────────────────────────────────────────
 
@@ -329,6 +393,7 @@ class EnvironmentChecker:
         self.collect_toolchain()
         self.collect_storage()
         self.collect_permissions()
+        self.collect_test_directory()
 
         # 按 category 分组输出
         current_cat = None
@@ -337,6 +402,7 @@ class EnvironmentChecker:
             'toolchain': '工具链',
             'storage': '存储设备',
             'permissions': '用户权限',
+            'test_dir': '测试目录',
         }
         for item in self.items:
             cat = item['category']
