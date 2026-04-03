@@ -41,6 +41,106 @@ class UFSDeviceInfo:
     health_status: str
 
 
+@dataclass
+class UFSDeviceDescriptor:
+    """UFS 设备描述符（Device Descriptor）
+    
+    参考：UFS 2.1/3.1 规范 Section 14.1
+    """
+    length: int                     # 描述符长度
+    descriptor_type: int            # 描述符类型 (0x01)
+    device_type: int                # 设备类型
+    device_class: int               # 设备类
+    con_device_sub_class: int       # 设备子类
+    con_device_protocol: int        # 设备协议
+    number_of_luns: int             # LUN 数量
+    number_of_wluns: int            # W-LUN 数量
+    boot_enable: int                # 启动分区启用
+    descriptor_access_enable: int   # 描述符访问启用
+    initial_power_mode: int         # 初始电源模式
+    high_priority_lun: int          # 高优先级 LUN
+    secure_removal_type: int        # 安全擦除类型
+    support_security_lun: int       # 安全 LUN 支持
+    background_operations: int      # 后台操作支持
+    provisioning_mode: int          # 配置模式
+    max_active_luns: int            # 最大活跃 LUN
+    device_write_buffer_size: int   # 写缓冲大小
+    max_write_buffer_size: int      # 最大写缓冲
+    max_data_buffer_size: int       # 最大数据缓冲
+    initial_active_icc_level: int   # 初始活跃电流等级
+    specification_version: int      # 规范版本
+    manufacturing_date: str         # 制造日期
+    manufacturer_id: str            # 制造商 ID
+    product_name: str               # 产品名称
+    serial_number: str              # 序列号
+    oem_id: str                     # OEM ID
+    manufacturing_location: str     # 制造地点
+    device_version: int             # 设备版本
+    firmware_version: str           # 固件版本
+    device_total_capacity: int      # 总容量 (KB)
+    remaining_total_capacity: int   # 剩余容量 (KB)
+
+
+@dataclass
+class UFSHealthDescriptor:
+    """UFS 健康描述符（Health Descriptor）
+    
+    参考：UFS 2.1/3.1 规范 Section 14.5
+    """
+    length: int                     # 描述符长度
+    descriptor_type: int            # 描述符类型 (0x05)
+    pre_eol_info: int               # 预 EOL 信息 (0x00-0x03)
+    device_life_time_est_a: int     # 设备寿命估算 A (SLC/MLC)
+    device_life_time_est_b: int     # 设备寿命估算 B (TLC)
+    vendor_specific: bytes          #厂商特定信息
+
+
+@dataclass
+class UFSPowerDescriptor:
+    """UFS 电源描述符（Power Descriptor）
+    
+    参考：UFS 2.1/3.1 规范 Section 14.6
+    """
+    length: int                     # 描述符长度
+    descriptor_type: int            # 描述符类型 (0x06)
+    active_icc_level: int           # 活跃电流等级
+    power_mode: str                 # 当前电源模式
+    active_power_mode: str          # 活跃电源模式
+    sleep_power_mode: str           # 睡眠电源模式
+    hibernate_power_mode: str       # 休眠电源模式
+    b_max_active_icc_level: int     # 最大活跃电流等级
+    b_max_sleep_icc_level: int      # 最大睡眠电流等级
+    b_max_hibernate_icc_level: int  # 最大休眠电流等级
+    b_active_power_state: int       # 活跃功耗状态
+    b_sleep_power_state: int        # 睡眠功耗状态
+    b_hibernate_power_state: int    # 休眠功耗状态
+
+
+@dataclass
+class UFSUnitDescriptor:
+    """UFS 单元描述符（Unit Descriptor）
+    
+    参考：UFS 2.1/3.1 规范 Section 14.3
+    用于每个 LUN 的详细信息
+    """
+    length: int                     # 描述符长度
+    descriptor_type: int            # 描述符类型 (0x03)
+    unit_index: int                 # 单元索引
+    lu_enable: int                  # LU 启用
+    boot_lun_id: int                # 启动 LUN ID
+    lu_write_protect: int           # 写保护状态
+    lu_memory_type: int             # 存储类型 (SLC/MLC/TLC)
+    number_of_allocation_units: int # 分配单元数量
+    allocation_unit_size: int       # 分配单元大小
+    provisioning_type: int          # 配置类型
+    thin provisioning_threshold: int # 薄配置阈值
+    device_max_write_buffer_size: int # 最大写缓冲
+    device_max_read_buffer_size: int  # 最大读缓冲
+    logical_block_size: int         # 逻辑块大小
+    logical_block_count: int        # 逻辑块数量
+    total_capacity_kb: int          # 总容量 (KB)
+
+
 class UFSUtilsError(Exception):
     """UFS 工具错误"""
     pass
