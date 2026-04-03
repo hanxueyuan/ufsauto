@@ -125,11 +125,14 @@ class EnvironmentChecker:
                     ctrl_file = os.path.join(proc_ufs_dir, ufs_files[0])
                     try:
                         with open(ctrl_file, 'r') as f:
-                            content = f.read(1024)  # 只读前 1KB
+                            content = f.read(1024)  # 只读前 1 KB
                             for line in content.split('\n')[:15]:
                                 line = line.strip()
                                 if ':' in line:
-                                    self._record('storage', f'  {line.split(':')[0]}', line.split(':')[1].strip() if len(line.split(':')) > 1 else '')
+                                    parts = line.split(':')
+                                    name = parts[0]
+                                    value = parts[1].strip() if len(parts) > 1 else ''
+                                    self._record('storage', f'  {name}', value)
                     except Exception:
                         pass
             except Exception as e:
