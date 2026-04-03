@@ -372,12 +372,11 @@ class TestCase:
 class TestRunner:
     """测试执行引擎"""
     
-    def __init__(self, device: str = '/dev/ufs0', test_dir: str = None, verbose: bool = False, dry_run: bool = False, simulate: bool = False):
+    def __init__(self, device: str = '/dev/ufs0', test_dir: str = None, verbose: bool = False, dry_run: bool = False):
         self.device = device
         self.test_dir_override = test_dir  # 用户手动指定
         self.verbose = verbose
         self.dry_run = dry_run
-        self.simulate = simulate  # 模拟模式（无硬件）
         self.suites_dir = Path(__file__).parent.parent / 'suites'
         self.test_dir = None  # 最终确定的测试目录
         
@@ -393,13 +392,6 @@ class TestRunner:
             # 用户手动指定，直接使用
             self.test_dir = Path(self.test_dir_override).absolute()
             # 自动创建目录
-            if not self.test_dir.exists():
-                self.test_dir.mkdir(parents=True, exist_ok=True)
-            return
-        
-        if self.simulate:
-            # 模拟模式，用 /tmp
-            self.test_dir = Path('/tmp/ufs_test').absolute()
             if not self.test_dir.exists():
                 self.test_dir.mkdir(parents=True, exist_ok=True)
             return

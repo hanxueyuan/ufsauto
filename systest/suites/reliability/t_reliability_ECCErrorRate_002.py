@@ -25,6 +25,7 @@ import os
 import sys
 import subprocess
 from pathlib import Path
+from typing import Dict, Any
 
 # 添加 core 和 tools 模块路径
 core_dir = Path(__file__).parent.parent.parent / 'core'
@@ -35,7 +36,6 @@ sys.path.insert(0, str(tools_dir))
 from runner import TestCase
 from fio_wrapper import FIO, FIOError
 from ufs_utils import UFSDevice
-from ufs_simulator import UFSSimulator
 
 
 class Test(TestCase):
@@ -49,9 +49,7 @@ class Test(TestCase):
         device: str = '/dev/ufs0',
         test_dir: Path = None,
         verbose: bool = False,
-        logger=None,
-        simulate: bool = False,
-        # === 测试参数 ===
+        logger = None,
         runtime: int = 1200,  # 20分钟
         ramp_time: int = 60,   # 1分钟 ramp
         ioengine: str = 'sync',
@@ -70,21 +68,10 @@ class Test(TestCase):
         self.read_ratio = read_ratio
         self.max_ecc_error_increase = max_ecc_error_increase
         self.prefill = prefill
-        self.simulate = simulate
         
         # 初始化工具
-        if simulate:
-            self.logger.info("🔧 模拟模式：使用 UFS 模拟器")
-            self.sim = UFSSimulator(device_path='/tmp/ufs_sim.img', logger=self.logger)
-            # 自动创建模拟设备文件
-            if not self.sim.exists():
-                self.sim.create_device(size_gb=128)
-            self.fio = None
-            self.ufs = self.sim
-        else:
-            self.fio = FIO(timeout=self.runtime + self.ramp_time + 60, logger=self.logger)
-            self.ufs = UFSDevice(device, logger=self.logger)
-            self.sim = None
+        self.fio = FIO(timeout=self.runtime + self.ramp_time + 60, logger=self.logger)
+        self.ufs = UFSDevice(device, logger=self.logger)
     
     def setup(self) -> bool:
         """测试前准备 - 检查前置条件 + 记录初始状态"""
@@ -120,20 +107,16 @@ class Test(TestCase):
         self.logger.debug(f"📊 设备权限正常：{self.device}")
         
         # 5. 预填充测试文件
-        if self.prefill and not self.simulate:
+        if self.prefill:
             self.logger.info(f"预填充测试文件：{self.test_file} (2GB)")
             try:
                 result = subprocess.run(
                     ['dd', 'if=/dev/urandom', f'of={self.test_file}',
-                     'bs=1M', 'count=2048', 'conv=fdatasync'],
-                    capture_output=True,
-                    text=True,
-                    timeout=120
+                     'bs=1M', f'count=2048', 'conv=fdatasync'],
+                    capture_output=True, timeout=120
                 )
                 if result.returncode != 0:
                     self.logger.warning(f"预填充失败，继续测试：{result.stderr}")
-                else:
-                    self.logger.debug("📊 测试文件预填充完成 (2GB)")
             except subprocess.TimeoutExpired:
                 self.logger.warning("预填充超时，继续测试")
             except Exception as e:
@@ -148,59 +131,51 @@ class Test(TestCase):
         self.logger.info("📊 前置条件检查通过")
         return True
     
-    def execute(self) -> dict:
+    def execute(self) -> Dict[str, Any]:
         """执行 ECC 压力测试"""
         self.logger.info("开始执行 ECC 压力测试（混合读写 20 分钟）...")
         
         try:
-            if self.simulate:
-                # 模拟模式
-                metrics = self.sim.simulate_performance('mixed_rw')
-            else:
-                # 构建 FIO 参数
-                extra_kwargs = {}
-                if self.ramp_time > 0:
-                    extra_kwargs['ramp_time'] = self.ramp_time
-                
-                metrics = self.fio.run_mixed_rw(
-                    filename=self.test_file,
-                    size='2G',
-                    runtime=self.runtime,
-                    bs='4k',
-                    iodepth=self.iodepth,
-                    read_ratio=self.read_ratio,
-                    ioengine=self.ioengine,
-                    **extra_kwargs
-                )
+            extra_kwargs = {}
+            if self.ramp_time > 0:
+                extra_kwargs['ramp_time'] = self.ramp_time
+            
+            metrics = self.fio.run_mixed_rw(
+                filename=self.test_file,
+                size='2G',
+                runtime=self.runtime,
+                bs='4k',
+                iodepth=self.iodepth,
+                read_ratio=self.read_ratio,
+                ioengine=self.ioengine,
+                **extra_kwargs
+            )
             
             # 提取关键指标
             total_iops = metrics.iops['value']
             read_iops = total_iops * (self.read_ratio / 100)
             write_iops = total_iops * ((100 - self.read_ratio) / 100)
-            avg_lat_us = metrics.latency_ns['mean'] / 1000
+            
+            result = {
+                'total_iops': {'value': total_iops, 'unit': 'IOPS'},
+                'read_iops': {'value': read_iops, 'unit': 'IOPS'},
+                'write_iops': {'value': write_iops, 'unit': 'IOPS'},
+                'raw': getattr(metrics, 'raw', {}),
+            }
             
             self.logger.info(f"📊 压力测试结果:")
             self.logger.info(f"  总 IOPS: {total_iops:.0f}")
             self.logger.info(f"  读 IOPS: {read_iops:.0f}")
             self.logger.info(f"  写 IOPS: {write_iops:.0f}")
-            self.logger.info(f"  平均延迟：{avg_lat_us:.1f} μs")
+            self.logger.info(f"  平均延迟: {avg_lat_us} μs")
             
-            return {
-                'total_iops': metrics.iops,
-                'read_iops': {'value': read_iops, 'unit': 'IOPS'},
-                'write_iops': {'value': write_iops, 'unit': 'IOPS'},
-                'latency_avg': {
-                    'value': avg_lat_us,
-                    'unit': 'μs'
-                },
-                'raw': getattr(metrics, 'raw', {}),
-            }
+            return result
             
-        except Exception as e:
+        except FIOError as e:
             self.logger.error(f"测试执行失败：{e}")
             raise
     
-    def validate(self, result: dict) -> bool:
+    def validate(self, result: Dict[str, Any]) -> bool:
         """验证 ECC 错误率结果"""
         annotations = []
         
@@ -212,6 +187,18 @@ class Test(TestCase):
             'reference': 'N/A',
             'gap': 'N/A',
         })
+        annotations.append({
+            'metric': '读 IOPS',
+            'actual': f'{read_iops:.0f}',
+            'reference': 'N/A',
+            'gap': 'N/A',
+        })
+        annotations.append({
+            'metric': '写 IOPS',
+            'actual': f'{write_iops:.0f}',
+            'reference': 'N/A',
+            'gap': 'N/A',
+        })
         
         result['annotations'] = annotations
         self.logger.info(f"📊 压力测试指标已记录")
@@ -219,21 +206,9 @@ class Test(TestCase):
         # === Postcondition 检查（硬件可靠性验证）===
         self._check_postcondition()
         
-        return True
-
+        return True  # 框架根据 failures 记录自动判断最终状态
+    
     def teardown(self) -> bool:
-        """清理测试文件"""
-        try:
-            test_path = Path(self.test_file)
-            if test_path.exists():
-                test_path.unlink()
-                self.logger.debug(f"清理测试文件：{self.test_file}")
-            
-            # 刷新缓存
-            self.ufs.flush_cache()
-            
-            self.logger.info("测试清理完成")
-            return True
-        except Exception as e:
-            self.logger.warning(f"清理失败：{e}")
-            return False
+        """测试后清理"""
+        # 清理测试文件 → 父类自动处理
+        return super().teardown()

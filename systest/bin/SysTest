@@ -50,7 +50,7 @@ def cmd_run(args):
     logger.debug(f"日志文件：{logger.get_log_file()}")
     
     # 初始化组件
-    runner = TestRunner(device=args.device, test_dir=args.test_dir, verbose=args.verbose, simulate=args.simulate)
+    runner = TestRunner(device=args.device, test_dir=args.test_dir, verbose=args.verbose)
     collector = ResultCollector(output_dir=args.output)
     reporter = ReportGenerator(template='default')
     
@@ -220,7 +220,6 @@ def main():
     run_parser.add_argument('--format', '-f', default='html,json', help='报告格式 (html/json/pdf)')
     run_parser.add_argument('--verbose', '-v', action='store_true', help='详细输出')
     run_parser.add_argument('--dry-run', '-n', action='store_true', help='模拟执行')
-    run_parser.add_argument('--simulate', action='store_true', help='模拟模式（无硬件）')
     run_parser.set_defaults(func=cmd_run)
     
     # list 命令

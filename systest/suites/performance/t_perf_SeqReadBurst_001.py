@@ -36,7 +36,6 @@ sys.path.insert(0, str(tools_dir))
 from runner import TestCase
 from fio_wrapper import FIO, FIOError, FIOMetrics
 from ufs_utils import UFSDevice
-from ufs_simulator import UFSSimulator
 
 
 class Test(TestCase):
@@ -51,7 +50,6 @@ class Test(TestCase):
         test_dir: Path = None,
         verbose: bool = False,
         logger=None,
-        simulate: bool = False,
         # === 可配置参数 ===
         bs: str = '128k',
         size: str = '1G',
@@ -64,7 +62,7 @@ class Test(TestCase):
         max_avg_latency_us: float = 200,
         max_tail_latency_us: float = 5000,  # p99.999
         # === 可选功能 ===
-        verify: str = None,  # 'md5', 'crc32c', None
+        verify: str = None,
         prefill: bool = True,
     ):
         super().__init__(device, test_dir, verbose, logger)
@@ -80,21 +78,10 @@ class Test(TestCase):
         self.max_tail_latency_us = max_tail_latency_us
         self.verify_mode = verify
         self.prefill = prefill
-        self.simulate = simulate
         
         # 初始化工具
-        if simulate:
-            self.logger.info("🔧 模拟模式：使用 UFS 模拟器")
-            self.sim = UFSSimulator(device_path='/tmp/ufs_sim.img', logger=self.logger)
-            # 自动创建模拟设备文件
-            if not self.sim.exists():
-                self.sim.create_device(size_gb=128)
-            self.fio = None
-            self.ufs = self.sim
-        else:
-            self.fio = FIO(timeout=self.runtime + self.ramp_time + 30, logger=self.logger)
-            self.ufs = UFSDevice(device, logger=self.logger)
-            self.sim = None
+        self.fio = FIO(timeout=self.runtime + self.ramp_time + 30, logger=self.logger)
+        self.ufs = UFSDevice(device, logger=self.logger)
     
     def setup(self) -> bool:
         """测试前准备 - 检查前置条件 + 预填充数据"""
@@ -136,14 +123,13 @@ class Test(TestCase):
             # 不阻止测试，但记录警告
         
         # 6. 预填充测试文件（避免读 sparse file / 未初始化数据）
-        if self.prefill and not self.simulate:
+        if self.prefill:
             self.logger.info(f"预填充测试文件：{self.test_file} ({self.size})")
             try:
-                # 用 dd 写入真实数据
+                size_mb = self._parse_size_mb(self.size)
                 result = subprocess.run(
                     ['dd', 'if=/dev/urandom', f'of={self.test_file}',
-                     'bs=1M', f'count={self._parse_size_mb(self.size)}',
-                     'conv=fdatasync'],
+                     'bs=1M', f'count={size_mb}', 'conv=fdatasync'],
                     capture_output=True,
                     text=True,
                     timeout=120
@@ -185,15 +171,6 @@ class Test(TestCase):
     def execute(self) -> Dict[str, Any]:
         """执行 FIO 顺序读测试"""
         self.logger.info("🚀 开始执行顺序读性能测试...")
-        
-        if self.simulate:
-            # 模拟模式：生成模拟数据
-            self.logger.info("🔧 模拟模式：生成模拟测试结果")
-            return self.sim.generate_performance_result(
-                'seq_read',
-                target_bw=self.target_bw_mbps,
-                runtime=self.runtime
-            )
         
         try:
             # 使用 fio_wrapper 便捷 API 执行
@@ -247,8 +224,8 @@ class Test(TestCase):
             self.logger.info("📊 测试完成，结果汇总:")
             self.logger.info(f"  带宽: {metrics['bandwidth']['value']:.1f} MB/s (目标: ≥{self.target_bw_mbps})")
             self.logger.info(f"  IOPS: {metrics['iops']['value']:.0f}")
-            self.logger.info(f"  平均延迟: {metrics['latency_avg']['value']:.1f} μs (目标: <{self.max_avg_latency_us})")
-            self.logger.info(f"  p99.999 尾延迟: {metrics['latency_p99999']['value']:.1f} μs (目标: <{self.max_tail_latency_us})")
+            self.logger.info(f"  平均延迟: {metrics['latency_avg']['value']:.1f} μs (target: <{self.max_avg_latency_us})")
+            self.logger.info(f"  p99.999 尾延迟: {metrics['latency_p99999']['value']:.1f} μs (target: <{self.max_tail_latency_us})")
             
             return metrics
             
@@ -282,7 +259,7 @@ class Test(TestCase):
         elif bw < target:
             # 在目标 90%-100% 之间，记录警告但不算失败
             self.logger.warning(
-                f"⚠️  带宽未达标: {bw:.1f} MB/s < {target} MB/s，"
+                f"⚠️  带宽未达标: {bw:.1f} MB/s < {target} MB/s,"
                 "但在容忍范围内（≥90%），测试继续"
             )
         

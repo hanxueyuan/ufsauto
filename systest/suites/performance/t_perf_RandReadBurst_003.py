@@ -27,6 +27,7 @@ import subprocess
 from pathlib import Path
 from typing import Dict, Any
 
+# 添加 core 和 tools 模块路径
 core_dir = Path(__file__).parent.parent.parent / 'core'
 tools_dir = Path(__file__).parent.parent.parent / 'tools'
 sys.path.insert(0, str(core_dir))
@@ -35,7 +36,6 @@ sys.path.insert(0, str(tools_dir))
 from runner import TestCase
 from fio_wrapper import FIO, FIOError, FIOMetrics
 from ufs_utils import UFSDevice
-from ufs_simulator import UFSSimulator
 
 
 class Test(TestCase):
@@ -50,7 +50,6 @@ class Test(TestCase):
         test_dir: Path = None,
         verbose: bool = False,
         logger=None,
-        simulate: bool = False,
         bs: str = '4k',
         size: str = '1G',
         runtime: int = 60,
@@ -63,7 +62,6 @@ class Test(TestCase):
         prefill: bool = True,
     ):
         super().__init__(device, test_dir, verbose, logger)
-        self.simulate = simulate
         self.test_file = self.get_test_file_path('rand_read')
         self.bs = bs
         self.size = size
@@ -76,15 +74,12 @@ class Test(TestCase):
         self.max_tail_latency_us = max_tail_latency_us
         self.prefill = prefill
         
-        self.sim = UFSSimulator(device_path=device, logger=self.logger)
+        # 初始化工具
         self.fio = FIO(timeout=self.runtime + self.ramp_time + 30, logger=self.logger)
-        self.ufs = self.sim if simulate else UFSDevice(device, logger=self.logger)
-        # 模拟模式：自动创建模拟设备文件
-        if simulate and self.sim is not None:
-            if not self.sim.exists():
-                self.sim.create_device(size_gb=128)
+        self.ufs = UFSDevice(device, logger=self.logger)
     
     def setup(self) -> bool:
+        """检查前置条件"""
         self.logger.info("开始检查前置条件...")
         
         if not self.ufs.exists():
@@ -104,7 +99,7 @@ class Test(TestCase):
             return False
         
         if not os.access(self.device, os.R_OK | os.W_OK):
-            self.logger.error(f"设备权限不足")
+            self.logger.error(f"设备权限不足：{self.device}")
             return False
         
         # 检查设备健康状态
@@ -113,7 +108,7 @@ class Test(TestCase):
             self.logger.warning(f"设备健康状态异常：{health['status']}")
         
         # 预填充
-        if self.prefill and not self.simulate:
+        if self.prefill:
             self.logger.info(f"预填充测试文件：{self.test_file} ({self.size})")
             try:
                 size_mb = self._parse_size_mb(self.size)
@@ -146,19 +141,11 @@ class Test(TestCase):
             try:
                 return int(size_str) // 1024 // 1024
             except ValueError:
-                return 1024
+                return 1024  # 默认 1GB
     
     def execute(self) -> Dict[str, Any]:
         """执行 FIO 随机读测试"""
         self.logger.info("🚀 开始执行随机读性能测试...")
-        
-        if self.simulate:
-            self.logger.info("🔧 模拟模式：生成模拟测试结果")
-            return self.sim.generate_performance_result(
-                'rand_read',
-                target_iops=self.target_iops,
-                runtime=self.runtime
-            )
         
         try:
             # 使用 fio_wrapper 便捷 API 执行
@@ -212,8 +199,8 @@ class Test(TestCase):
             self.logger.info("📊 测试完成，结果汇总:")
             self.logger.info(f"  IOPS: {metrics['iops']['value']:.0f} (目标: ≥{self.target_iops})")
             self.logger.info(f"  带宽: {metrics['bandwidth']['value']:.1f} MB/s")
-            self.logger.info(f"  平均延迟: {metrics['latency_avg']['value']:.1f} μs (目标: <{self.max_avg_latency_us})")
-            self.logger.info(f"  p99.999 尾延迟: {metrics['latency_p99999']['value']:.1f} μs (目标: <{self.max_tail_latency_us})")
+            self.logger.info(f"  平均延迟: {metrics['latency_avg']['value']:.1f} μs (target: <{self.max_avg_latency_us})")
+            self.logger.info(f"  p99.999 尾延迟: {metrics['latency_p99999']['value']:.1f} μs (target: <{self.max_tail_latency_us})")
             
             return metrics
             
@@ -243,6 +230,7 @@ class Test(TestCase):
             )
             all_ok = False
         elif iops < target:
+            # 在目标 90%-100% 之间，记录警告但不算失败
             self.logger.warning(
                 f"⚠️  IOPS 未达标: {iops:.0f} < {target:.0f}，"
                 "但在容忍范围内（≥90%），测试继续"
@@ -278,7 +266,7 @@ class Test(TestCase):
         else:
             self.logger.warning(f"⚠️  共有 {len(self._failures)} 项验证不通过")
         
-        return True
+        return True  # 性能测试始终返回 True，由框架根据 failures 判断最终状态
     
     def teardown(self) -> bool:
         """测试后清理 - 父类会自动清理测试文件"""

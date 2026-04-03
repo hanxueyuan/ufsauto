@@ -5,7 +5,7 @@ QoS 尾部发散度测试
 测试 UFS 设备的延迟尾部发散度（p99.99/p50）
 
 测试用例 ID: t_qos_TailLatencyRatio_003
-测试目的：验证 UFS 设备延迟尾部发散度满足车规要求（< 100x）
+测试目的：验证 UFS 设备延迟尾部发散度满足车规要求（< 100×）
 前置条件：
     1. UFS 设备已挂载
     2. 有足够可用空间（≥2GB）
@@ -15,19 +15,24 @@ QoS 尾部发散度测试
     1. 预填充测试文件
     2. 执行 FIO 延迟测试（4K block, QD1, 120s, 含 10s ramp）
     3. 收集延迟百分位数据（p50, p99.99）
-    4. 计算尾部发散度比值（p99.99/p50）
-    5. 验证比值 < 100x
+    4. 计算比值 p99.99/p50 并验证 < 100×
 预期指标：
-    - 尾部发散度 < 100x
+    - 尾部发散度 < 100×
     - p99.99 < 2ms (车规 QoS 要求)
 测试耗时：约 130 秒（含 ramp）
+
+注意：
+    - 使用 get_test_file_path() 获取测试文件路径
+    - teardown 时基类会自动清理测试文件
 """
 
 import os
 import sys
 import subprocess
 from pathlib import Path
+from typing import Dict, Any
 
+# 添加 core 和 tools 模块路径
 core_dir = Path(__file__).parent.parent.parent / 'core'
 tools_dir = Path(__file__).parent.parent.parent / 'tools'
 sys.path.insert(0, str(core_dir))
@@ -36,7 +41,6 @@ sys.path.insert(0, str(tools_dir))
 from runner import TestCase
 from fio_wrapper import FIO, FIOError
 from ufs_utils import UFSDevice
-from ufs_simulator import UFSSimulator
 
 
 class Test(TestCase):
@@ -50,8 +54,7 @@ class Test(TestCase):
         device: str = '/dev/ufs0',
         test_dir: Path = None,
         verbose: bool = False,
-        logger=None,
-        simulate: bool = False,
+        logger = None,
         bs: str = '4k',
         size: str = '512M',
         runtime: int = 120,
@@ -63,7 +66,6 @@ class Test(TestCase):
         prefill: bool = True,
     ):
         super().__init__(device, test_dir, verbose, logger)
-        self.simulate = simulate
         self.test_file = self.get_test_file_path('qos_tail_ratio')
         self.bs = bs
         self.size = size
@@ -75,15 +77,12 @@ class Test(TestCase):
         self.target_p9999_us = target_p9999_us
         self.prefill = prefill
         
-        self.sim = UFSSimulator(device_path=device, logger=self.logger)
+        # 初始化工具
         self.fio = FIO(timeout=self.runtime + self.ramp_time + 30, logger=self.logger)
-        self.ufs = self.sim if simulate else UFSDevice(device, logger=self.logger)
-        # 模拟模式：自动创建模拟设备文件
-        if simulate and self.sim is not None:
-            if not self.sim.exists():
-                self.sim.create_device(size_gb=128)
+        self.ufs = UFSDevice(device, logger=self.logger)
     
     def setup(self) -> bool:
+        """检查前置条件"""
         self.logger.info("开始检查前置条件...")
         
         if not self.ufs.exists():
@@ -103,7 +102,7 @@ class Test(TestCase):
             return False
         
         if not os.access(self.device, os.R_OK | os.W_OK):
-            self.logger.error(f"设备权限不足")
+            self.logger.error(f"设备权限不足：{self.device}")
             return False
         
         # 预填充
@@ -114,21 +113,36 @@ class Test(TestCase):
                 subprocess.run(
                     ['dd', 'if=/dev/urandom', f'of={self.test_file}',
                      'bs=1M', f'count={size_mb}', 'conv=fdatasync'],
-                    capture_output=True, text=True, timeout=120
+                    capture_output=True, timeout=120
                 )
             except Exception as e:
                 self.logger.warning(f"预填充异常，继续测试：{e}")
         
         self.logger.info("📋 测试配置:")
         self.logger.info(f"  bs={self.bs}, size={self.size}, runtime={self.runtime}s, iodepth={self.iodepth}")
-        self.logger.info(f"  ioengine={self.ioengine}, ramp_time={self.ramp_time}s")
-        self.logger.info(f"  target_tail_ratio={self.target_tail_ratio}x, target_p99.99={self.target_p9999_us} μs")
+        self.logger.info(f"  target_tail_ratio={self.target_tail_ratio}×, target_p99.99={self.target_p999_us} μs")
         
         self.logger.info("📊 前置条件检查通过")
         return True
     
-    def execute(self) -> dict:
-        self.logger.info("开始执行 QoS 尾部发散度测试...")
+    def _parse_size_mb(self, size_str: str) -> int:
+        """解析大小字符串为 MB"""
+        size_str = size_str.lower()
+        if size_str.endswith('g'):
+            return int(size_str[:-1]) * 1024
+        elif size_str.endswith('m'):
+            return int(size_str[:-1])
+        elif size_str.endswith('k'):
+            return max(1, int(size_str[:-1]) // 1024)
+        else:
+            try:
+                return int(size_str) // 1024 // 1024
+            except ValueError:
+                return 512  # 默认 512MB
+    
+    def execute(self) -> Dict[str, Any]:
+        """执行 FIO 尾部发散度测试"""
+        self.logger.info("🚀 开始执行 QoS 尾部发散度测试...")
         
         try:
             extra_kwargs = {}
@@ -145,81 +159,59 @@ class Test(TestCase):
                 **extra_kwargs
             )
             
-            percentiles = metrics.latency_ns.get('percentile', {})
-            p50 = percentiles.get('50.000000', 0) / 1000
-            p9999 = percentiles.get('99.990000', 0) / 1000
-            avg = metrics.latency_ns['mean'] / 1000
+            p50 = metrics.latency_ns['percentile'].get('50.000000', 0) / 1000 /  # ns → µs
+            p9999 = metrics.latency_ns['percentile'].get('99.990000', 0) / 1000 /  # ns → µs
             
-            self.logger.info(f"📊 延迟分布:")
-            self.logger.info(f"  平均值：{avg:.1f} μs")
-            self.logger.info(f"  p50:    {p50:.1f} μs")
-            self.logger.info(f"  p99.99: {p9999:.1f} μs")
-            
-            return {
-                'latency_avg': {'value': avg, 'unit': 'μs'},
-                'latency_p50': {'value': p50, 'unit': 'μs'},
-                'latency_p9999': {'value': p9999, 'unit': 'μs'},
+            result = {
+                'latency_p50_ns': {'value': p50, 'unit': 'ns'},
+                'latency_p9999_ns': {'value': p9999, 'unit': 'µs'},
+                'tail_ratio': {'value': p9999 / p50 if p50 > 0 else 0, 'unit': '×'},
             }
             
-        except Exception as e:
-            self.logger.error(f"测试执行失败：{e}")
+            # 日志输出结果
+            self.logger.info("📊 测试完成，尾部发散度:")
+            self.logger.info(f"  p50: {p50:.1f} ns")
+            self.logger.info(f"  p99.99: {p9999:.1f} µs")
+            self.logger.info(f"  p99.99/p50 = {p9999 / p50:.1f}× (target: <{self.target_tail_ratio:.1f}×)")
+            
+            return result
+            
+        except FIOError as e:
+            self.logger.error(f"FIO 执行失败: {e}")
             raise
     
-    def validate(self, result: dict) -> bool:
+    def validate(self, result: Dict[str, Any]) -> bool:
         """验证尾部发散度结果"""
-        annotations = []
+        all_ok = True
         
-        p50 = result['latency_p50']['value']
-        p9999 = result['latency_p9999']['value']
+        p50 = result['latency_p50_ns']['value']
+        p9999 = result['latency_p9999_ns']['value']
         
-        # 检查 p99.99 绝对值
-        if p9999 > 0:
-            gap_p9999 = (p9999 - self.target_p9999_us) / self.target_p9999_us * 100 if self.target_p9999_us > 0 else 0
-            annotations.append({
-                'metric': 'p99.99 延迟',
-                'actual': f'{p9999:.1f} μs',
-                'reference': f'{self.target_p9999_us} μs',
-                'gap': f'{gap_p9999:+.1f}%',
-            })
-            self.logger.info(f"📊 p99.99 延迟：{p9999:.1f} μs（参考 {self.target_p9999_us} μs，gap {gap_p9999:+.1f}%）")
-        
-        # 计算尾部发散度
-        if p50 > 0 and p9999 > 0:
-            tail_ratio = p9999 / p50
-            gap_ratio = (tail_ratio - self.target_tail_ratio) / self.target_tail_ratio * 100 if self.target_tail_ratio > 0 else 0
-            annotations.append({
-                'metric': '尾部发散度',
-                'actual': f'p99.99/p50 = {tail_ratio:.1f}x',
-                'reference': f'< {self.target_tail_ratio}x',
-                'gap': f'{gap_ratio:+.1f}%',
-            })
-            self.logger.info(f"📊 尾部发散度：p99.99/p50 = {tail_ratio:.1f}x（参考 < {self.target_tail_ratio}x，gap {gap_ratio:+.1f}%）")
-        
-        result['annotations'] = annotations
-        self.logger.info(f"📊 共 {len(annotations)} 项指标数据已采集")
+        # 检查尾部发散度
+        if p50 > 0:
+            ratio = p9999 / p50
+            if ratio > self.target_tail_ratio:
+                self.record_failure(
+                    "尾部发散度",
+                    f"< {self.target_tail_ratio}×",
+                    f"{ratio:.1f}×",
+                    "尾部发散度超出限制"
+                )
+                all_ok = False
+            else:
+                self.logger.info(f"✅ 尾部发散度验证通过: {ratio:.1f}× (target <{self.target_tail_ratio}×)")
         
         # === Postcondition 检查（硬件可靠性验证）===
         self._check_postcondition()
         
-        return True
-
-    def teardown(self) -> bool:
-        try:
-            test_path = Path(self.test_file)
-            if test_path.exists():
-                test_path.unlink()
-            self.ufs.flush_cache()
-            self.logger.info("测试清理完成")
-            return True
-        except Exception as e:
-            self.logger.warning(f"清理失败：{e}")
-            return False
+        if all_ok:
+            self.logger.info("✅ 所有验证通过")
+        else:
+            self.logger.warning(f"⚠️  共 {len(self._failures)} 项验证不通过")
+        
+        return True  # 性能测试始终返回 True，框架根据失败记录判断最终状态
     
-    @staticmethod
-    def _parse_size_mb(size_str: str) -> int:
-        size_str = size_str.strip().upper()
-        if size_str.endswith('G'):
-            return int(float(size_str[:-1]) * 1024)
-        elif size_str.endswith('M'):
-            return int(float(size_str[:-1]))
-        return int(size_str) // (1024 * 1024)
+    def teardown(self) -> bool:
+        """测试后清理"""
+        # 清理测试文件 → 父类自动处理
+        return super().teardown()

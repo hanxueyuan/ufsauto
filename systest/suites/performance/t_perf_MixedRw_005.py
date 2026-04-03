@@ -26,6 +26,7 @@ import subprocess
 from pathlib import Path
 from typing import Dict, Any
 
+# 添加 core 和 tools 模块路径
 core_dir = Path(__file__).parent.parent.parent / 'core'
 tools_dir = Path(__file__).parent.parent.parent / 'tools'
 sys.path.insert(0, str(core_dir))
@@ -34,7 +35,6 @@ sys.path.insert(0, str(tools_dir))
 from runner import TestCase
 from fio_wrapper import FIO, FIOError
 from ufs_utils import UFSDevice
-from ufs_simulator import UFSSimulator
 
 
 class Test(TestCase):
@@ -49,7 +49,6 @@ class Test(TestCase):
         test_dir: Path = None,
         verbose: bool = False,
         logger=None,
-        simulate: bool = False,
         bs: str = '4k',
         size: str = '1G',
         runtime: int = 60,
@@ -62,7 +61,6 @@ class Test(TestCase):
         max_tail_latency_us: float = 8000,
     ):
         super().__init__(device, test_dir, verbose, logger)
-        self.simulate = simulate
         self.test_file = self.get_test_file_path('mixed_rw')
         self.bs = bs
         self.size = size
@@ -75,15 +73,12 @@ class Test(TestCase):
         self.max_avg_latency_us = max_avg_latency_us
         self.max_tail_latency_us = max_tail_latency_us
         
-        self.sim = UFSSimulator(device_path=device, logger=self.logger)
+        # 初始化工具
         self.fio = FIO(timeout=self.runtime + self.ramp_time + 30, logger=self.logger)
-        self.ufs = self.sim if simulate else UFSDevice(device, logger=self.logger)
-        # 模拟模式：自动创建模拟设备文件
-        if simulate and self.sim is not None:
-            if not self.sim.exists():
-                self.sim.create_device(size_gb=128)
+        self.ufs = UFSDevice(device, logger=self.logger)
     
     def setup(self) -> bool:
+        """检查前置条件"""
         self.logger.info("开始检查前置条件...")
         
         if not self.ufs.exists():
@@ -103,7 +98,7 @@ class Test(TestCase):
             return False
         
         if not os.access(self.device, os.R_OK | os.W_OK):
-            self.logger.error(f"设备权限不足")
+            self.logger.error(f"设备权限不足：{self.device}")
             return False
         
         self.logger.info("📋 测试配置:")
@@ -116,10 +111,12 @@ class Test(TestCase):
     
     def execute(self) -> Dict[str, Any]:
         """执行测试逻辑"""
+        self.logger.info("🚀 开始执行混合读写性能测试...")
+        
         try:
             # 构建FIO测试参数
             fio_args = {
-                'filename': self.device if not self.simulate else self.test_file,
+                'filename': self.test_file,
                 'bs': self.bs,
                 'size': self.size,
                 'runtime': self.runtime,
@@ -158,10 +155,6 @@ class Test(TestCase):
             p99999_write_latency_us = write_clat_ns.get('99.999', 0) / 1000
             p99999_latency_us = max(p99999_read_latency_us, p99999_write_latency_us)
             
-            # 清理测试文件（如果使用模拟）
-            if self.simulate and os.path.exists(self.test_file):
-                os.remove(self.test_file)
-                
             return {
                 'total_iops': total_iops,
                 'read_iops': read_iops,
@@ -185,15 +178,15 @@ class Test(TestCase):
     def validate(self, result: Dict[str, Any]) -> bool:
         """
         验证结果。
-        对于性能测试，返回 True，指标达标情况通过 annotations 记录。
+        对于性能测试，返回 True，指标达标情况通过 failure 记录。
         """
         # 检查是否有错误
         if 'error' in result:
             self.record_failure(
                 "FIO 执行",
                 "成功完成",
-                "执行失败",
-                result['error']
+                f"执行失败：{result['error']}",
+                "FIO 执行失败"
             )
             return True  # 让框架处理failure记录
         
@@ -203,12 +196,9 @@ class Test(TestCase):
         p99999_latency_us = result.get('p99999_latency_us', float('inf'))
         
         # 记录指标达标情况（作为annotations）
-        annotations = []
-        
         if total_iops >= self.target_total_iops:
-            annotations.append(f"✅ 总IOPS: {total_iops:.0f} ≥ {self.target_total_iops}")
+            self.logger.info(f"✅ 总IOPS: {total_iops:.0f} ≥ {self.target_total_iops}")
         else:
-            annotations.append(f"❌ 总IOPS: {total_iops:.0f} < {self.target_total_iops}")
             self.record_failure(
                 "总IOPS性能",
                 f"≥ {self.target_total_iops}",
@@ -217,9 +207,8 @@ class Test(TestCase):
             )
         
         if avg_latency_us <= self.max_avg_latency_us:
-            annotations.append(f"✅ 平均延迟: {avg_latency_us:.1f}μs ≤ {self.max_avg_latency_us}μs")
+            self.logger.info(f"✅ 平均延迟: {avg_latency_us:.1f}μs ≤ {self.max_avg_latency_us}μs")
         else:
-            annotations.append(f"❌ 平均延迟: {avg_latency_us:.1f}μs > {self.max_avg_latency_us}μs")
             self.record_failure(
                 "平均延迟",
                 f"≤ {self.max_avg_latency_us}μs",
@@ -228,9 +217,8 @@ class Test(TestCase):
             )
         
         if p99999_latency_us <= self.max_tail_latency_us:
-            annotations.append(f"✅ 尾部延迟(p99.999): {p99999_latency_us:.0f}μs ≤ {self.max_tail_latency_us}μs")
+            self.logger.info(f"✅ 尾部延迟(p99.999): {p99999_latency_us:.0f}μs ≤ {self.max_tail_latency_us}μs")
         else:
-            annotations.append(f"❌ 尾部延迟(p99.999): {p99999_latency_us:.0f}μs > {self.max_tail_latency_us}μs")
             self.record_failure(
                 "尾部延迟(p99.999)",
                 f"≤ {self.max_tail_latency_us}μs",
@@ -238,17 +226,14 @@ class Test(TestCase):
                 "尾部延迟超出预期"
             )
         
-        # 记录详细的性能数据
-        self.logger.info("📊 性能测试结果:")
-        for annotation in annotations:
-            self.logger.info(f"  {annotation}")
-        
-        self.logger.info(f"  读IOPS: {result.get('read_iops', 0):.0f}")
-        self.logger.info(f"  写IOPS: {result.get('write_iops', 0):.0f}")
-        self.logger.info(f"  读写比例: {self.rw_mix}%/{100-self.rw_mix}%")
-        
         # 执行Postcondition检查（硬件可靠性验证）
         self._check_postcondition()
         
-        # 性能测试总是返回True，让框架根据failure记录判断最终状态
-        return True
+        if hasattr(self, '_failures') and len(self._failures) > 0:
+            self.logger.warning(f"⚠️  共有 {len(self._failures)} 项验证不通过")
+        
+        return True  # 性能测试始终返回 True，由框架根据 failures 判断最终状态
+    
+    def teardown(self) -> bool:
+        """测试后清理 - 父类会自动清理测试文件"""
+        return super().teardown()
