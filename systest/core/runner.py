@@ -523,6 +523,10 @@ class TestRunner:
 
                 candidate_mounts.append((mount, avail_gb))
 
+                # 跳过根目录（通常是只读的）
+                if mount == '/':
+                    continue
+
                 # 需要至少 2GB 可用空间
                 if avail_gb >= 2 and avail_gb > max_avail_gb:
                     max_avail_gb = avail_gb

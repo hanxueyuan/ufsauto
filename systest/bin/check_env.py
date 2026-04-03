@@ -237,18 +237,17 @@ class EnvironmentChecker:
             except Exception:
                 continue
             
+            # 跳过根目录（通常是只读的）
+            if mount == '/':
+                continue
+            
             if avail_gb >= 2 and avail_gb > max_avail_gb:
                 max_avail_gb = avail_gb
                 best_mount = mount
         
         if best_mount:
-            # 修复：当 mount 是 '/' 时，避免变成 '//ufs_test'
-            if best_mount == '/':
-                test_dir = '/ufs_test'
-            else:
-                test_dir = f'{best_mount}/ufs_test'
-            self._record('test_dir', '建议测试目录', f'{test_dir} (可用 {max_avail_gb:.1f} GB)')
-            self.runtime_config['test_dir'] = test_dir
+            self._record('test_dir', '建议测试目录', f'{best_mount}/ufs_test (可用 {max_avail_gb:.1f} GB)')
+            self.runtime_config['test_dir'] = f'{best_mount}/ufs_test'
         else:
             self._record('test_dir', '建议测试目录', '/tmp/ufs_test (所有挂载点 < 2GB)')
             self.runtime_config['test_dir'] = '/tmp/ufs_test'
