@@ -110,12 +110,11 @@ class EnvironmentChecker:
                         if 'ufs' in driver.lower() or 'ufshcd' in driver.lower():
                             found_ufshcd = True
                             break
-                if found_ufshcd or ufshcd_loaded:
-                    # 如果 ufshcd 已经加载，就算找不到驱动链，也认为这是 UFS 设备
+                if found_ufshcd:
+                    # 必须通过驱动链识别，不能只看模块是否加载
                     ufs_found = True
                     dev_path = f'/dev/{dev_name}'
-                    driver_name = driver if 'driver' in locals() else 'unknown'
-                    self._record('storage', 'UFS 设备', f'{dev_path} (via {driver_name})')
+                    self._record('storage', 'UFS 设备', f'{dev_path} (via {driver})')
                     # 容量
                     size_file = os.path.join(blk, 'size')
                     if os.path.exists(size_file):
@@ -179,67 +178,32 @@ class EnvironmentChecker:
             except Exception:
                 pass
 
-        # 6) 回退 4：调用 lsblk 列出所有块设备，从厂商/型号/类型识别 UFS
-        if not ufs_found:
-            try:
-                rc, lsblk_out, _ = self._run(['lsblk', '-o', 'NAME,SIZE,MODEL,VENDOR,TYPE,FSTYPE,MOUNTPOINT', '-n'])
-                if rc == 0:
-                    lines = lsblk_out.strip().split('\n')
-                    candidate_devices = []
-                    for line in lines:
-                        line = line.strip()
-                        if not line or line.startswith('├─') or line.startswith('└─'):
-                            continue  # 跳过分区，只看整块设备
-                        parts = line.split()
-                        # 解析各列
-                        name = parts[0] if len(parts) >= 1 else ''
-                        size_str = parts[1] if len(parts) >= 2 else ''
-                        model = parts[2] if len(parts) >= 3 else ''
-                        vendor = parts[3] if len(parts) >= 4 else ''
-                        dev_type = parts[4] if len(parts) >= 5 else ''
-                        
-                        if dev_type != 'disk':
-                            continue  # 只看整个磁盘设备
-                        
-                        # 判断是否为 UFS 设备
-                        vendor_lower = (vendor or '').lower()
-                        model_lower = (model or '').lower()
-                        # UFS 常见厂商：SKhynix, Samsung, Micron, Western Digital, Toshiba
-                        ufs_vendors = ['skhynix', 'hynix', 'samsung', 'micron', 'wd', 'western', 'toshiba']
-                        is_ufs_vendor = any(v in vendor_lower for v in ufs_vendors)
-                        has_ufs_in_name = 'ufs' in model_lower or 'ufs' in vendor_lower
-                        
-                        if is_ufs_vendor or has_ufs_in_name:
-                            dev_path = f'/dev/{name}'
-                            ufs_found = True
-                            info = f'{dev_path}'
-                            if vendor or model:
-                                info += f' ({vendor} {model})'.strip()
-                            self._record('storage', 'UFS 设备', info)
-                            # 获取容量
-                            try:
-                                rc2, size_out, _ = self._run(['blockdev', '--getsize64', dev_path])
-                                if rc2 == 0:
-                                    bytes = int(size_out.strip())
-                                    gb = bytes / (1024 ** 3)
-                                    self._record('storage', '设备容量', f'{gb:.0f} GB')
-                                    # 建议测试目录：选择最大的已挂载分区放测试文件
-                                    # 查找该磁盘下最大的已挂载分区
-                                    self._suggest_test_directory(name)
-                            except Exception:
-                                pass
-                            break
-            except Exception:
-                pass
-
-        # 7) 如果还是没找到，列出所有块设备供用户参考
+        # 6) 回退 4：列出所有块设备供用户参考，不做厂商名推断
+        # 注意：SKhynix/Samsung/Micron 既生产 UFS 也生产普通 SSD/NVMe
+        #       不能只看厂商名判断设备类型
         if not ufs_found:
             self._record('storage', 'UFS 设备', '未检测到')
             self._record('storage', '💡 提示', '如果确认设备存在，可以直接在 run 命令中用 --device 指定路径')
+            self._record('storage', '检测方法', '驱动链识别（需 ufshcd 饭动已加载）')
             try:
                 rc, lsblk_out, _ = self._run(['lsblk', '-o', 'NAME,SIZE,MODEL,VENDOR,TYPE,FSTYPE,MOUNTPOINT'])
                 if rc == 0:
                     self._record('storage', '📋 所有块设备', '\n' + lsblk_out)
+            except Exception:
+                pass
+            # 检查是否有 UFS 常见厂商的设备（提示而非判断）
+            try:
+                rc, lsblk_out, _ = self._run(['lsblk', '-o', 'NAME,VENDOR,MODEL,TYPE', '-n'])
+                if rc == 0:
+                    for line in lsblk_out.strip().split('\n'):
+                        parts = line.strip().split()
+                        if len(parts) >= 4 and parts[3] == 'disk':
+                            vendor = parts[1].lower()
+                            model = parts[2].lower()
+                            ufs_vendors = ['skhynix', 'hynix', 'samsung', 'micron', 'wd', 'western', 'toshiba', 'kioxia']
+                            if any(v in vendor for v in ufs_vendors) or 'ufs' in model:
+                                self._record('storage', '⚠️  疑似 UFS 厂商设备', f'/dev/{parts[0]} ({parts[1]} {parts[2]}) - 请确认驱动类型')
+                                break
             except Exception:
                 pass
             if self.mode == 'deploy':
