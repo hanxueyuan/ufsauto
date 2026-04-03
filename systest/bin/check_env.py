@@ -23,10 +23,24 @@ from datetime import datetime
 class EnvironmentChecker:
     """环境信息收集器 — 只报事实，不做判断"""
 
-    def __init__(self, mode='dev', verbose=False):
+    def __init__(self, mode='dev', verbose=False, config_dir=None):
         self.mode = mode
         self.verbose = verbose
         self.items = []
+        # config 目录在 systest/config/（bin/../config/），而不是 bin/config/
+        if config_dir:
+            self.config_dir = Path(config_dir)
+        else:
+            self.config_dir = Path(__file__).parent.parent / 'config'
+        # 收集到的关键配置（用于写入 runtime.json）
+        self.runtime_config = {
+            'device': None,
+            'test_dir': None,
+            'device_capacity_gb': None,
+            'env_checked_at': None,
+            'system': {},
+            'toolchain': {},
+        }
 
     # ── 内部工具 ──────────────────────────────────────────
 
@@ -115,6 +129,7 @@ class EnvironmentChecker:
                     ufs_found = True
                     dev_path = f'/dev/{dev_name}'
                     self._record('storage', 'UFS 设备', f'{dev_path} (via {driver})')
+                    self.runtime_config['device'] = dev_path
                     # 容量
                     size_file = os.path.join(blk, 'size')
                     if os.path.exists(size_file):
@@ -122,6 +137,7 @@ class EnvironmentChecker:
                             sectors = int(f.read().strip())
                             gb = sectors * 512 / (1024 ** 3)
                             self._record('storage', '设备容量', f'{gb:.0f} GB')
+                            self.runtime_config['device_capacity_gb'] = round(gb, 0)
                     # vendor / model
                     for attr in ('vendor', 'model', 'rev'):
                         attr_path = os.path.join(blk, 'device', attr)
@@ -247,13 +263,15 @@ class EnvironmentChecker:
         elif rc != 0:
             self._record('test_dir', 'findmnt 兼容性', f'不可用: {err}')
             self._record('test_dir', '建议测试目录', '/tmp/ufs_test (findmnt 不可用，回退)')
+            self.runtime_config['test_dir'] = '/tmp/ufs_test'
             return
         else:
             self._record('test_dir', 'findmnt 兼容性', '新版 (支持所有列)')
             use_simple = False
-        
+
         if rc != 0 or not out.strip():
             self._record('test_dir', '建议测试目录', '/tmp/ufs_test (无挂载点)')
+            self.runtime_config['test_dir'] = '/tmp/ufs_test'
             return
         
         # 找可用空间最大的挂载点
@@ -289,9 +307,16 @@ class EnvironmentChecker:
                 best_mount = mount
         
         if best_mount:
-            self._record('test_dir', '建议测试目录', f'{best_mount}/ufs_test (可用 {max_avail_gb:.1f} GB)')
+            # 修复：当 mount 是 '/' 时，避免变成 '//ufs_test'
+            if best_mount == '/':
+                test_dir = '/ufs_test'
+            else:
+                test_dir = f'{best_mount}/ufs_test'
+            self._record('test_dir', '建议测试目录', f'{test_dir} (可用 {max_avail_gb:.1f} GB)')
+            self.runtime_config['test_dir'] = test_dir
         else:
             self._record('test_dir', '建议测试目录', '/tmp/ufs_test (所有挂载点 < 2GB)')
+            self.runtime_config['test_dir'] = '/tmp/ufs_test'
 
     # ── 内部工具 ──────────────────────────────────────────
 
@@ -392,6 +417,37 @@ class EnvironmentChecker:
             json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
         print(f'\n报告已保存：{path}')
 
+    def save_runtime_config(self):
+        """将关键配置写入 runtime.json，供后续脚本读取"""
+        self.runtime_config['env_checked_at'] = datetime.now().isoformat()
+
+        config_path = self.config_dir / 'runtime.json'
+
+        # 确保目录存在
+        if not self.config_dir.exists():
+            self.config_dir.mkdir(parents=True, exist_ok=True)
+
+        # 读取现有配置（如果存在），合并更新
+        existing = {}
+        if config_path.exists():
+            try:
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    existing = json.load(f)
+            except Exception:
+                pass
+
+        # 合合配置：runtime_config 覆盖现有
+        merged = {**existing, **self.runtime_config}
+
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(merged, f, indent=2, ensure_ascii=False)
+
+        print(f'\n✅ 配置已保存：{config_path}')
+        print(f'   设备路径: {self.runtime_config.get("device", "未检测到")}')
+        print(f'   测试目录: {self.runtime_config.get("test_dir", "未检测到")}')
+
+        return config_path
+
 
 def main():
     import argparse
@@ -400,6 +456,7 @@ def main():
                    help='运行模式: dev(开发,默认) / deploy(部署)')
     p.add_argument('--report', action='store_true', help='生成 JSON 报告')
     p.add_argument('--output', default='env_report.json', help='报告输出路径')
+    p.add_argument('--save-config', action='store_true', help='将检测结果保存为 runtime.json 配置文件')
     p.add_argument('-v', '--verbose', action='store_true', help='详细输出')
     args = p.parse_args()
 
@@ -407,6 +464,8 @@ def main():
     checker.run()
     if args.report:
         checker.save_report(args.output)
+    if args.save_config:
+        checker.save_runtime_config()
 
 
 if __name__ == '__main__':

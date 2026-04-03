@@ -30,86 +30,86 @@ from core.logger import get_logger, close_all_loggers
 
 def cmd_run(args):
     """执行测试"""
-    # 生成测试 ID（脚本名称 + 时间后缀）
+    # 生成测试 ID(脚本名称 + 时间后缀)
     script_name = Path(__file__).stem  # SysTest
     test_id = f"{script_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    
-    # 初始化日志（按测试 ID 分离）
+
+    # 初始化日志(按测试 ID 分离)
     logger = get_logger(
         test_id=test_id,
         log_dir='logs',
         console_level=logging.DEBUG if args.verbose else logging.INFO,
         file_level=logging.DEBUG
     )
-    
+
     logger.info(f"开始执行测试 - Suite: {args.suite}, Device: {args.device}")
     if args.test_dir:
         logger.info(f"测试目录: {args.test_dir} (手动指定)")
     else:
         logger.info(f"测试目录: 自动选择 (基于设备挂载点)")
     logger.info(f"测试 ID: {test_id}")
-    logger.debug(f"日志文件：{logger.get_log_file()}")
-    
+    logger.debug(f"日志文件:{logger.get_log_file()}")
+
     # 初始化组件
     runner = TestRunner(device=args.device, test_dir=args.test_dir, verbose=args.verbose)
     collector = ResultCollector(output_dir=args.output)
     reporter = ReportGenerator(template='default')
-    
+
     # 执行测试
     try:
         results = runner.run_suite(args.suite)
-        
+
         # 收集结果
         report_data = collector.collect(results, test_id=test_id)
-        
+
         # 生成报告
         report_path = reporter.generate(report_data, output_dir=args.output, formats=args.format.split(','))
-        
-        logger.info(f"测试完成 - 通过率：{report_data['summary']['pass_rate']:.1f}%")
-        logger.info(f"报告已生成：{report_path}")
-        logger.info(f"日志文件：{logger.get_log_file()}")
-        
+
+        logger.info(f"测试完成 - 通过率:{report_data['summary']['pass_rate']:.1f}%")
+        logger.info(f"报告已生成:{report_path}")
+        logger.info(f"日志文件:{logger.get_log_file()}")
+
         # 关闭日志
         close_all_loggers()
-        
+
         return 0 if report_data['summary']['failed'] == 0 else 1
-        
+
     except Exception as e:
-        logger.critical(f"测试执行失败：{e}", exc_info=True)
-        logger.error(f"错误日志：{logger.get_error_file()}")
-        
+        logger.critical(f"测试执行失败:{e}", exc_info=True)
+        logger.error(f"错误日志:{logger.get_error_file()}")
+
         # 关闭日志
         close_all_loggers()
-        
+
         return 2
 
 
 def cmd_list(args):
     """列出可用测试"""
     from core.runner import TestRunner
-    
+
     runner = TestRunner(dry_run=True)
-    
+
     print("\n=== 可用测试套件 ===\n")
     suites = runner.list_suites()
-    
+
     for suite_name, tests in suites.items():
         print(f"📦 {suite_name}")
         for test in tests:
             print(f"   • {test}")
         print()
-    
-    print(f"共计 {sum(len(t) for t in suites.values())} 个测试项，{len(suites)} 个套件")
+
+    print(f"共计 {sum(len(t) for t in suites.values())} 个测试项,{len(suites)} 个套件")
 
 
 def cmd_report(args):
     """生成/查看报告"""
     from core.reporter import ReportGenerator
     from core.logger import get_logger
-    
+
     logger = get_logger(test_id='report', log_dir='logs', console_level=logging.INFO, file_level=logging.DEBUG)
     reporter = ReportGenerator()
-    
+
     if args.latest:
         report_path = reporter.get_latest_report()
     elif args.id:
@@ -117,9 +117,9 @@ def cmd_report(args):
     else:
         print("❌ 请指定 --latest 或 --id")
         return 1
-    
+
     if report_path:
-        logger.info(f"报告路径：{report_path}")
+        logger.info(f"报告路径:{report_path}")
         if args.open:
             import webbrowser
             webbrowser.open(f'file://{report_path}')
@@ -132,35 +132,37 @@ def cmd_report(args):
 def cmd_config(args):
     """查看/管理配置"""
     config_path = script_dir / 'config' / 'default.json'
-    
+
     if args.show:
         if config_path.exists():
-            print(f"\n=== 配置文件：{config_path} ===\n")
+            print(f"\n=== 配置文件:{config_path} ===\n")
             with open(config_path, 'r', encoding='utf-8') as f:
                 print(f.read())
         else:
-            print(f"⚠️  配置文件不存在：{config_path}")
+            print(f"⚠️  配置文件不存在:{config_path}")
     else:
-        print(f"配置文件路径：{config_path}")
+        print(f"配置文件路径:{config_path}")
 
 
 def cmd_check_env(args):
     """环境检查"""
     import subprocess
-    
+
     check_script = script_dir / 'check_env.py'
-    
+
     if not check_script.exists():
         print(f"❌ 环境检查脚本不存在：{check_script}")
         return 1
-    
+
     # 构建命令
     cmd = [sys.executable, str(check_script)]
     if args.report:
         cmd.extend(['--report', '--output', args.output])
+    if args.save_config:
+        cmd.append('--save-config')
     if args.verbose:
         cmd.append('-v')
-    
+
     # 执行检查
     result = subprocess.run(cmd)
     return result.returncode
@@ -169,13 +171,13 @@ def cmd_check_env(args):
 def cmd_compare_baseline(args):
     """性能基线对比"""
     import subprocess
-    
+
     compare_script = script_dir / 'compare_baseline.py'
-    
+
     if not compare_script.exists():
-        print(f"❌ 对比脚本不存在：{compare_script}")
+        print(f"❌ 对比脚本不存在:{compare_script}")
         return 1
-    
+
     # 构建命令
     cmd = [sys.executable, str(compare_script)]
     if args.dev:
@@ -186,7 +188,7 @@ def cmd_compare_baseline(args):
         cmd.extend(['--threshold', str(args.threshold)])
     if args.output:
         cmd.extend(['--output', args.output])
-    
+
     # 执行对比
     result = subprocess.run(cmd)
     return result.returncode
@@ -208,44 +210,45 @@ def main():
   SysTest compare-baseline --dev results/dev/ --ci results/ci/
         """
     )
-    
+
     subparsers = parser.add_subparsers(dest='command', help='可用命令')
-    
+
     # run 命令
     run_parser = subparsers.add_parser('run', help='执行测试')
     run_parser.add_argument('--suite', '-s', required=True, help='测试套件名称')
     run_parser.add_argument('--test', '-t', help='单个测试项名称')
     run_parser.add_argument('--device', '-d', default='/dev/ufs0', help='测试设备路径')
-    run_parser.add_argument('--test-dir', '-tdir', default=None, help='测试文件目录（默认自动选择，所有测试共用）')
+    run_parser.add_argument('--test-dir', '-tdir', default=None, help='测试文件目录(默认自动选择,所有测试共用)')
     run_parser.add_argument('--output', '-o', default='./results', help='输出目录')
     run_parser.add_argument('--format', '-f', default='html,json', help='报告格式 (html/json/pdf)')
     run_parser.add_argument('--verbose', '-v', action='store_true', help='详细输出')
     run_parser.add_argument('--dry-run', '-n', action='store_true', help='模拟执行')
     run_parser.set_defaults(func=cmd_run)
-    
+
     # list 命令
     list_parser = subparsers.add_parser('list', help='列出可用测试')
     list_parser.set_defaults(func=cmd_list)
-    
+
     # report 命令
     report_parser = subparsers.add_parser('report', help='生成/查看报告')
     report_parser.add_argument('--latest', action='store_true', help='查看最新报告')
     report_parser.add_argument('--id', help='指定报告 ID')
     report_parser.add_argument('--open', action='store_true', help='在浏览器中打开')
     report_parser.set_defaults(func=cmd_report)
-    
+
     # config 命令
     config_parser = subparsers.add_parser('config', help='查看/管理配置')
     config_parser.add_argument('--show', action='store_true', help='显示配置内容')
     config_parser.set_defaults(func=cmd_config)
-    
+
     # check-env 命令
-    check_env_parser = subparsers.add_parser('check-env', help='检查 CI/CD 环境配置')
+    check_env_parser = subparsers.add_parser('check-env', help='检查环境并生成配置')
     check_env_parser.add_argument('--report', action='store_true', help='生成 JSON 报告')
     check_env_parser.add_argument('--output', default='env_check_report.json', help='报告输出路径')
+    check_env_parser.add_argument('--save-config', action='store_true', help='将检测结果保存为 runtime.json 配置文件')
     check_env_parser.add_argument('--verbose', '-v', action='store_true', help='详细输出')
     check_env_parser.set_defaults(func=cmd_check_env)
-    
+
     # compare-baseline 命令
     compare_parser = subparsers.add_parser('compare-baseline', help='对比性能基线')
     compare_parser.add_argument('--dev', help='开发板测试结果目录')
@@ -255,14 +258,14 @@ def main():
     compare_parser.add_argument('--threshold', type=float, default=0.10, help='允许差异比例 (默认 0.10)')
     compare_parser.add_argument('--output', help='报告输出路径')
     compare_parser.set_defaults(func=cmd_compare_baseline)
-    
+
     # 解析参数
     args = parser.parse_args()
-    
+
     if not args.command:
         parser.print_help()
         return 1
-    
+
     # 执行命令
     return args.func(args)
 

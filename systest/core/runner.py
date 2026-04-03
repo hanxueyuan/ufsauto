@@ -372,22 +372,55 @@ class TestCase:
 class TestRunner:
     """测试执行引擎"""
 
-    def __init__(self, device: str = '/dev/ufs0', test_dir: str = None, verbose: bool = False, dry_run: bool = False):
-        self.device = device
+    def __init__(self, device: str = None, test_dir: str = None, verbose: bool = False, dry_run: bool = False):
+        self.device_override = device  # 用户手动指定
         self.test_dir_override = test_dir  # 用户手动指定
         self.verbose = verbose
         self.dry_run = dry_run
         self.suites_dir = Path(__file__).parent.parent / 'suites'
+        self.config_dir = Path(__file__).parent.parent / 'config'
         self.test_dir = None  # 最终确定的测试目录
+        self.device = None  # 最终确定的设备路径
 
-        # 自动选择测试目录
+        # 加载运行时配置
+        self.runtime_config = self._load_runtime_config()
+
+        # 确定设备路径：用户指定 > runtime_config > 默认值
+        if self.device_override:
+            self.device = self.device_override
+            logger.info(f"✅ 设备路径: {self.device} (手动指定)")
+        elif self.runtime_config.get('device'):
+            self.device = self.runtime_config['device']
+            logger.info(f"✅ 设备路径: {self.device} (从 runtime.json 读取)")
+        else:
+            self.device = '/dev/ufs0'
+            logger.warning(f"⚠️  设备路径: {self.device} (默认值，建议运行 check-env --save-config)")
+
+        # 确定测试目录
         self._resolve_test_dir()
 
         # 加载测试套件
         self.suites = self._load_suites()
 
+    def _load_runtime_config(self) -> Dict[str, Any]:
+        """加载 runtime.json 配置文件"""
+        config_path = self.config_dir / 'runtime.json'
+        if config_path.exists():
+            try:
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                checked_at = config.get('env_checked_at', '未知时间')
+                logger.info(f"📄 已加载配置: {config_path} (环境检查时间: {checked_at})")
+                return config
+            except Exception as e:
+                logger.warning(f"⚠️  配置文件读取失败: {e}")
+                return {}
+        else:
+            logger.info(f"ℹ️  配置文件不存在: {config_path} (建议运行 check-env --save-config)")
+            return {}
+
     def _resolve_test_dir(self):
-        """自动选择测试目录:用户指定 > 最大可用空间挂载点 > /tmp
+        """确定测试目录：用户指定 > runtime_config > 自动检测 > /tmp
 
         生产模式(默认):自动根据存储情况选择测试目录
         测试模式(CI/CD):用户手动指定 --test-dir
@@ -396,16 +429,33 @@ class TestRunner:
             - 找不到 ≥2GB 可用空间 → 报 warning,回退到 /tmp
             - findmnt 命令失败 → 报 warning,回退到 /tmp
         """
+        # 1) 用户手动指定（最高优先级）
         if self.test_dir_override:
-            # 用户手动指定(测试模式)
             self.test_dir = Path(self.test_dir_override).absolute()
             if not self.test_dir.exists():
                 self.test_dir.mkdir(parents=True, exist_ok=True)
-            logger.info(f"✅ 测试目录:{self.test_dir} (手动指定 - 测试模式)")
+            logger.info(f"✅ 测试目录: {self.test_dir} (手动指定)")
             return
 
-        # 生产模式:自动查找最大可用空间挂载点
-        logger.info("🔍 生产模式:自动选择测试目录 (根据存储情况)")
+        # 2) 从 runtime_config 读取（check-env --save-config 生成的配置）
+        if self.runtime_config.get('test_dir'):
+            config_test_dir = self.runtime_config['test_dir']
+            self.test_dir = Path(config_test_dir).absolute()
+            try:
+                if not self.test_dir.exists():
+                    self.test_dir.mkdir(parents=True, exist_ok=True)
+                logger.info(f"✅ 测试目录: {self.test_dir} (从 runtime.json 读取)")
+            except PermissionError:
+                logger.warning(f"⚠️  无法创建测试目录: {self.test_dir} (权限不足)")
+                logger.warning("    建议: 使用 sudo 运行，或手动指定 --test-dir")
+                # 回退到用户可写的目录
+                self.test_dir = Path.home() / 'ufs_test'
+                self.test_dir.mkdir(parents=True, exist_ok=True)
+                logger.warning(f"⚠️  回退到: {self.test_dir}")
+            return
+
+        # 3) 实时自动检测（向后兼容）
+        logger.info("🔍 自动选择测试目录 (runtime.json 未配置)")
 
         try:
             # 先尝试新版 findmnt (支持 FSUSED, FSAVAIL)
