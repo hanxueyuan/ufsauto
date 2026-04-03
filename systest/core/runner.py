@@ -384,6 +384,19 @@ class TestRunner:
         self.test_dir = None  # 最终确定的测试目录
         self.device = None  # 最终确定的设备路径
 
+        # === Dry-run 模式：使用临时参数验证框架 ===
+        if self.dry_run:
+            logger.info("🧪 [DRY-RUN] 使用临时参数验证框架")
+            self.device = '/dev/null'  # 避免真实设备
+            self.test_dir = Path('/tmp/systest_dryrun')
+            self.test_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"  设备路径: {self.device} (临时)")
+            logger.info(f"  测试目录: {self.test_dir} (临时)")
+            # 跳过 CI 环境验证（dry-run 不需要真实配置）
+            self.suites = self._load_suites()
+            return
+
+        # === 生产模式：使用真实参数 ===
         # 加载运行时配置
         self.runtime_config = self._load_runtime_config()
 
@@ -705,12 +718,71 @@ class TestRunner:
             logger.info(f"[{i}/{len(tests)}] 执行测试:{test_name}")
 
             if self.dry_run:
-                logger.info(f"  [DRY-RUN] 跳过执行")
-                results.append({
-                    'name': test_name,
-                    'status': 'DRY-RUN',
-                    'duration': 0
-                })
+                # Dry-run 模式：验证测试用例能正确导入和解析参数
+                try:
+                    import sys
+                    suites_dir = Path(__file__).parent.parent / 'suites'
+                    if str(suites_dir) not in sys.path:
+                        sys.path.insert(0, str(suites_dir))
+
+                    # 导入测试模块（验证文件存在）
+                    if test_name.startswith('t_'):
+                        module_path = suites_dir / suite_name / f'{test_name}.py'
+                    else:
+                        module_path = suites_dir / suite_name / f'test_{test_name}.py'
+
+                    if not module_path.exists():
+                        logger.error(f"  ❌ 测试文件不存在: {module_path}")
+                        results.append({
+                            'name': test_name,
+                            'status': 'ERROR',
+                            'reason': f'Test file not found: {module_path}',
+                            'duration': 0
+                        })
+                        continue
+
+                    # 动态导入（验证语法正确）
+                    import importlib.util
+                    spec = importlib.util.spec_from_file_location(f'{suite_name}.{test_name}', module_path)
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+
+                    # 验证 TestCase 类存在
+                    if 'TestCase' not in dir(module):
+                        logger.error(f"  ❌ TestCase 类不存在: {test_name}")
+                        results.append({
+                            'name': test_name,
+                            'status': 'ERROR',
+                            'reason': 'TestCase class not found',
+                            'duration': 0
+                        })
+                        continue
+
+                    # 创建实例（验证参数解析）
+                    test_instance = module.TestCase(device=self.device, test_dir=self.test_dir)
+                    logger.info(f"  ✅ [DRY-RUN] 测试用例验证通过: {test_instance.__class__.__name__}")
+                    results.append({
+                        'name': test_name,
+                        'status': 'DRY-RUN-PASS',
+                        'class': test_instance.__class__.__name__,
+                        'duration': 0
+                    })
+                except SyntaxError as e:
+                    logger.error(f"  ❌ [DRY-RUN] 语法错误: {e}")
+                    results.append({
+                        'name': test_name,
+                        'status': 'ERROR',
+                        'reason': f'Syntax error: {e}',
+                        'duration': 0
+                    })
+                except Exception as e:
+                    logger.error(f"  ❌ [DRY-RUN] 导入失败: {e}")
+                    results.append({
+                        'name': test_name,
+                        'status': 'ERROR',
+                        'reason': f'Import error: {e}',
+                        'duration': 0
+                    })
                 continue
 
             # 动态导入测试用例

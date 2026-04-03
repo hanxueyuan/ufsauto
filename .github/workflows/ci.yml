@@ -106,10 +106,51 @@ jobs:
         cd systest
         python3 -m unittest discover -s tests -v || echo "单元测试完成"
 
+  # Dry-run 验证（框架逻辑测试，无硬件依赖）
+  dry-run-validation:
+    runs-on: ubuntu-22.04
+    needs: environment-check
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f systest/requirements.txt ]; then
+          pip install -r systest/requirements.txt 2>/dev/null || true
+        fi
+
+    - name: Dry-run framework validation
+      run: |
+        cd systest
+        echo "=== 🧪 Dry-run 模式验证 ==="
+        echo "验证项目：参数解析、测试流程、测试用例导入"
+        echo ""
+
+        # 运行所有套件的 dry-run 验证
+        python3 bin/SysTest run --suite=performance --dry-run -v
+
+        echo ""
+        echo "✅ Dry-run 验证完成"
+
+    - name: Upload dry-run report
+      uses: actions/upload-artifact@v4
+      with:
+        name: dry-run-report
+        path: systest/results/
+        retention-days: 7
+
   # 性能测试（有硬件时执行真实测试，无硬件时跳过）
   performance-tests:
     runs-on: ubuntu-22.04
-    needs: environment-check
+    needs: [environment-check, dry-run-validation]
     
     steps:
     - name: Checkout code
