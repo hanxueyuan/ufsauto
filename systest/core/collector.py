@@ -45,7 +45,7 @@ class ResultCollector:
             完整的报告数据结构
         """
         if test_id is None:
-            test_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+            test_id = f"SysTest_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
         # 创建测试输出目录
         test_dir = self.output_dir / test_id

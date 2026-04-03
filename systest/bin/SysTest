@@ -30,8 +30,9 @@ from core.logger import get_logger, close_all_loggers
 
 def cmd_run(args):
     """执行测试"""
-    # 生成测试 ID
-    test_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+    # 生成测试 ID（脚本名称 + 时间后缀）
+    script_name = Path(__file__).stem  # SysTest
+    test_id = f"{script_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     
     # 初始化日志（按测试 ID 分离）
     logger = get_logger(
