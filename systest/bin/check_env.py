@@ -495,7 +495,7 @@ class EnvironmentChecker:
             except Exception:
                 pass
 
-        # 合合配置：runtime_config 覆盖现有
+        # 合并配置：runtime_config 覆盖现有
         merged = {**existing, **self.runtime_config}
 
         with open(config_path, 'w', encoding='utf-8') as f:

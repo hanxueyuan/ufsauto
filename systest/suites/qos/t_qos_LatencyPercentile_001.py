@@ -70,7 +70,7 @@ class Test(TestCase):
         self.ioengine = ioengine
         self.iodepth = iodepth
         self.target_p9999_us = target_p9999_us
-        self.target_p99999_us = target_p9999_us
+        self.target_p99999_us = target_p99999_us
         self.prefill = prefill
         
         # 初始化工具
@@ -121,7 +121,7 @@ class Test(TestCase):
         
         self.logger.info("📋 测试配置:")
         self.logger.info(f"  bs={self.bs}, size={self.size}, runtime={self.runtime}s, iodepth={self.iodepth}")
-        self.logger.info(f"  target_p99.99={self.target_p9999_us} μs, target_p99.999={self.target_p9999_us} μs")
+        self.logger.info(f"  target_p99.99={self.target_p9999_us} μs, target_p99.999={self.target_p99999_us} μs")
         
         self.logger.info("📊 前置条件检查通过")
         return True
@@ -170,6 +170,10 @@ class Test(TestCase):
                     'value': metrics_obj.bandwidth['value'],
                     'unit': 'MB/s'
                 },
+                'latency_avg': {
+                    'value': lat.get('avg', 0) / 1000,  # ns → μs
+                    'unit': 'μs'
+                },
                 'latency_p50': {
                     'value': percentiles.get('50.0', 0) / 1000,  # ns → μs
                     'unit': 'μs'
@@ -204,7 +208,7 @@ class Test(TestCase):
             self.logger.info(f"  平均延迟: {metrics['latency_avg']['value']:.1f} μs")
             self.logger.info(f"  p50: {metrics['latency_p50']['value']:.1f} μs")
             self.logger.info(f"  p90: {metrics['latency_p90']['value']:.1f} μs")
-            self.logger.info(f"  p99: {metrics['latency_p99']['value']:.1f} μs (目标: <{self.target_p999_us})")
+            self.logger.info(f"  p99: {metrics['latency_p99']['value']:.1f} μs")
             self.logger.info(f"  p99.99: {metrics['latency_p9999']['value']:.1f} μs (目标: <{self.target_p9999_us})")
             
             return metrics

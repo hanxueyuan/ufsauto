@@ -163,14 +163,14 @@ class Test(TestCase):
             p9999 = metrics.latency_ns['percentile'].get('99.990000', 0) / 1000  # ns → µs
             
             result = {
-                'latency_p50_ns': {'value': p50, 'unit': 'ns'},
-                'latency_p9999_ns': {'value': p9999, 'unit': 'µs'},
+                'latency_p50': {'value': p50, 'unit': 'µs'},
+                'latency_p9999': {'value': p9999, 'unit': 'µs'},
                 'tail_ratio': {'value': p9999 / p50 if p50 > 0 else 0, 'unit': '×'},
             }
             
             # 日志输出结果
             self.logger.info("📊 测试完成，尾部发散度:")
-            self.logger.info(f"  p50: {p50:.1f} ns")
+            self.logger.info(f"  p50: {p50:.1f} µs")
             self.logger.info(f"  p99.99: {p9999:.1f} µs")
             self.logger.info(f"  p99.99/p50 = {p9999 / p50:.1f}× (target: <{self.target_tail_ratio:.1f}×)")
             
@@ -184,8 +184,8 @@ class Test(TestCase):
         """验证尾部发散度结果"""
         all_ok = True
         
-        p50 = result['latency_p50_ns']['value']
-        p9999 = result['latency_p9999_ns']['value']
+        p50 = result['latency_p50']['value']
+        p9999 = result['latency_p9999']['value']
         
         # 检查尾部发散度
         if p50 > 0:
