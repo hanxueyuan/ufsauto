@@ -135,8 +135,37 @@ class EnvironmentChecker:
             except Exception as e:
                 self._record('storage', '⚠️ 访问失败', str(e))
         
-        # ========== 方法 2: 通过 /sys 查找块设备，检查驱动链 ==========
-        # 保留原逻辑作为备选
+        # ========== 方法 2: 检查 /sys/class/scsi_host/ proc_name ==========
+        scsi_host_dir = '/sys/class/scsi_host'
+        if os.path.isdir(scsi_host_dir) and not ufs_found:
+            try:
+                hosts = os.listdir(scsi_host_dir)
+                for host in hosts:
+                    proc_name_path = os.path.join(scsi_host_dir, host, 'proc_name')
+                    if os.path.exists(proc_name_path):
+                        with open(proc_name_path, 'r') as f:
+                            proc_name = f.read().strip()
+                        if 'ufs' in proc_name.lower() or 'ufshcd' in proc_name.lower():
+                            ufs_found = True
+                            self._record('storage', 'SCSI 主机', f'{host} (proc_name={proc_name})')
+                            self._record('storage', '检测方法', '/sys/class/scsi_host proc_name 包含 ufs')
+                            break
+            except Exception:
+                pass
+        
+        # ========== 方法 3: 检查 /sys/class/ufs/ 目录（新版内核）==========
+        sys_ufs_dir = '/sys/class/ufs'
+        if os.path.isdir(sys_ufs_dir) and not ufs_found:
+            try:
+                ufs_devices = os.listdir(sys_ufs_dir)
+                if ufs_devices:
+                    ufs_found = True
+                    self._record('storage', 'sysfs UFS 类', f'{ufs_devices[0]} ✓')
+                    self._record('storage', '检测方法', '/sys/class/ufs 目录存在')
+            except Exception:
+                pass
+        
+        # ========== 方法 4: 通过 /sys/block 检查驱动链 ==========
         for blk in sorted(glob.glob('/sys/block/*')):
             if ufs_found:
                 break
