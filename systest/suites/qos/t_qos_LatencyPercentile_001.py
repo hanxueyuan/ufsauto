@@ -187,14 +187,14 @@ class Test(TestCase):
                     'unit': 'μs'
                 },
                 'latency_p9999': {
-                    'value': percentiles.get('99.9', 0) / 1000,
+                    'value': percentiles.get('99.990000', 0) / 1000,
                     'unit': 'μs',
                     'target': self.target_p9999_us
                 },
                 'latency_p99999': {
-                    'value': percentiles.get('99.99', 0) / 1000,
+                    'value': percentiles.get('99.999000', 0) / 1000,
                     'unit': 'μs',
-                    'target': self.target_p9999_us
+                    'target': self.target_p99999_us
                 },
                 'runtime': {
                     'value': metrics_obj.raw['jobs'][0]['elapsed'],

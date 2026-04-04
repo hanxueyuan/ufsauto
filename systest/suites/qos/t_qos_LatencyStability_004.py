@@ -170,8 +170,8 @@ class Test(TestCase):
                 )
                 
                 percentiles = metrics.latency_ns.get('percentile', {})
-                avg_lat = percentiles.get('50.0', 0) / 1000  # ns → μs
-                p9999_lat = percentiles.get('99.99', 0) / 1000  # ns → μs
+                avg_lat = percentiles.get('50.000000', 0) / 1000  # ns → μs
+                p9999_lat = percentiles.get('99.990000', 0) / 1000  # ns → μs
                 
                 avg_latencies.append(avg_lat)
                 p9999_latencies.append(p9999_lat)
