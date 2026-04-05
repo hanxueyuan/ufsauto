@@ -22,14 +22,9 @@ python3 bin/SysTest run --all
 
 ## 📚 文档导航
 
-### 新手入门
-1. **[项目总结](PROJECT_SUMMARY.md)** - 了解项目全貌和设计哲学
-2. **[知识框架](systest/docs/Knowledge_Framework.md)** - 快速掌握 UFS 测试核心概念
-3. **[README](systest/README.md)** - 详细使用说明
-
-### 深入学习
+### 核心文档
 - **[测试知识](systest/docs/UFS_Testing_Knowledge.md)** - UFS 测试原理和指标详解
-- **[使用示例](systest/docs/Usage_Examples.md)** - 10 个实际场景的使用指南
+- **[使用示例](systest/docs/Usage_Examples.md)** - 15 个实际场景的使用指南
 - **[故障诊断](systest/docs/Troubleshooting_Guide.md)** - 系统化的问题排查方法
 
 ### 专业参考
@@ -136,16 +131,6 @@ python3 bin/SysTest compare-baseline
 
 ## 📈 关键指标参考
 
-### 性能指标 (UFS 3.1 256GB 典型值)
-```
-顺序读取：~2000 MB/s
-顺序写入：~1200 MB/s
-随机读取：~60,000 IOPS (4K QD32)
-随机写入：~50,000 IOPS (4K QD32)
-读取延迟：~100 μs (avg)
-写入延迟：~150 μs (avg)
-```
-
 ### 健康判断
 ```
 P99/P50 < 10    → 延迟分布均匀 ✓
@@ -153,6 +138,8 @@ P99/P50 > 20    → 延迟抖动大 ⚠
 性能波动 < 20%  → 稳定性好 ✓
 性能波动 > 50%  → 可能有问题 ⚠
 ```
+
+**注意**: 具体性能指标因设备型号和容量而异，请参考设备规格书。
 
 ## 🛠️ 故障诊断速查
 
@@ -171,7 +158,6 @@ P99/P50 > 20    → 延迟抖动大 ⚠
 ```
 ufsauto/
 ├── README.md                     # 本文件
-├── PROJECT_SUMMARY.md            # 项目总结
 └── systest/                      # 测试框架
     ├── bin/                      # 可执行脚本
     ├── core/                     # 核心模块
@@ -185,20 +171,20 @@ ufsauto/
 
 ## 🎓 学习路径
 
-### 第 1 天：快速上手
-1. 阅读 [Knowledge_Framework.md](systest/docs/Knowledge_Framework.md)
-2. 运行 `python3 bin/SysTest check-env`
-3. 运行 `python3 bin/SysTest run --quick`
+### 快速上手
+1. 运行 `python3 bin/SysTest check-env`
+2. 运行 `python3 bin/SysTest run --quick`
+3. 阅读 [UFS_Testing_Knowledge.md](systest/docs/UFS_Testing_Knowledge.md)
 
-### 第 2 天：深入理解
-1. 阅读 [UFS_Testing_Knowledge.md](systest/docs/UFS_Testing_Knowledge.md)
-2. 阅读 [Usage_Examples.md](systest/docs/Usage_Examples.md)
-3. 尝试不同测试场景
+### 深入理解
+1. 阅读 [Usage_Examples.md](systest/docs/Usage_Examples.md)
+2. 尝试不同测试场景
+3. 建立自己的 baseline
 
-### 第 3 天：掌握诊断
+### 掌握诊断
 1. 阅读 [Troubleshooting_Guide.md](systest/docs/Troubleshooting_Guide.md)
-2. 建立基线并对比
-3. 学习分析测试结果
+2. 学习分析测试结果
+3. 实践故障排查流程
 
 ## 🔗 相关资源
 
