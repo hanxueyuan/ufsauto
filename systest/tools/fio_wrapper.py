@@ -460,9 +460,14 @@ class FIO:
         bs: str = '4k',
         iodepth: int = 1,  # QD=1 测延迟
         ioengine: str = 'sync',
+        ramp_time: int = 0,
         **kwargs
     ) -> FIOMetrics:
-        """延迟测试（QD=1，小 block）"""
+        """延迟测试（QD=1，小 block）
+        
+        Args:
+            ramp_time: 预热时间（秒），用于稳定状态
+        """
         config = FIOConfig(
             name='latency',
             filename=filename,
@@ -473,6 +478,7 @@ class FIO:
             ioengine=ioengine,
             iodepth=iodepth,
             time_based=True,
+            ramp_time=ramp_time if ramp_time > 0 else None,
             **kwargs
         )
         return self.run(config)

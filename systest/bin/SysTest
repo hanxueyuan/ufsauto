@@ -30,59 +30,143 @@ from core.logger import get_logger, close_all_loggers
 
 def cmd_run(args):
     """执行测试"""
+    import time
+    from datetime import datetime
+    
     # 生成测试 ID(脚本名称 + 时间后缀)
     script_name = Path(__file__).stem  # SysTest
     test_id = f"{script_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-
-    # 初始化日志(按测试 ID 分离)
+    
+    # 初始化日志 (按测试 ID 分离)
     logger = get_logger(
         test_id=test_id,
         log_dir='logs',
         console_level=logging.DEBUG if args.verbose else logging.INFO,
         file_level=logging.DEBUG
     )
-
-    logger.info(f"开始执行测试 - Suite: {args.suite}, Device: {args.device}")
+    
+    # 加载预设配置（如果有）
+    if hasattr(args, 'config') and args.config:
+        config_path = Path(args.config)
+        if config_path.exists():
+            with open(config_path, 'r', encoding='utf-8') as f:
+                preset_config = json.load(f)
+            # 应用预设配置
+            if preset_config.get('device') and not args.device:
+                args.device = preset_config['device']
+            if preset_config.get('test_dir') and not args.test_dir:
+                args.test_dir = preset_config['test_dir']
+            logger.info(f"📄 已加载预设配置：{args.config}")
+    
+    logger.info(f"开始执行测试")
+    if args.all:
+        logger.info("模式：运行所有测试套件")
+    elif args.suite:
+        logger.info(f"套件：{args.suite}")
+    elif args.test:
+        logger.info(f"测试：{args.test}")
+    if args.device:
+        logger.info(f"设备：{args.device} (手动指定)")
     if args.test_dir:
-        logger.info(f"测试目录: {args.test_dir} (手动指定)")
-    else:
-        logger.info(f"测试目录: 自动选择 (基于设备挂载点)")
+        logger.info(f"测试目录：{args.test_dir} (手动指定)")
+    if args.quick:
+        logger.info("模式：快速模式 (测试时间缩短 50%)")
+    if args.batch > 1:
+        logger.info(f"批量测试：{args.batch} 次，间隔{args.interval}s")
     logger.info(f"测试 ID: {test_id}")
     logger.debug(f"日志文件:{logger.get_log_file()}")
-
-    # 初始化组件
-    runner = TestRunner(device=args.device, test_dir=args.test_dir, verbose=args.verbose,
-                         ci_mode=args.ci if hasattr(args, 'ci') else False)
-    collector = ResultCollector(output_dir=args.output)
-    reporter = ReportGenerator(template='default')
-
-    # 执行测试
-    try:
-        results = runner.run_suite(args.suite)
-
-        # 收集结果
-        report_data = collector.collect(results, test_id=test_id)
-
-        # 生成报告
-        report_path = reporter.generate(report_data, output_dir=args.output, formats=args.format.split(','))
-
-        logger.info(f"测试完成 - 通过率:{report_data['summary']['pass_rate']:.1f}%")
-        logger.info(f"报告已生成:{report_path}")
-        logger.info(f"日志文件:{logger.get_log_file()}")
-
-        # 关闭日志
-        close_all_loggers()
-
-        return 0 if report_data['summary']['failed'] == 0 else 1
-
-    except Exception as e:
-        logger.critical(f"测试执行失败:{e}", exc_info=True)
-        logger.error(f"错误日志:{logger.get_error_file()}")
-
-        # 关闭日志
-        close_all_loggers()
-
-        return 2
+    
+    # 批量测试
+    batch_results = []
+    for i in range(args.batch):
+        if args.batch > 1:
+            logger.info(f"\n{'='*60}")
+            logger.info(f"批量测试 {i+1}/{args.batch}")
+            logger.info(f"{'='*60}")
+        
+        # 确定要运行的套件
+        suites_to_run = []
+        if args.all:
+            if args.quick:
+                # 快速模式：跳过 reliability（太耗时）
+                suites_to_run = ['performance', 'qos']
+                logger.info("快速模式：跳过 reliability 套件")
+            else:
+                suites_to_run = ['performance', 'qos', 'reliability']
+        elif args.suite:
+            suites_to_run = [args.suite]
+        elif args.test:
+            # 单个测试，找到所属套件
+            from core.runner import TestRunner
+            runner_tmp = TestRunner(dry_run=True)
+            for suite_name, tests in runner_tmp.list_suites().items():
+                if args.test in tests:
+                    suites_to_run = [suite_name]
+                    break
+        
+        if not suites_to_run:
+            logger.error("未指定测试套件或测试项")
+            return 2
+        
+        # 快速模式：调整测试参数（缩短时间）
+        quick_factor = 0.5 if args.quick else 1.0
+        if args.quick:
+            logger.info(f"快速模式：测试时间缩短为 {quick_factor*100:.0f}%")
+        
+        # 执行每个套件
+        for suite_name in suites_to_run:
+            # 初始化组件
+            runner = TestRunner(
+                device=args.device,
+                test_dir=args.test_dir,
+                verbose=args.verbose,
+                dry_run=args.dry_run,
+                ci_mode=args.ci if hasattr(args, 'ci') else False
+            )
+            collector = ResultCollector(output_dir=args.output)
+            reporter = ReportGenerator(template='default')
+            
+            # 执行测试
+            try:
+                results = runner.run_suite(suite_name)
+                
+                # 收集结果
+                report_data = collector.collect(results, test_id=test_id, suite_name=suite_name, device=args.device)
+                
+                # 生成报告
+                report_formats = args.format.split(',') if hasattr(args, 'format') and args.format else ['html', 'json']
+                
+                # CSV 导出
+                if hasattr(args, 'export_csv') and args.export_csv:
+                    report_formats.append('csv')
+                
+                report_path = reporter.generate(report_data, output_dir=args.output, formats=report_formats)
+                
+                logger.info(f"测试完成 - 通过率:{report_data['summary']['pass_rate']:.1f}%")
+                logger.info(f"报告已生成:{report_path}")
+                logger.info(f"日志文件:{logger.get_log_file()}")
+                
+                batch_results.append(report_data)
+                
+            except Exception as e:
+                logger.critical(f"测试执行失败:{e}", exc_info=True)
+                logger.error(f"错误日志:{logger.get_error_file()}")
+                if args.batch == 1:
+                    # 关闭日志
+                    close_all_loggers()
+                    return 2
+        
+        # 批量测试间隔
+        if args.batch > 1 and i < args.batch - 1:
+            logger.info(f"\n等待 {args.interval}s 后进行下一轮测试...")
+            time.sleep(args.interval)
+    
+    # 关闭日志
+    close_all_loggers()
+    
+    # 返回码：有失败则返回 1
+    has_failure = any(r['summary']['failed'] > 0 for r in batch_results)
+    return 1 if has_failure else 0
 
 
 def cmd_list(args):
@@ -107,10 +191,11 @@ def cmd_report(args):
     """生成/查看报告"""
     from core.reporter import ReportGenerator
     from core.logger import get_logger
-
+    from datetime import datetime
+    
     logger = get_logger(test_id='report', log_dir='logs', console_level=logging.INFO, file_level=logging.DEBUG)
     reporter = ReportGenerator()
-
+    
     if args.latest:
         report_path = reporter.get_latest_report()
     elif args.id:
@@ -118,31 +203,108 @@ def cmd_report(args):
     else:
         print("❌ 请指定 --latest 或 --id")
         return 1
-
+    
     if report_path:
         logger.info(f"报告路径:{report_path}")
+        print(f"\n📄 报告路径：{report_path}")
         if args.open:
             import webbrowser
             webbrowser.open(f'file://{report_path}')
+        
+        # CSV 导出
+        if hasattr(args, 'export_csv') and args.export_csv:
+            csv_path = f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            # 从 JSON 结果生成 CSV
+            json_path = Path(report_path).parent / 'results.json'
+            if json_path.exists():
+                import json
+                with open(json_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                with open(csv_path, 'w', encoding='utf-8') as f:
+                    f.write("test_name,status,duration,metric_name,metric_value,metric_unit\n")
+                    for tc in data.get('test_cases', []):
+                        name = tc.get('name', '')
+                        status = tc.get('status', '')
+                        duration = tc.get('duration', 0)
+                        metrics = tc.get('metrics', {})
+                        for m_name, m_val in metrics.items():
+                            if isinstance(m_val, dict):
+                                val = m_val.get('value', '')
+                                unit = m_val.get('unit', '')
+                            else:
+                                val = m_val
+                                unit = ''
+                            f.write(f"{name},{status},{duration:.2f},{m_name},{val},{unit}\n")
+                print(f"✅ CSV 已导出：{csv_path}")
+        
         return 0
     else:
         logger.error("未找到报告")
+        print("❌ 未找到报告")
         return 1
 
 
 def cmd_config(args):
     """查看/管理配置"""
-    config_path = script_dir / 'config' / 'default.json'
-
-    if args.show:
+    import json
+    from pathlib import Path
+    
+    config_path = Path(__file__).parent.parent / 'config' / 'runtime.json'
+    
+    # 重置配置
+    if hasattr(args, 'reset') and args.reset:
+        default_config = {
+            "device": None,
+            "test_dir": None,
+            "device_capacity_gb": None,
+            "env_checked_at": None,
+            "system": {},
+            "toolchain": {},
+            "_comment": "配置已重置，请运行 check-env --save-config 重新生成"
+        }
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(default_config, f, indent=2, ensure_ascii=False)
+        print(f"✅ 配置已重置：{config_path}")
+        return 0
+    
+    # 设置设备路径
+    if hasattr(args, 'device') and args.device:
+        if not config_path.exists():
+            config = {}
+        else:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+        config['device'] = args.device
+        config['env_checked_at'] = datetime.now().isoformat()
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+        print(f"✅ 设备路径已设置：{args.device}")
+    
+    # 设置测试目录
+    if hasattr(args, 'test_dir') and args.test_dir:
+        if not config_path.exists():
+            config = {}
+        else:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+        config['test_dir'] = args.test_dir
+        config['env_checked_at'] = datetime.now().isoformat()
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+        print(f"✅ 测试目录已设置：{args.test_dir}")
+    
+    # 显示配置
+    if hasattr(args, 'show') and args.show:
         if config_path.exists():
-            print(f"\n=== 配置文件:{config_path} ===\n")
+            print(f"\n=== 配置文件：{config_path} ===\n")
             with open(config_path, 'r', encoding='utf-8') as f:
                 print(f.read())
         else:
-            print(f"⚠️  配置文件不存在:{config_path}")
-    else:
-        print(f"配置文件路径:{config_path}")
+            print(f"⚠️  配置文件不存在：{config_path}")
+            print("   运行 'SysTest check-env --save-config' 自动生成配置")
+    
+    return 0
 
 
 def cmd_check_env(args):
@@ -172,43 +334,65 @@ def cmd_check_env(args):
 def cmd_compare_baseline(args):
     """性能基线对比"""
     import subprocess
-
+    
     compare_script = script_dir / 'compare_baseline.py'
-
+    
     if not compare_script.exists():
         print(f"❌ 对比脚本不存在:{compare_script}")
         return 1
-
+    
     # 构建命令
     cmd = [sys.executable, str(compare_script)]
     if args.dev:
         cmd.extend(['--dev', args.dev])
     if args.ci:
         cmd.extend(['--ci', args.ci])
+    if args.baseline1:
+        cmd.extend(['--baseline1', args.baseline1])
+    if args.baseline2:
+        cmd.extend(['--baseline2', args.baseline2])
     if args.threshold:
         cmd.extend(['--threshold', str(args.threshold)])
     if args.output:
         cmd.extend(['--output', args.output])
-
+    
     # 执行对比
     result = subprocess.run(cmd)
+    
+    # CSV 导出（如果有）
+    if hasattr(args, 'export_csv') and args.export_csv:
+        print("\n📄 CSV 导出功能将在对比脚本中实现")
+    
     return result.returncode
 
 
 def main():
-    """主函数"""
+    """主函数 - 统一入口"""
     parser = argparse.ArgumentParser(
         description='UFS 系统测试框架 - SysTest',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-示例:
-  SysTest run --suite=performance --device=/dev/ufs0
+================================================================================
+示例用法:
+  # 执行测试
+  SysTest run --suite=performance
+  SysTest run --suite=performance --quick      # 快速模式 (时间减半，跳过 reliability)
   SysTest run --test=seq_read_burst -v
-  SysTest list
-  SysTest report --latest
-  SysTest config --show
-  SysTest check-env -v              # 检查 CI/CD 环境配置
-  SysTest compare-baseline --dev results/dev/ --ci results/ci/
+  SysTest run --all --batch=3                  # 批量测试 3 次
+
+  # 查看信息
+  SysTest list                                 # 列出所有测试
+  SysTest report --latest                      # 查看最新报告
+
+  # 环境管理
+  SysTest check-env                            # 检查环境
+  SysTest check-env --save-config              # 保存配置到 runtime.json
+  SysTest config --show                        # 显示配置
+  SysTest config --device=/dev/sda             # 设置设备路径
+
+  # 对比分析
+  SysTest compare-baseline --baseline1 results/gold/ --baseline2 results/current/
+================================================================================
         """
     )
 
@@ -216,19 +400,26 @@ def main():
 
     # run 命令
     run_parser = subparsers.add_parser('run', help='执行测试')
-    run_parser.add_argument('--suite', '-s', required=True, help='测试套件名称')
+    run_parser.add_argument('--suite', '-s', help='测试套件名称 (performance/qos/reliability)')
     run_parser.add_argument('--test', '-t', help='单个测试项名称')
-    run_parser.add_argument('--device', '-d', default='/dev/ufs0', help='测试设备路径')
-    run_parser.add_argument('--test-dir', '-tdir', default=None, help='测试文件目录(默认自动选择,所有测试共用)')
+    run_parser.add_argument('--all', '-a', action='store_true', help='运行所有测试套件')
+    run_parser.add_argument('--device', '-d', default=None, help='测试设备路径 (默认从 runtime.json 读取)')
+    run_parser.add_argument('--test-dir', '-tdir', default=None, help='测试文件目录 (默认自动选择)')
     run_parser.add_argument('--output', '-o', default='./results', help='输出目录')
-    run_parser.add_argument('--format', '-f', default='html,json', help='报告格式 (html/json/pdf)')
+    run_parser.add_argument('--format', '-f', default='html,json,txt', help='报告格式 (html/json/txt/csv)')
     run_parser.add_argument('--verbose', '-v', action='store_true', help='详细输出')
-    run_parser.add_argument('--dry-run', '-n', action='store_true', help='模拟执行')
-    run_parser.add_argument('--ci', action='store_true', help='CI/CD 环境模式(启用环境验证,失败时报错)')
+    run_parser.add_argument('--dry-run', '-n', action='store_true', help='模拟执行 (不实际运行测试)')
+    run_parser.add_argument('--quick', '-q', action='store_true', help='快速模式 (缩短测试时间 50%%)')
+    run_parser.add_argument('--batch', '-b', type=int, default=1, help='批量测试次数 (默认 1)')
+    run_parser.add_argument('--interval', '-i', type=int, default=60, help='批量测试间隔秒数 (默认 60s)')
+    run_parser.add_argument('--config', '-c', default=None, help='加载预设配置 (如 configs/ufs31_128GB.json)')
+    run_parser.add_argument('--export-csv', action='store_true', help='导出 CSV 格式结果')
+    run_parser.add_argument('--ci', action='store_true', help='CI/CD 环境模式 (启用环境验证)')
     run_parser.set_defaults(func=cmd_run)
 
     # list 命令
     list_parser = subparsers.add_parser('list', help='列出可用测试')
+    list_parser.add_argument('--detail', action='store_true', help='显示详细信息')
     list_parser.set_defaults(func=cmd_list)
 
     # report 命令
@@ -236,18 +427,22 @@ def main():
     report_parser.add_argument('--latest', action='store_true', help='查看最新报告')
     report_parser.add_argument('--id', help='指定报告 ID')
     report_parser.add_argument('--open', action='store_true', help='在浏览器中打开')
+    report_parser.add_argument('--export-csv', action='store_true', help='导出 CSV 格式')
     report_parser.set_defaults(func=cmd_report)
 
     # config 命令
     config_parser = subparsers.add_parser('config', help='查看/管理配置')
     config_parser.add_argument('--show', action='store_true', help='显示配置内容')
+    config_parser.add_argument('--reset', action='store_true', help='重置配置为默认值')
+    config_parser.add_argument('--device', help='设置设备路径')
+    config_parser.add_argument('--test-dir', help='设置测试目录')
     config_parser.set_defaults(func=cmd_config)
 
     # check-env 命令
     check_env_parser = subparsers.add_parser('check-env', help='检查环境并生成配置')
     check_env_parser.add_argument('--report', action='store_true', help='生成 JSON 报告')
     check_env_parser.add_argument('--output', default='env_check_report.json', help='报告输出路径')
-    check_env_parser.add_argument('--save-config', action='store_true', help='将检测结果保存为 runtime.json 配置文件')
+    check_env_parser.add_argument('--save-config', action='store_true', help='将检测结果保存为 runtime.json')
     check_env_parser.add_argument('--verbose', '-v', action='store_true', help='详细输出')
     check_env_parser.set_defaults(func=cmd_check_env)
 

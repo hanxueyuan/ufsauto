@@ -202,17 +202,8 @@ class TestLogger:
         """内部日志方法"""
         # 添加额外数据
         if kwargs:
-            extra_record = logging.LogRecord(
-                name=self.logger.name,
-                level=level,
-                pathname='',
-                lineno=0,
-                msg=msg,
-                args=(),
-                exc_info=None
-            )
-            extra_record.extra_data = kwargs
-            self.logger.handle(extra_record)
+            # 使用标准 logging 的 extra 参数传递额外数据
+            self.logger.log(level, msg, extra={'extra_data': kwargs})
         else:
             self.logger.log(level, msg)
     

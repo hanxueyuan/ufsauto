@@ -1,8 +1,9 @@
 {
   "device": null,
-  "test_dir": "/ufs_test",
+  "test_dir": null,
   "device_capacity_gb": null,
-  "env_checked_at": "2026-04-03T12:22:33.349476",
+  "env_checked_at": null,
   "system": {},
-  "toolchain": {}
+  "toolchain": {},
+  "_comment": "请运行 'python3 systest/bin/SysTest check-env --save-config' 自动生成配置"
 }

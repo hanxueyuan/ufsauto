@@ -241,18 +241,66 @@ class ReportGenerator:
     
     def _create_failure_analysis(self, result: Dict[str, Any]) -> str:
         """创建失效分析 HTML"""
+        test_name = result.get('name', 'unknown')
+        status = result.get('status', 'UNKNOWN')
+        duration = result.get('duration', 0)
+        
+        # 收集失败详情
+        failures = result.get('failures', [])
+        error = result.get('error', '')
+        reason = result.get('reason', '')
+        fail_mode = result.get('fail_mode', '')
+        
+        # 构建失败详情列表
+        failure_items = []
+        if error:
+            failure_items.append(f'错误：{error}')
+        if reason:
+            failure_items.append(f'原因：{reason}')
+        if fail_mode == 'stop':
+            failure_items.append('Fail-Stop: 测试被强制终止')
+        
+        for f in failures:
+            check = f.get('check', '未知检查项')
+            expected = f.get('expected', '-')
+            actual = f.get('actual', '-')
+            failure_reason = f.get('reason', '')
+            failure_items.append(f'{check}: 期望 {expected}, 实际 {actual}' + (f' ({failure_reason})' if failure_reason else ''))
+        
+        if not failure_items:
+            failure_items.append('详细失败原因请查看日志文件')
+        
+        # 构建建议列表
+        suggestions = []
+        if 'permission' in (error + reason).lower():
+            suggestions.append('检查用户权限，使用 sudo 或加入 disk 组')
+        if 'not found' in (error + reason).lower() or 'no such' in (error + reason).lower():
+            suggestions.append('确认设备路径正确，运行 check-env 检测')
+        if 'space' in (error + reason).lower():
+            suggestions.append('清理磁盘空间或指定 --test-dir 到其他分区')
+        if 'timeout' in (error + reason).lower():
+            suggestions.append('检查设备响应，查看 dmesg 日志')
+        if not suggestions:
+            suggestions.extend([
+                '查看测试日志文件定位具体问题',
+                '检查测试环境和设备状态',
+                '重新执行测试确认是否可复现'
+            ])
+        
+        failure_html = '<br>'.join(f'<li>{item}</li>' for item in failure_items)
+        suggestion_html = '<br>'.join(f'<li>{item}</li>' for item in suggestions)
+        
         return f'''<div class="failure-analysis">
-            <h3>❌ {result['name']}</h3>
-            <p><strong>状态:</strong> {result.get('status', 'UNKNOWN')}</p>
-            <p><strong>可能原因:</strong></p>
+            <h3>❌ {test_name}</h3>
+            <p><strong>状态:</strong> <span class="status {status}">{status}</span></p>
+            <p><strong>耗时:</strong> {duration:.2f}s</p>
+            <p><strong>失败详情:</strong></p>
             <ul>
-                <li>待分析（失效分析引擎待实现）</li>
+                {failure_html}
             </ul>
             <p><strong>建议措施:</strong></p>
             <ul>
-                <li>检查测试环境</li>
-                <li>查看日志文件</li>
-                <li>重新执行测试</li>
+                {suggestion_html}
             </ul>
         </div>'''
     
