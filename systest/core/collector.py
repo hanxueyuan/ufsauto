@@ -101,6 +101,7 @@ class ResultCollector:
                             logger.warning(f"💡 可手动清理：rm {log_dst}")
                         else:
                             logger.warning(f"⚠️  日志文件复制失败 {result['name']} ({log_size / 1024 / 1024:.1f} MB): {e}")
+                        logger.warning(f"💡  建议：手动复制或删除大日志文件以释放空间")
                     except Exception:
                         logger.warning(f"⚠️  日志文件复制失败 {result['name']}: {e}")
                     # 继续处理其他结果，不中断整个流程

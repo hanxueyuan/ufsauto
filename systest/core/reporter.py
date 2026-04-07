@@ -240,9 +240,9 @@ class ReportGenerator:
     
     def _create_failure_analysis(self, result: Dict[str, Any]) -> str:
         """创建失效分析 HTML"""
-        test_name = result.get('name', 'unknown')
+        test_name = result.get('name', 'unknown_test')
         status = result.get('status', 'UNKNOWN')
-        duration = result.get('duration', 0)
+        duration = result.get('duration', 0.0)
         
         # 收集失败详情
         failures = result.get('failures', [])

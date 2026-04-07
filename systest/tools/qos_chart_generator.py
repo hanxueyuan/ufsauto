@@ -90,7 +90,7 @@ class QoSChartGenerator:
         # 计算尾部系数，避免除零错误
         p50 = distribution.get('p50', 0)
         p99_999 = distribution.get('p99.999', 0)
-        tail_factor = p99_999 / p50 if p50 > 0 else float('inf')
+        tail_factor = p99_999 / p50 if p50 > 0 else float('inf')  # p50=0 时返回 inf
         chart_lines.append(f"  尾部系数 (p99.999/p50): {tail_factor:.1f}x")
         
         return "\n".join(chart_lines)

@@ -680,6 +680,7 @@ class TestRunner:
 
             if self.dry_run:
                 # Dry-run 模式：验证测试用例能正确导入和解析参数
+                # 验证内容包括：文件存在、语法正确、类存在、参数解析
                 try:
                     import sys
                     suites_dir = Path(__file__).parent.parent / 'suites'

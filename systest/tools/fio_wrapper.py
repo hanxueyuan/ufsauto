@@ -324,8 +324,10 @@ class FIO:
                     self.logger.error("❌ FIO 执行失败:")
                     self.logger.error(f"  命令：{' '.join(cmd[:10])}...")
                     self.logger.error(f"  返回码：{result.returncode}")
-                    self.logger.error(f"  stderr: {result.stderr[:1000] if result.stderr else '无'}")
-                    self.logger.error(f"  stdout: {result.stdout[:500] if result.stdout else '无'}")
+                    stderr_preview = result.stderr[:500] if result.stderr else '无'
+                    self.logger.error(f"  stderr: {stderr_preview}")
+                    if len(result.stderr or '') > 500:
+                        self.logger.debug(f"  stderr 完整内容：{result.stderr}")
                     
                     raise FIOError(
                         f"FIO 执行失败：{result.stderr}",

@@ -56,9 +56,9 @@ class Test(TestCase):
         ioengine: str = 'sync',
         iodepth: int = 32,
         rw_mix: int = 70,
-        target_total_iops: float = 150000,
-        max_avg_latency_us: float = 200,
-        max_tail_latency_us: float = 8000,
+        target_total_iops: float = 150000,  # 参考值，根据具体设备调整
+        max_avg_latency_us: float = 200,  # 参考值，根据具体设备调整
+        max_tail_latency_us: float = 8000,  # 参考值，根据具体设备调整
     ):
         super().__init__(device, test_dir, verbose, logger)
         self.test_file = self.get_test_file_path('mixed_rw')
