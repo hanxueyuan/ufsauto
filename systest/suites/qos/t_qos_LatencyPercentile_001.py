@@ -94,10 +94,16 @@ class Test(TestCase):
         self.logger.debug(f"📊 可用空间充足（≥2GB）")
         
         # 3. 检查 FIO 是否已安装
-        if not self.fio.is_installed():
-            self.logger.error("FIO 工具未安装")
+        import subprocess
+        try:
+            result = subprocess.run(['which', 'fio'], capture_output=True, text=True)
+            if result.returncode != 0:
+                self.logger.error("FIO 工具未安装")
+                return False
+            self.logger.debug(f"📊 FIO 已安装")
+        except Exception as e:
+            self.logger.error(f"FIO 检查失败：{e}")
             return False
-        self.logger.debug(f"📊 FIO 已安装")
         
         # 4. 检查设备权限
         if not self.ufs.check_device():
@@ -227,3 +233,7 @@ class Test(TestCase):
             self.logger.info(f"  ✅ p99.99 延迟：{lat_p9999:.1f} μs (< {self.p9999_latency_us} μs)")
         
         return True
+    
+    def teardown(self) -> bool:
+        """测试后清理"""
+        return super().teardown()

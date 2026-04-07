@@ -7,7 +7,6 @@
 
 import json
 import logging
-import webbrowser
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Any, Optional
