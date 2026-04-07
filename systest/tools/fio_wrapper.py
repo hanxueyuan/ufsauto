@@ -320,6 +320,13 @@ class FIO:
                 )
                 
                 if result.returncode != 0:
+                    # 打印完整的 FIO 命令和错误信息便于调试
+                    self.logger.error("❌ FIO 执行失败:")
+                    self.logger.error(f"  命令：{' '.join(cmd[:10])}...")
+                    self.logger.error(f"  返回码：{result.returncode}")
+                    self.logger.error(f"  stderr: {result.stderr[:1000] if result.stderr else '无'}")
+                    self.logger.error(f"  stdout: {result.stdout[:500] if result.stdout else '无'}")
+                    
                     raise FIOError(
                         f"FIO 执行失败：{result.stderr}",
                         returncode=result.returncode,

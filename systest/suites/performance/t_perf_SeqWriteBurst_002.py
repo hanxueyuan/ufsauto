@@ -138,8 +138,9 @@ class Test(TestCase):
                 os.unlink(self.test_file)
             
             # 使用 fio_wrapper 便捷 API 执行
-            metrics_obj = self.fio.run_seq_write(direct=True, 
+            metrics_obj = self.fio.run_seq_write(
                 filename=self.test_file,
+                direct=True,
                 size=self.size,
                 runtime=self.runtime,
                 bs=self.bs,
