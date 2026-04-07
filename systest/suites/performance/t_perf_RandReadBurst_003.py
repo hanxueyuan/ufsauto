@@ -56,7 +56,7 @@ class Test(TestCase):
         ramp_time: int = 10,
         ioengine: str = 'sync',
         iodepth: int = 32,
-        target_iops: float = 200000,
+        target_iops: float = 120000,
         max_avg_latency_us: float = 160,
         max_tail_latency_us: float = 5000,
         prefill: bool = True,

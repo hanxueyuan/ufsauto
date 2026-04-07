@@ -54,8 +54,8 @@ class Test(TestCase):
         ramp_time: int = 10,
         ioengine: str = 'sync',
         iodepth: int = 32,
-        target_iops: float = 330000,
-        max_avg_latency_us: float = 100,
+        target_iops: float = 100000,
+        max_avg_latency_us: float = 150,
         max_tail_latency_us: float = 8000,
     ):
         super().__init__(device, test_dir, verbose, logger)

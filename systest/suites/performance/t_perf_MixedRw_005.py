@@ -145,7 +145,11 @@ class Test(TestCase):
             
             avg_read_latency_us = read_lat_ns.get('mean', 0) / 1000  # 转换为μs
             avg_write_latency_us = write_lat_ns.get('mean', 0) / 1000  # 转换为μs
-            avg_latency_us = (avg_read_latency_us + avg_write_latency_us) / 2
+            # 按 IOPS 加权平均延迟
+            if total_iops > 0:
+                avg_latency_us = (avg_read_latency_us * read_iops + avg_write_latency_us * write_iops) / total_iops
+            else:
+                avg_latency_us = (avg_read_latency_us + avg_write_latency_us) / 2
             
             # 提取尾部延迟
             read_clat_ns = job_data.get('read', {}).get('clat_ns', {}).get('percentile', {})

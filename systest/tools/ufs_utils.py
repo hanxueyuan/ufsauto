@@ -412,13 +412,17 @@ class UFSDevice:
                         # 方法 1：检查 uevent 中的 DEVNAME
                         uevent_file = ufs_dir / 'uevent'
                         if uevent_file.exists():
-                            with open(uevent_file, 'r') as f:
-                                content = f.read()
-                                if f'DEVNAME={device_name}' in content:
-                                    health_dir = ufs_dir / 'health_descriptor'
-                                    if health_dir.exists():
-                                        self.logger.debug(f"找到匹配的健康目录：{health_dir}")
-                                        return health_dir
+                            try:
+                                with open(uevent_file, 'r') as f:
+                                    uevent_content = f.read()
+                                    # 检查多种格式
+                                    if f'DEVNAME={device_name}' in uevent_content or f'DEVICE=/{device_name}' in uevent_content:
+                                        health_dir = ufs_dir / 'health_descriptor'
+                                        if health_dir.exists():
+                                            self.logger.debug(f"找到匹配的健康目录：{health_dir}")
+                                            return health_dir
+                            except Exception:
+                                pass
                     except Exception:
                         pass
                     
