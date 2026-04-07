@@ -35,7 +35,7 @@ from ufs_utils import UFSDevice
 from typing import Dict, Any
 
 
-class TestCase(TestCase):
+class Test(TestCase):
     """可靠性 - 坏块监控测试"""
     
     name = "reliability_badblock_monitor"

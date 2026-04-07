@@ -36,7 +36,7 @@ from ufs_utils import UFSDevice
 from typing import Dict, Any
 
 
-class TestCase(TestCase):
+class Test(TestCase):
     """QoS 延迟百分位测试"""
     
     name = "qos_latency_percentile"
