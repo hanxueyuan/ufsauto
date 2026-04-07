@@ -21,8 +21,6 @@ import os
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional, Any
-
-# 默认 logger(向后兼容)
 logger = logging.getLogger(__name__)
 
 # 性能阈值常量
@@ -70,7 +68,7 @@ class TestCase:
         self._failures: List[Dict[str, Any]] = []
         # 健康状态监控
         self._pre_test_health = None
-        self._post_test_health = ufs.get_health_status()
+        self._post_test_health = None  # 在 setup() 中初始化
 
         # 如果测试目录已指定,确保它存在
         if self.test_dir and not self.test_dir.exists():
@@ -222,8 +220,9 @@ class TestCase:
         self.logger.debug(f"Teardown: {self.name}")
 
         # 自动清理测试文件
-        if hasattr(self, "test_file") and self.test_file and isinstance(self.test_file, Path):
-            if self.test_file.exists():
+        test_file = getattr(self, 'test_file', None)
+        if test_file and isinstance(test_file, Path):
+            if test_file.exists():
                 try:
                     file_size = self.test_file.stat().st_size
                     self.test_file.unlink()
