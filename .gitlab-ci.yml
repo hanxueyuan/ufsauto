@@ -1,0 +1,165 @@
+# GitLab CI/CD 配置
+# 每次提交自动执行代码检查和测试验证
+
+stages:
+  - check
+  - test
+  - deploy
+
+# ============================================
+# 阶段 1: 代码检查
+# ============================================
+
+# Python 语法检查
+syntax-check:
+  stage: check
+  image: python:3.11
+  script:
+    - echo "=== Python 语法检查 ==="
+    - python3 -m py_compile systest/bin/SysTest
+    - python3 -m py_compile systest/bin/check_env.py
+    - python3 -m py_compile systest/core/runner.py
+    - python3 -m py_compile systest/core/collector.py
+    - python3 -m py_compile systest/core/reporter.py
+    - python3 -m py_compile systest/core/logger.py
+    - python3 -m py_compile systest/tools/fio_wrapper.py
+    - python3 -m py_compile systest/tools/ufs_utils.py
+    - for file in systest/suites/performance/*.py; do python3 -m py_compile "$file"; done
+    - echo "✅ 语法检查通过"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# Mypy 类型检查
+type-check:
+  stage: check
+  image: python:3.11
+  before_script:
+    - pip install mypy
+  script:
+    - echo "=== 类型检查 ==="
+    - mypy systest/ --ignore-missing-imports || true
+    - echo "✅ 类型检查完成"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  allow_failure: true  # 类型检查不阻塞流程
+
+# 代码规范检查
+lint-check:
+  stage: check
+  image: python:3.11
+  before_script:
+    - pip install pycodestyle
+  script:
+    - echo "=== 代码规范检查 ==="
+    - pycodestyle systest/bin/ systest/core/ systest/tools/ systest/suites/ --max-line-length=120 --ignore=E501,W503 || true
+    - echo "✅ 代码规范检查完成"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  allow_failure: true  # 规范检查不阻塞流程
+
+# ============================================
+# 阶段 2: 功能测试
+# ============================================
+
+# Dry-run 测试（不实际执行 FIO）
+dry-run-test:
+  stage: test
+  image: python:3.11
+  script:
+    - echo "=== Dry-run 测试 ==="
+    - cd systest
+    - python3 bin/SysTest run --suite=performance --dry-run
+    - python3 bin/SysTest run --suite=performance --dry-run --quick
+    - echo "✅ Dry-run 测试通过"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# 环境检测测试
+env-check:
+  stage: test
+  image: python:3.11
+  script:
+    - echo "=== 环境检测测试 ==="
+    - cd systest
+    - python3 bin/SysTest check-env
+    - echo "✅ 环境检测通过"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# 帮助文档测试
+help-test:
+  stage: test
+  image: python:3.11
+  script:
+    - echo "=== 帮助文档测试 ==="
+    - cd systest
+    - python3 bin/SysTest --help
+    - python3 bin/SysTest run --help
+    - python3 bin/SysTest check-env --help
+    - python3 bin/SysTest list --help
+    - python3 bin/SysTest report --help
+    - echo "✅ 帮助文档测试通过"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# ============================================
+# 阶段 3: 部署准备
+# ============================================
+
+# 项目瘦身检查（确保没有提交不必要的文件）
+cleanup-check:
+  stage: deploy
+  image: python:3.11
+  script:
+    - echo "=== 项目瘦身检查 ==="
+    - echo "检查是否有不必要的文件..."
+    - test ! -d ".git/__pycache__" || (echo "❌ 发现__pycache__" && exit 1)
+    - test ! -d "systest/__pycache__" || (echo "❌ 发现__pycache__" && exit 1)
+    - test ! -d "venv" || (echo "❌ 发现 venv" && exit 1)
+    - test ! -d "results" || (echo "❌ 发现 results" && exit 1)
+    - echo "✅ 项目瘦身检查通过"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+      when: manual  # 手动触发
+  allow_failure: true
+
+# 发布检查（打标签时触发）
+release-check:
+  stage: deploy
+  image: python:3.11
+  script:
+    - echo "=== 发布检查 ==="
+    - echo "检查版本号..."
+    - git describe --tags --always
+    - echo "✅ 发布检查完成"
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: manual  # 手动触发
+
+# ============================================
+# 通知配置
+# ============================================
+
+# 流水线完成通知
+notify:
+  stage: deploy
+  image: curlimages/curl:latest
+  script:
+    - |
+      if [ "$CI_JOB_STATUS" == "success" ]; then
+        echo "✅ 流水线成功完成"
+      else
+        echo "❌ 流水线失败"
+        # 这里可以添加飞书/钉钉 webhook 通知
+        # curl -X POST -H "Content-Type: application/json" -d "{\"text\":\"CI/CD 失败：$CI_PROJECT_NAME - $CI_COMMIT_TITLE\"}" "$WEBHOOK_URL" || true
+      fi
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+      when: always
+  allow_failure: true

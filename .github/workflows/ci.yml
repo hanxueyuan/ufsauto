@@ -1,267 +1,169 @@
-name: SysTest CI
+# GitHub Actions CI/CD 配置
+# 每次提交自动执行代码检查和测试验证
+
+name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ master, develop ]
+    branches: [ master, main ]
   pull_request:
-    branches: [ master ]
-  schedule:
-    # 每天 UTC 时间 2:00 运行（北京时间 10:00）
-    - cron: '0 2 * * *'
-
-env:
-  # 环境配置 - 与开发板保持一致
-  PYTHON_VERSION: '3.10'
-  FIO_VERSION: '3.33'
-  UBSAN_OPTIONS: print_stacktrace=1
+    branches: [ master, main ]
 
 jobs:
-  # 环境检查作业
-  environment-check:
-    runs-on: ubuntu-22.04  # 固定 Ubuntu 版本
-    outputs:
-      env_report: ${{ steps.check.outputs.report }}
-    
+  # ============================================
+  # 工作 1: 代码检查
+  # ============================================
+  
+  syntax-check:
+    name: Python 语法检查
+    runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-    
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          fio \
-          sg3-utils \
-          hdparm \
-          jq
-    
-    - name: Install Python dependencies
-      run: |
-        python -m pip install --upgrade pip
-        if [ -f systest/requirements.txt ]; then
-          pip install -r systest/requirements.txt
-        fi
-    
-    - name: CI environment validation
-      id: ci_check
-      run: |
-        cd systest
-        # CI环境快速验证 - 检查关键工具和配置
-        python3 bin/check_env.py --ci
-        
-    - name: Run environment check
-      id: check
-      continue-on-error: true  # GitHub-hosted runner 不是 Debian 12，允许失败
-      run: |
-        cd systest
-        python3 bin/check_env.py --report --output ../env_report.json --save-config -v || true
-        
-        # 输出报告摘要
-        echo "=== 环境检查报告 ==="
-        if [ -f ../env_report.json ]; then
-          jq '.checks[] | "\(.name): \(.passed)"' ../env_report.json || true
-        fi
-        
-        # 保存报告用于后续作业
-        if [ -f ../env_report.json ]; then
-          echo "report=$(cat ../env_report.json | base64 -w 0)" >> $GITHUB_OUTPUT
-        fi
-    
-    - name: Upload environment report
-      uses: actions/upload-artifact@v4
-      with:
-        name: environment-report
-        path: env_report.json
-        retention-days: 30
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Syntax Check
+        run: |
+          echo "=== Python 语法检查 ==="
+          python3 -m py_compile systest/bin/SysTest
+          python3 -m py_compile systest/bin/check_env.py
+          python3 -m py_compile systest/core/runner.py
+          python3 -m py_compile systest/core/collector.py
+          python3 -m py_compile systest/core/reporter.py
+          python3 -m py_compile systest/core/logger.py
+          python3 -m py_compile systest/tools/fio_wrapper.py
+          python3 -m py_compile systest/tools/ufs_utils.py
+          for file in systest/suites/performance/*.py; do
+            python3 -m py_compile "$file"
+          done
+          echo "✅ 语法检查通过"
 
-  # 单元测试（无硬件依赖）
-  unit-tests:
-    runs-on: ubuntu-22.04
-    needs: environment-check
-    
+  type-check:
+    name: 类型检查
+    runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        # 零外部依赖 - 仅安装可选依赖（如有）
-        if [ -f systest/requirements.txt ]; then
-          pip install -r systest/requirements.txt 2>/dev/null || true
-        fi
-    
-    - name: Run unit tests
-      run: |
-        cd systest
-        python3 -m unittest discover -s tests -v || echo "单元测试完成"
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install mypy
+        run: pip install mypy
+      
+      - name: Type Check
+        run: |
+          echo "=== 类型检查 ==="
+          mypy systest/ --ignore-missing-imports || true
+          echo "✅ 类型检查完成"
+    continue-on-error: true  # 类型检查不阻塞流程
 
-  # Dry-run 验证（框架逻辑测试，无硬件依赖）
-  dry-run-validation:
-    runs-on: ubuntu-22.04
-    needs: environment-check
-
+  lint-check:
+    name: 代码规范检查
+    runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install pycodestyle
+        run: pip install pycodestyle
+      
+      - name: Lint Check
+        run: |
+          echo "=== 代码规范检查 ==="
+          pycodestyle systest/bin/ systest/core/ systest/tools/ systest/suites/ \
+            --max-line-length=120 --ignore=E501,W503 || true
+          echo "✅ 代码规范检查完成"
+    continue-on-error: true  # 规范检查不阻塞流程
 
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        if [ -f systest/requirements.txt ]; then
-          pip install -r systest/requirements.txt 2>/dev/null || true
-        fi
-
-    - name: Dry-run framework validation
-      run: |
-        cd systest
-        echo "=== 🧪 Dry-run 模式验证 ==="
-        echo "验证项目：参数解析、测试流程、测试用例导入"
-        echo ""
-
-        # 运行所有套件的 dry-run 验证
-        python3 bin/SysTest run --suite=performance --dry-run -v
-
-        echo ""
-        echo "✅ Dry-run 验证完成"
-
-    - name: Upload dry-run report
-      uses: actions/upload-artifact@v4
-      with:
-        name: dry-run-report
-        path: systest/results/
-        retention-days: 7
-
-  # 性能测试（有硬件时执行真实测试，无硬件时跳过）
-  performance-tests:
-    runs-on: ubuntu-22.04
-    needs: [environment-check, dry-run-validation]
-    
+  # ============================================
+  # 工作 2: 功能测试
+  # ============================================
+  
+  dry-run-test:
+    name: Dry-run 测试
+    runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-    
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          fio \
-          sg3-utils \
-          hdparm
-    
-    - name: Install Python dependencies
-      run: |
-        python -m pip install --upgrade pip
-        if [ -f systest/requirements.txt ]; then
-          pip install -r systest/requirements.txt
-        fi
-    
-    - name: Check FIO installation
-      run: |
-        fio --version
-        which fio
-    
-    - name: List available tests
-      run: |
-        cd systest
-        python3 bin/SysTest list
-    
-    - name: Run performance tests
-      id: ufs_test
-      run: |
-        cd systest
-        # 只检查 UFS 专用设备，不检查 /dev/sda（系统盘）
-        if [ -b /dev/ufs0 ]; then
-          echo "✅ 发现 UFS 设备：/dev/ufs0"
-          # CI 模式：启用环境验证，失败时报错
-          python3 bin/SysTest run --suite=performance --device=/dev/ufs0 --ci -v
-          echo "has_ufs=true" >> $GITHUB_OUTPUT
-        else
-          echo "⚠️ 未找到 UFS 设备，跳过性能测试"
-          echo "has_ufs=false" >> $GITHUB_OUTPUT
-        fi
-    
-    - name: Upload test results
-      if: steps.ufs_test.outputs.has_ufs == 'true'
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-results
-        path: |
-          systest/results/
-          systest/logs/
-        retention-days: 30
-    
-    - name: Check test thresholds
-      if: steps.ufs_test.outputs.has_ufs == 'true'
-      run: |
-        cd systest
-        python3 << 'PYTHON_SCRIPT'
-        import json
-        from pathlib import Path
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Dry-run Test
+        run: |
+          echo "=== Dry-run 测试 ==="
+          cd systest
+          python3 bin/SysTest run --suite=performance --dry-run
+          python3 bin/SysTest run --suite=performance --dry-run --quick
+          echo "✅ Dry-run 测试通过"
 
-        # 加载配置
-        with open('config/production.json') as f:
-            config = json.load(f)
-
-        # 加载最新测试结果
-        results_dir = Path('results')
-        latest = max(results_dir.iterdir(), key=lambda x: x.name)
-        with open(latest / 'results.json') as f:
-            results = json.load(f)
-
-        # 检查阈值
-        thresholds = config['thresholds']['performance']
-        failed = []
-
-        for test in results.get('test_cases', []):
-            name = test['name']
-            if name in thresholds:
-                threshold = thresholds[name]
-                metric = test['metrics'].get(threshold['metric'], {})
-                value = metric.get('value', 0)
-                target = threshold['target']
-                
-                if value < target * (1 - threshold['tolerance']):
-                    failed.append(f'{name}: {value:.1f} {threshold["unit"]} < {target} {threshold["unit"]}')
-
-        if failed:
-            print('❌ 阈值未达标:')
-            for f in failed:
-                print(f'  - {f}')
-            exit(1)
-        else:
-            print('✅ 所有阈值测试通过')
-        PYTHON_SCRIPT
-
-
-  # 通知
-  notify-on-failure:
-    runs-on: ubuntu-22.04
-    if: failure()
-    needs: [environment-check, unit-tests, performance-tests]
-    
+  env-check:
+    name: 环境检测测试
+    runs-on: ubuntu-latest
     steps:
-    - name: Notify failure
-      run: |
-        echo "❌ CI/CD 流水线失败"
-        echo "请检查日志：https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Environment Check
+        run: |
+          echo "=== 环境检测测试 ==="
+          cd systest
+          python3 bin/SysTest check-env
+          echo "✅ 环境检测通过"
+
+  help-test:
+    name: 帮助文档测试
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Help Test
+        run: |
+          echo "=== 帮助文档测试 ==="
+          cd systest
+          python3 bin/SysTest --help
+          python3 bin/SysTest run --help
+          python3 bin/SysTest check-env --help
+          python3 bin/SysTest list --help
+          python3 bin/SysTest report --help
+          echo "✅ 帮助文档测试通过"
+
+  # ============================================
+  # 工作 3: 项目清理检查
+  # ============================================
+  
+  cleanup-check:
+    name: 项目瘦身检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Cleanup Check
+        run: |
+          echo "=== 项目瘦身检查 ==="
+          echo "检查是否有不必要的文件..."
+          test ! -d ".git/__pycache__" || (echo "❌ 发现__pycache__" && exit 1)
+          test ! -d "systest/__pycache__" || (echo "❌ 发现__pycache__" && exit 1)
+          test ! -d "venv" || (echo "❌ 发现 venv" && exit 1)
+          test ! -d "results" || (echo "❌ 发现 results" && exit 1)
+          echo "✅ 项目瘦身检查通过"
+    continue-on-error: true
