@@ -18,6 +18,7 @@ Usage:
     print(f"容量：{info['capacity_gb']}GB")
 """
 
+import glob
 import os
 import re
 import subprocess
@@ -51,10 +52,10 @@ def validate_device_path(device_path: str) -> bool:
         return False
     
     # 只允许标准设备命名模式
-    # /dev/sd[a-z]+  (如 /dev/sda, /dev/sdb)
+    # /dev/sd[a-zA-Z]+  (如 /dev/sda, /dev/sdb)
     # /dev/mmcblk[0-9]+  (如 /dev/mmcblk0)
     # /dev/nvme[0-9]+n[0-9]+  (如 /dev/nvme0n1)
-    pattern = r'^/dev/(sd[a-z]+|mmcblk[0-9]+|nvme[0-9]+n[0-9]+|vd[a-z]+|vd[a-z]+)$'
+    pattern = r'^/dev/(sd[a-zA-Z]+|mmcblk[0-9]+|nvme[0-9]+n[0-9]+|vd[a-zA-Z]+)$'
     if not re.match(pattern, device_path):
         return False
     
@@ -553,7 +554,6 @@ def auto_detect_ufs() -> Dict[str, Any]:
     Returns:
         dict: 探测结果
     """
-    import glob as _glob
 
     result = {
         'found': False,
@@ -586,7 +586,7 @@ def auto_detect_ufs() -> Dict[str, Any]:
     if ufshcd_loaded:
         # 同时扫描 sd* 和 mmcblk* 设备（某些平台 UFS 命名为 mmcblk*）
         for pattern in ['/sys/block/sd*', '/sys/block/mmcblk*']:
-            for blk in sorted(_glob.glob(pattern)):
+            for blk in sorted(glob.glob(pattern)):
                 dev_name = os.path.basename(blk)
                 try:
                     # 往上找 driver，看是否是 ufshcd
@@ -623,7 +623,7 @@ def auto_detect_ufs() -> Dict[str, Any]:
     # ── 方法 2：回退检查 /dev/disk/by-id/ ──
 
     try:
-        for link in sorted(_glob.glob('/dev/disk/by-id/*')):
+        for link in sorted(glob.glob('/dev/disk/by-id/*')):
             basename = os.path.basename(link).lower()
             if 'ufs' in basename:
                 real = os.path.realpath(link)

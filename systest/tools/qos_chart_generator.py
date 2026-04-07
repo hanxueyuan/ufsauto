@@ -87,7 +87,11 @@ class QoSChartGenerator:
         chart_lines.append(f"  最大值：{distribution.get('max', 0):.1f} μs")
         chart_lines.append(f"  平均值：{distribution.get('mean', 0):.1f} μs")
         chart_lines.append(f"  标准差：{distribution.get('stddev', 0):.1f} μs")
-        chart_lines.append(f"  尾部系数 (p99.999/p50): {distribution.get('p99.999', 0) / max(distribution.get('p50', 1), 0.1):.1f}x")
+        # 计算尾部系数，避免除零错误
+        p50 = distribution.get('p50', 0)
+        p99_999 = distribution.get('p99.999', 0)
+        tail_factor = p99_999 / p50 if p50 > 0 else float('inf')
+        chart_lines.append(f"  尾部系数 (p99.999/p50): {tail_factor:.1f}x")
         
         return "\n".join(chart_lines)
     

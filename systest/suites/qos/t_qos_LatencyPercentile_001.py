@@ -118,6 +118,10 @@ class Test(TestCase):
         
         self.logger.info("✅ 前置条件检查通过")
         return True
+        # Postcondition 检查
+        self._check_postcondition()
+        # Postcondition 检查
+        self._check_postcondition()
     
     def execute(self) -> Dict[str, Any]:
         """执行 QoS 延迟百分位测试"""
@@ -233,6 +237,10 @@ class Test(TestCase):
             self.logger.info(f"  ✅ p99.99 延迟：{lat_p9999:.1f} μs (< {self.p9999_latency_us} μs)")
         
         return True
+        # Postcondition 检查
+        self._check_postcondition()
+        # Postcondition 检查
+        self._check_postcondition()
     
     def teardown(self) -> bool:
         """测试后清理"""

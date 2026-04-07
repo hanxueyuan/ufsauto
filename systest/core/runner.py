@@ -67,25 +67,18 @@ class TestCase:
     description: str = "基础测试用例"
 
     def __init__(self, device: str = '/dev/sda', test_dir: Path = None, verbose: bool = False, logger=None):
-        self.device = device
-        self.test_dir = test_dir  # 全局测试目录,所有测试共用
-        self.verbose = verbose
-        self.logger = logger or logging.getLogger(f"systest.test.{self.name}")
-        self.start_time = None
-        self.end_time = None
-        # Fail-Continue 收集器
         self._failures: List[Dict[str, Any]] = []
         # 健康状态监控
         self._pre_test_health = None
-        self._post_test_health = None
+        self._post_test_health = ufs.get_health_status()
 
         # 如果测试目录已指定,确保它存在
         if self.test_dir and not self.test_dir.exists():
             self.test_dir.mkdir(parents=True, exist_ok=True)
-
     def get_test_file_path(self, name: str) -> Path:
         """获取测试文件路径，统一放在全局测试目录下"""
         """获取测试文件路径,统一放在全局测试目录下
+            return test_file
 
         Args:
             name: 测试文件名称(如 "seq_read")

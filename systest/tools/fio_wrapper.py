@@ -293,7 +293,7 @@ class FIO:
         """
         # 验证 filename 路径
         filename = Path(config.filename)
-        if allowed_prefixes:
+        if allowed_prefixes and not str(filename).startswith("/dev/"):
             # 检查是否在允许的目录内
             if not any(str(filename).startswith(p) for p in allowed_prefixes):
                 # 也允许设备路径（/dev/ 开头）

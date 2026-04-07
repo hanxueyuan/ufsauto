@@ -98,7 +98,7 @@ class TestLogger:
         log_dir: str = 'logs',
         console_level: int = logging.INFO,
         file_level: int = logging.DEBUG,
-        max_bytes: int = 50 * 1024 * 1024,  # 10MB
+        max_bytes: int = 50 * 1024 * 1024,  # 50MB/文件
         backup_count: int = 5,
         enable_json: bool = False
     ):

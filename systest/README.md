@@ -11,7 +11,6 @@ python3 bin/SysTest list
 # 执行测试套件
 python3 bin/SysTest run --suite=performance --device=/dev/ufs0
 python3 bin/SysTest run --suite=qos --device=/dev/ufs0
-python3 bin/SysTest run --suite=reliability --device=/dev/ufs0
 
 # 执行单个测试
 python3 bin/SysTest run --test=t_perf_SeqReadBurst_001 -v
@@ -27,7 +26,7 @@ systest/
 ├── bin/           # 入口脚本
 ├── core/          # 核心框架（runner/collector/reporter/logger/analyzer）
 ├── tools/         # 工具层（fio_wrapper/ufs_utils）
-├── suites/        # 测试套件（performance/qos/reliability）
+├── suites/        # 测试套件（performance/qos）
 └── tests/         # 单元测试
 ```
 
@@ -36,8 +35,7 @@ systest/
 | 套件 | 功能 | 用例数 |
 |------|------|--------|
 | performance | 性能测试 | 5 |
-| qos | QoS 延迟测试 | 4 |
-| reliability | 可靠性测试 | 3 |
+| qos | QoS 延迟测试 | 1 |
 
 ## 环境要求
 
