@@ -286,13 +286,29 @@ class TestCase:
             self.end_time = datetime.now()
             duration = (self.end_time - self.start_time).total_seconds()
 
-            # 最终状态:validate 返回 False 或有 Fail-Continue 记录 → FAIL
-            if not passed or self.has_failures:
+            # 框架层统一判断 PASS/FAIL
+            # 规则:
+            # 1. validate 返回 False → FAIL
+            # 2. 有 Fail-Continue 记录 → FAIL
+            # 3. 其他情况 → PASS
+            should_fail = False
+            fail_reasons = []
+            
+            if not validate_passed:
+                should_fail = True
+                fail_reasons.append("验证未通过")
+            
+            if self.has_failures:
+                should_fail = True
+                fail_reasons.append(f"有 {len(self._failures)} 个 Fail-Continue 项")
+            
+            if should_fail:
                 status = 'FAIL'
+                self.logger.info(f"测试完成:{self.name} - ❌ FAIL ({duration:.2f}s)")
+                self.logger.info(f"  失败原因：{', '.join(fail_reasons)}")
             else:
                 status = 'PASS'
-
-            self.logger.info(f"测试完成:{self.name} - {status} ({duration:.2f}s)")
+                self.logger.info(f"测试完成:{self.name} - ✅ PASS ({duration:.2f}s)")
 
             run_result = {
                 'name': self.name,
