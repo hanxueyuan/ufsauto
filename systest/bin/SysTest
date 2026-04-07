@@ -401,24 +401,39 @@ def main():
         epilog="""
 ================================================================================
 示例用法:
-  # 执行测试
-  SysTest run --suite=performance
-  SysTest run --suite=performance --quick      # 快速模式 (时间减半，跳过 reliability)
-  SysTest run --test=seq_read_burst -v
-  SysTest run --all --batch=3                  # 批量测试 3 次
 
-  # 查看信息
+[执行测试]
+  SysTest run --suite=performance              # 性能测试套件
+  SysTest run --suite=performance --quick      # 快速模式 (时间减半)
+  SysTest run --test=t_perf_SeqReadBurst_001 -v  # 单个测试
+  SysTest run --all --batch=3                  # 批量 3 次
+
+[查看信息]
   SysTest list                                 # 列出所有测试
+  SysTest list --detail                        # 详细信息
   SysTest report --latest                      # 查看最新报告
 
-  # 环境管理
+[环境管理]
   SysTest check-env                            # 检查环境
-  SysTest check-env --save-config              # 保存配置到 runtime.json
+  SysTest check-env --save-config              # 保存配置
   SysTest config --show                        # 显示配置
   SysTest config --device=/dev/sda             # 设置设备路径
 
-  # 对比分析
+[对比分析]
   SysTest compare-baseline --baseline1 results/gold/ --baseline2 results/current/
+
+[完整工作流]
+  # 1. 首次使用：检查环境并保存配置
+  SysTest check-env --save-config
+  
+  # 2. 运行性能测试
+  SysTest run --suite=performance
+  
+  # 3. 查看报告
+  SysTest report --latest
+  
+  # 4. 对比基线
+  SysTest compare-baseline --baseline1 baseline_v1 --baseline2 baseline_v2
 ================================================================================
         """
     )
@@ -430,32 +445,80 @@ def main():
         help='执行测试',
         description='执行 UFS 性能/可靠性测试',
         epilog='''示例:
+  [基础用法]
   # 运行完整性能测试套件
   python3 bin/SysTest run --suite=performance
   
   # 运行 QoS 测试套件（车规级延迟测试）
   python3 bin/SysTest run --suite=qos
   
-  # 快速性能验证（缩短测试时间）
+  # 运行可靠性测试套件
+  python3 bin/SysTest run --suite=reliability
+  
+  # 运行所有测试套件
+  python3 bin/SysTest run --all
+  
+  [快速模式]
+  # 快速性能验证（缩短测试时间 50%）
   python3 bin/SysTest run --suite=performance --quick
   
+  # 快速模式 + 批量测试
+  python3 bin/SysTest run --suite=performance --quick --batch=3
+  
+  [单个测试]
   # 运行单个测试项
   python3 bin/SysTest run --test=t_perf_SeqReadBurst_001
   
+  # 运行单个测试项（详细输出）
+  python3 bin/SysTest run --test=t_perf_SeqReadBurst_001 -v
+  
+  [批量测试]
   # 批量测试 3 次，间隔 60 秒
   python3 bin/SysTest run --suite=performance --batch=3 --interval=60
   
-  # 指定设备和测试目录
+  # 批量测试 5 次，间隔 30 秒（快速验证稳定性）
+  python3 bin/SysTest run --suite=performance --batch=5 --interval=30 --quick
+  
+  [指定设备和目录]
+  # 指定设备路径
+  python3 bin/SysTest run --suite=performance --device=/dev/sda
+  
+  # 指定测试目录
+  python3 bin/SysTest run --suite=performance --test-dir=/mapdata/ufs_test
+  
+  # 同时指定设备和测试目录
   python3 bin/SysTest run --suite=performance --device=/dev/sda --test-dir=/mapdata/ufs_test
   
+  [使用预设配置]
   # 使用预设配置（如 configs/ufs31_128GB.json）
   python3 bin/SysTest run --suite=performance --config=configs/ufs31_128GB.json
   
+  # 使用车规级配置
+  python3 bin/SysTest run --suite=performance --config=configs/automotive_grade.json
+  
+  [CI/CD 集成]
   # CI/CD 环境模式（启用环境验证）
   python3 bin/SysTest run --suite=performance --ci
   
+  # CI/CD + 批量测试
+  python3 bin/SysTest run --suite=performance --ci --batch=3
+  
+  [调试和验证]
   # 模拟执行（不实际运行测试，验证框架）
   python3 bin/SysTest run --suite=performance --dry-run
+  
+  # 模拟执行 + 详细输出
+  python3 bin/SysTest run --suite=performance --dry-run -v
+  
+  [完整示例]
+  # 车规级性能验证：快速模式 + 批量 3 次 + 指定设备
+  python3 bin/SysTest run --suite=performance --quick --batch=3 --device=/dev/sda
+  
+  # 完整可靠性测试：所有套件 + 详细输出
+  python3 bin/SysTest run --all -v
+  
+  # 生产环境测试：使用预设配置 + CI 模式
+  python3 bin/SysTest run --config=configs/ufs31_128GB.json --ci
 ''')
     run_parser.add_argument('--suite', '-s', help='测试套件名称 (performance/qos/reliability)')
     run_parser.add_argument('--test', '-t', help='单个测试项名称')
