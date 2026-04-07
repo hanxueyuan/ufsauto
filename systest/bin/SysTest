@@ -34,9 +34,14 @@ def cmd_run(args):
     import time
     from datetime import datetime
     
-    # 生成测试 ID(脚本名称 + 时间后缀)
+    # 生成测试 ID(脚本名称 + 套件/测试名 + 时间后缀)
     script_name = Path(__file__).stem  # SysTest
-    test_id = f"{script_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    name_suffix = ""
+    if args.suite:
+        name_suffix = f"_{args.suite}"
+    elif args.test:
+        name_suffix = f"_{args.test}"
+    test_id = f"{script_name}{name_suffix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     
     # 初始化日志 (按测试 ID 分离)
     logger = get_logger(

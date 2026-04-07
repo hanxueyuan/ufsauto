@@ -479,11 +479,12 @@ class TestRunner:
 
         try:
             # 先尝试新版 findmnt (支持 FSUSED, FSAVAIL)
-            rc, out, err = self._run(['findmnt', '-n', '-o', 'TARGET,SIZE,FSUSED,FSAVAIL', '-t', 'ext4,xfs,btrfs'])
+            # 不限制文件系统类型，所有挂载点都参与选择
+            rc, out, err = self._run(['findmnt', '-n', '-o', 'TARGET,SIZE,FSUSED,FSAVAIL'])
 
             # 如果失败,尝试旧版 findmnt (只支持 TARGET,AVAIL)
             if rc != 0 and 'unknown column' in err.lower():
-                rc, out, err = self._run(['findmnt', '-n', '-o', 'TARGET,AVAIL', '-t', 'ext4,xfs,btrfs'])
+                rc, out, err = self._run(['findmnt', '-n', '-o', 'TARGET,AVAIL'])
                 use_simple_format = True
             else:
                 use_simple_format = False
