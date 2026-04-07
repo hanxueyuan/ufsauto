@@ -1,0 +1,11 @@
+#!/usr/bin/env python3
+"""SysTest 小写命令入口"""
+import sys
+from pathlib import Path
+
+# 添加父目录到路径
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# 导入并执行 SysTest
+from bin.SysTest import main
+sys.exit(main())
