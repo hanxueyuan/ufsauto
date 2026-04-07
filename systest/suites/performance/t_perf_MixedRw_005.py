@@ -33,7 +33,7 @@ sys.path.insert(0, str(core_dir))
 sys.path.insert(0, str(tools_dir))
 
 from runner import TestCase
-from fio_wrapper import FIO, FIOError
+from fio_wrapper import FIO, FIOError, FIOConfig
 from ufs_utils import UFSDevice
 
 
