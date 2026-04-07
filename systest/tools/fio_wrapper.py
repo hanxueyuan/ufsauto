@@ -324,16 +324,27 @@ class FIO:
                 # 过滤 FIO 警告信息，提取 JSON 部分
                 # FIO 可能在 JSON 前输出警告信息（如 iodepth 警告）
                 import re
+                
+                # 抓取策略说明
+                self.logger.debug(f"FIO 原始输出长度：stdout={len(result.stdout)} chars, stderr={len(result.stderr)} chars")
+                self.logger.debug(f"FIO 抓取策略：使用正则表达式提取 JSON 部分")
+                
                 # 使用更精确的正则：匹配从 { 开始到最后一个 } 结束
                 json_match = re.search(r'\{[\s\S]*\}', result.stdout)
                 if json_match:
                     json_str = json_match.group(0)
+                    self.logger.debug(f"✅ 成功提取 JSON，长度：{len(json_str)} chars")
                 else:
                     json_str = result.stdout
+                    self.logger.warning(f"⚠️  未找到 JSON 部分，使用完整输出")
                 
                 # 检查输出是否是 JSON 格式
                 if not json_str.strip().startswith('{'):
-                    raise FIOError(f"FIO 输出格式错误（非 JSON）: {json_str[:200]}...")
+                    # 打印原始输出便于诊断
+                    self.logger.error(f"FIO 输出格式错误，原始输出预览:")
+                    self.logger.error(f"  stdout[:500]: {result.stdout[:500]}...")
+                    self.logger.error(f"  stderr[:500]: {result.stderr[:500] if result.stderr else '无'}...")
+                    raise FIOError(f"FIO 输出格式错误（非 JSON）。stdout={len(result.stdout)} chars, stderr={len(result.stderr)} chars. 预览：{json_str[:200]}...")
                 
                 try:
                     fio_output = json.loads(json_str)
