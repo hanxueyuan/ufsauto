@@ -227,14 +227,18 @@ class TestCase:
                     self.logger.debug(f"🧹 已清理测试文件：{self.test_file} ({file_size / 1024 / 1024:.1f} MB)")
                 except Exception as e:
                     self.logger.warning(f"⚠️  清理测试文件失败：{e}")
+                    # 尝试获取文件大小并提醒用户
                     if self.test_file.exists():
                         try:
                             file_size = self.test_file.stat().st_size
+                            self.logger.warning(f"⚠️  测试文件未删除：{self.test_file} ({file_size / 1024 / 1024:.1f} MB)")
                             if file_size > 100 * 1024 * 1024:  # > 100MB
-                                self.logger.warning(f"⚠️  测试文件未删除：{self.test_file} ({file_size / 1024 / 1024:.1f} MB)")
-                                self.logger.warning(f"💡 请手动删除以释放空间：rm {self.test_file}")
-                        except Exception:
-                            pass
+                                self.logger.warning(f"💡 文件较大，请手动删除以释放空间：rm {self.test_file}")
+                            else:
+                                self.logger.debug(f"💡 文件较小，可手动删除：rm {self.test_file}")
+                        except Exception as stat_error:
+                            self.logger.warning(f"⚠️  无法获取文件大小（可能已被删除或锁定）: {stat_error}")
+                            self.logger.warning(f"💡 请检查文件状态：ls -lh {self.test_file}")
 
     def run(self) -> Dict[str, Any]:
         """完整执行流程"""
@@ -493,9 +497,29 @@ class TestRunner:
                 continue
         
         # 所有回退都失败（极罕见）
-        self.test_dir = Path('/tmp/ufs_test').absolute()
-        self.test_dir.mkdir(parents=True, exist_ok=True)
-        logger.error(f"❌ 所有回退目录创建失败，强制使用：{self.test_dir}")
+        try:
+            self.test_dir = Path('/tmp/ufs_test').absolute()
+            self.test_dir.mkdir(parents=True, exist_ok=True)
+            logger.error(f"❌ 所有回退目录创建失败，强制使用：{self.test_dir}")
+        except Exception as e:
+            logger.critical(f"❌ 测试目录创建完全失败：{e}")
+            logger.critical(f"💡 可能原因：磁盘空间已满、/tmp 目录不可写、或权限不足")
+            logger.critical(f"💡 请检查：df -h /tmp && ls -ld /tmp")
+            raise RuntimeError(f"无法创建任何测试目录：{e}")
+        
+        # 检查可用空间
+        try:
+            import shutil
+            stat = shutil.disk_usage(self.test_dir)
+            free_gb = stat.free / (1024 ** 3)
+            if free_gb < 2:
+                logger.warning(f"⚠️  测试目录可用空间不足：{free_gb:.1f} GB (推荐≥2GB)")
+                logger.warning(f"💡 请清理空间或指定 --test-dir 到其他目录")
+                logger.warning(f"💡 查看磁盘使用：df -h {self.test_dir}")
+            else:
+                logger.debug(f"✅ 测试目录可用空间：{free_gb:.1f} GB")
+        except Exception as e:
+            logger.warning(f"⚠️  无法检查磁盘空间：{e}")
     def _validate_ci_environment(self):
         """CI/CD 环境验证 - 检测常见低级配置错误
 

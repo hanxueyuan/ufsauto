@@ -87,10 +87,22 @@ class ResultCollector:
                 try:
                     log_src = Path(result['log_file'])
                     if log_src.exists():
+                        log_size = log_src.stat().st_size
                         log_dst = test_dir / f"{result['name']}.log"
                         shutil.copy2(log_src, log_dst)
+                        logger.debug(f"📄 日志已复制：{result['name']} ({log_size / 1024 / 1024:.1f} MB)")
                 except Exception as e:
-                    logger.warning(f"⚠️  日志文件复制失败 {result['name']}: {e}")
+                    # 尝试获取文件大小
+                    try:
+                        log_size = log_src.stat().st_size if log_src.exists() else 0
+                        if log_size > 500 * 1024 * 1024:  # > 500MB
+                            logger.warning(f"⚠️  大日志文件复制失败 {result['name']} ({log_size / 1024 / 1024:.1f} MB): {e}")
+                            logger.warning(f"💡 文件较大，复制可能需要更多空间或时间")
+                            logger.warning(f"💡 可手动清理：rm {log_dst}")
+                        else:
+                            logger.warning(f"⚠️  日志文件复制失败 {result['name']} ({log_size / 1024 / 1024:.1f} MB): {e}")
+                    except Exception:
+                        logger.warning(f"⚠️  日志文件复制失败 {result['name']}: {e}")
                     # 继续处理其他结果，不中断整个流程
         
         # 保存汇总信息
