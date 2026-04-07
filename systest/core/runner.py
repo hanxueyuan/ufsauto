@@ -831,6 +831,14 @@ class TestRunner:
         logger.info(f"  ⏹️  ABORT: {aborted}")
         logger.info("-" * 60)
         
+        # 显示每个测试用例的执行时间
+        logger.info("📋 测试用例执行时间:")
+        for r in results:
+            duration = r.get('duration', 0)
+            status = r.get('status', 'UNKNOWN')
+            name = r.get('name', 'unknown')
+            logger.info(f"  {name}: {duration:.2f}s [{status}]")
+        
         # 判断套件整体是否通过
         if failed > 0 or errors > 0:
             suite_status = '❌ FAIL'
