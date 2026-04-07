@@ -25,7 +25,21 @@ class QoSChartGenerator:
         with open(json_file, 'r', encoding='utf-8') as f:
             return json.load(f)
     
+    def has_enough_data(self, distribution: Dict[str, float]) -> bool:
+        """检查是否有足够的数据生成图表"""
+        if not distribution:
+            return False
+        
+        # 检查是否有至少 5 个百分位数据
+        percentile_keys = ['p50', 'p90', 'p95', 'p99', 'p99.9', 'p99.99', 'p99.999']
+        valid_count = sum(1 for k in percentile_keys if distribution.get(k, 0) > 0)
+        
+        return valid_count >= 5
+    
     def generate_text_chart(self, distribution: Dict[str, float], test_name: str = "QoS Test") -> str:
+        """生成文本图表（仅在数据充足时调用）"""
+        if not self.has_enough_data(distribution):
+            return f"⚠️  数据不足，无法生成图表（有效百分位数据 < 5 个）"
         """
         生成文本格式的延迟分布图表（ASCII 艺术）
         
