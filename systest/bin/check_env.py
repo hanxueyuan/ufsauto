@@ -428,28 +428,33 @@ class EnvironmentChecker:
 
         config_path = self.config_dir / 'runtime.json'
 
-        # 确保目录存在
-        if not self.config_dir.exists():
-            self.config_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            if not self.config_dir.exists():
+                self.config_dir.mkdir(parents=True, exist_ok=True)
 
-        # 读取现有配置（如果存在），合并更新
-        existing = {}
-        if config_path.exists():
-            try:
-                with open(config_path, 'r', encoding='utf-8') as f:
-                    existing = json.load(f)
-            except Exception:
-                pass
+            existing = {}
+            if config_path.exists():
+                try:
+                    with open(config_path, 'r', encoding='utf-8') as f:
+                        existing = json.load(f)
+                except Exception:
+                    pass
 
-        # 合并配置：runtime_config 覆盖现有
-        merged = {**existing, **self.runtime_config}
+            merged = {**existing, **self.runtime_config}
 
-        with open(config_path, 'w', encoding='utf-8') as f:
-            json.dump(merged, f, indent=2, ensure_ascii=False)
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(merged, f, indent=2, ensure_ascii=False)
 
-        print(f'\n✅ 配置已保存：{config_path}')
-        print(f'   设备路径: {self.runtime_config.get("device", "未检测到")}')
-        print(f'   测试目录: {self.runtime_config.get("test_dir", "未检测到")}')
+            print(f'\n✅ 配置已保存：{config_path}')
+            print(f'   设备路径：{self.runtime_config.get("device", "未检测到")}')
+            print(f'   测试目录：{self.runtime_config.get("test_dir", "未检测到")}')
+        except PermissionError as e:
+            print(f'\n❌ 配置目录无法写入：{e}')
+            print(f'   建议：使用 sudo 或检查目录权限')
+            raise
+        except OSError as e:
+            print(f'\n❌ 配置保存失败（磁盘空间不足？）: {e}')
+            raise
 
         return config_path
 
