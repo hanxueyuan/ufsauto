@@ -1,0 +1,40 @@
+{
+  "test_id": "SysTest_20260407_100302",
+  "timestamp": "2026-04-07T10:03:02.530621",
+  "suite": "qos",
+  "device": "/dev/ufs0",
+  "test_cases": [
+    {
+      "name": "t_qos_LatencyStability_004",
+      "status": "DRY-RUN-PASS",
+      "class": "TestCase",
+      "duration": 0
+    },
+    {
+      "name": "t_qos_LatencyJitter_002",
+      "status": "DRY-RUN-PASS",
+      "class": "TestCase",
+      "duration": 0
+    },
+    {
+      "name": "t_qos_TailLatencyRatio_003",
+      "status": "DRY-RUN-PASS",
+      "class": "TestCase",
+      "duration": 0
+    },
+    {
+      "name": "t_qos_LatencyPercentile_001",
+      "status": "DRY-RUN-PASS",
+      "class": "TestCase",
+      "duration": 0
+    }
+  ],
+  "summary": {
+    "total": 4,
+    "passed": 0,
+    "failed": 0,
+    "errors": 0,
+    "pass_rate": 0.0
+  },
+  "metadata": {}
+}

@@ -515,8 +515,6 @@ def main():
     p.add_argument('--report', action='store_true', help='生成 JSON 报告')
     p.add_argument('--output', default='env_report.json', help='报告输出路径')
     p.add_argument('--no-save', action='store_true', help='不保存配置文件 (默认会自动保存 runtime.json)')
-    p.add_argument('--report', action='store_true', help='生成 JSON 报告')
-    p.add_argument('--output', default='env_report.json', help='报告输出路径')
     p.add_argument('--ci', action='store_true', help='CI/CD 环境验证模式 (快速检查配置合规性)')
     p.add_argument('-v', '--verbose', action='store_true', help='详细输出')
     args = p.parse_args()

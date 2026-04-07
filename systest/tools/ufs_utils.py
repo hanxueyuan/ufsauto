@@ -358,14 +358,41 @@ class UFSDevice:
         return health
     
     def _find_ufs_health_dir(self) -> Optional[Path]:
-        """查找 UFS 健康信息目录"""
+        """查找 UFS 健康信息目录
+        
+        根据当前设备路径匹配对应的健康目录，避免多设备场景读错信息
+        """
+        # 从设备路径提取设备名（如 /dev/sda → sda）
+        device_name = Path(self.device_path).name
+        
         # 典型路径：/sys/class/ufs_device/ufsX/health_descriptor/
         for base in [Path('/sys/class/ufs_device'), Path('/sys/bus/platform/drivers/ufs')]:
             if base.exists():
                 for ufs_dir in base.iterdir():
+                    # 检查这个 UFS 设备是否对应我们的目标设备
+                    # 通过检查 uevent 或 dev 文件来匹配
+                    try:
+                        # 方法 1：检查 uevent 中的 DEVNAME
+                        uevent_file = ufs_dir / 'uevent'
+                        if uevent_file.exists():
+                            with open(uevent_file, 'r') as f:
+                                content = f.read()
+                                if f'DEVNAME={device_name}' in content:
+                                    health_dir = ufs_dir / 'health_descriptor'
+                                    if health_dir.exists():
+                                        self.logger.debug(f"找到匹配的健康目录：{health_dir}")
+                                        return health_dir
+                    except Exception:
+                        pass
+                    
+                    # 方法 2：如果上面失败，退而求其次，找到第一个可用的
+                    # （单设备场景下这仍然有效）
                     health_dir = ufs_dir / 'health_descriptor'
                     if health_dir.exists():
+                        self.logger.debug(f"使用第一个可用的健康目录：{health_dir}")
                         return health_dir
+        
+        self.logger.warning(f"未找到 UFS 健康目录")
         return None
     
     def flush_cache(self) -> bool:
@@ -520,7 +547,9 @@ def auto_detect_ufs() -> Dict[str, Any]:
         ufshcd_loaded = False
 
     if ufshcd_loaded:
-        for blk in sorted(_glob.glob('/sys/block/sd*')):
+        # 同时扫描 sd* 和 mmcblk* 设备（某些平台 UFS 命名为 mmcblk*）
+        for pattern in ['/sys/block/sd*', '/sys/block/mmcblk*']:
+            for blk in sorted(_glob.glob(pattern)):
             dev_name = os.path.basename(blk)
             try:
                 # 往上找 driver，看是否是 ufshcd

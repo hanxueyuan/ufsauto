@@ -166,10 +166,17 @@ class FIOMetrics:
             # 混合模式，合并读写
             read_stats = job.get('read', {})
             write_stats = job.get('write', {})
+            # 带宽和 IOPS 合并
+            read_bw = read_stats.get('bw_bytes', 0)
+            write_bw = write_stats.get('bw_bytes', 0)
+            read_iops = read_stats.get('iops', 0)
+            write_iops = write_stats.get('iops', 0)
+            # 延迟：分开统计读和写，不合并（合并会丢失信息）
             io_stats = {
-                'bw_bytes': read_stats.get('bw_bytes', 0) + write_stats.get('bw_bytes', 0),
-                'iops': read_stats.get('iops', 0) + write_stats.get('iops', 0),
-                'lat_ns': read_stats.get('lat_ns', write_stats.get('lat_ns', {}))
+                'bw_bytes': read_bw + write_bw,
+                'iops': read_iops + write_iops,
+                'lat_ns_read': read_stats.get('lat_ns', {}),
+                'lat_ns_write': write_stats.get('lat_ns', {})
             }
         
         # 带宽 (MB/s)
@@ -184,15 +191,37 @@ class FIOMetrics:
             'unit': 'IOPS'
         }
         
-        # 延迟统计
-        lat_ns = io_stats.get('lat_ns', {})
-        latency = {
-            'min': lat_ns.get('min', 0),
-            'max': lat_ns.get('max', 0),
-            'mean': lat_ns.get('mean', 0),
-            'stddev': lat_ns.get('stddev', 0),
-            'percentile': lat_ns.get('percentile', {})
-        }
+        # 延迟统计：混合读写模式分开统计读和写
+        if 'lat_ns_read' in io_stats and 'lat_ns_write' in io_stats:
+            # 混合模式：分别记录读和写的延迟
+            lat_read = io_stats['lat_ns_read']
+            lat_write = io_stats['lat_ns_write']
+            latency = {
+                'read': {
+                    'min': lat_read.get('min', 0),
+                    'max': lat_read.get('max', 0),
+                    'mean': lat_read.get('mean', 0),
+                    'stddev': lat_read.get('stddev', 0),
+                    'percentile': lat_read.get('percentile', {})
+                },
+                'write': {
+                    'min': lat_write.get('min', 0),
+                    'max': lat_write.get('max', 0),
+                    'mean': lat_write.get('mean', 0),
+                    'stddev': lat_write.get('stddev', 0),
+                    'percentile': lat_write.get('percentile', {})
+                }
+            }
+        else:
+            # 纯读或纯写模式
+            lat_ns = io_stats.get('lat_ns', {})
+            latency = {
+                'min': lat_ns.get('min', 0),
+                'max': lat_ns.get('max', 0),
+                'mean': lat_ns.get('mean', 0),
+                'stddev': lat_ns.get('stddev', 0),
+                'percentile': lat_ns.get('percentile', {})
+            }
         
         # CPU 使用率
         usr_cpu = job.get('usr_cpu', 0)

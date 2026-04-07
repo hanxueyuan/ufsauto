@@ -489,15 +489,35 @@ class TestRunner:
                 logger.info(f"✅ 测试目录: {self.test_dir} (自动检测)")
             except Exception as e:
                 logger.warning(f"⚠️  无法创建测试目录: {self.test_dir} ({e})")
-                # 极端情况：自动检测也失败了，回退到开发板默认
-                self.test_dir = Path('/mapdata/ufs_test').absolute()
+                # 多级回退：先试开发板默认
+                try:
+                    self.test_dir = Path('/mapdata/ufs_test').absolute()
+                    if not self.test_dir.exists():
+                        self.test_dir.mkdir(parents=True, exist_ok=True)
+                    logger.warning(f"⚠️  回退到开发板默认：{self.test_dir}")
+                except Exception:
+                    # 最后回退到 /tmp
+                    self.test_dir = Path('/tmp/ufs_test').absolute()
+                    if not self.test_dir.exists():
+                        self.test_dir.mkdir(parents=True, exist_ok=True)
+                    logger.warning(f"⚠️  回退到临时目录：{self.test_dir}")
                 if not self.test_dir.exists():
                     self.test_dir.mkdir(parents=True, exist_ok=True)
                 logger.warning(f"⚠️  回退到开发板默认: {self.test_dir}")
             return
 
         # 3) 极端情况：自动检测也没给出结果，回退默认
-        self.test_dir = Path('/mapdata/ufs_test').absolute()
+        try:
+                    self.test_dir = Path('/mapdata/ufs_test').absolute()
+                    if not self.test_dir.exists():
+                        self.test_dir.mkdir(parents=True, exist_ok=True)
+                    logger.warning(f"⚠️  回退到开发板默认：{self.test_dir}")
+                except Exception:
+                    # 最后回退到 /tmp
+                    self.test_dir = Path('/tmp/ufs_test').absolute()
+                    if not self.test_dir.exists():
+                        self.test_dir.mkdir(parents=True, exist_ok=True)
+                    logger.warning(f"⚠️  回退到临时目录：{self.test_dir}")
         if not self.test_dir.exists():
             self.test_dir.mkdir(parents=True, exist_ok=True)
         logger.warning(f"⚠️  自动检测失败，使用开发板默认: {self.test_dir}")
