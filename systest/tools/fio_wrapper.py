@@ -155,7 +155,18 @@ class FIOMetrics:
     @classmethod
     def from_fio_output(cls, fio_output: Dict[str, Any], rw_type: str) -> 'FIOMetrics':
         """从 FIO JSON 输出创建指标对象"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # 调试信息：打印 FIO 输出结构
+        logger.debug(f"FIO 输出键：{list(fio_output.keys())}")
         job = fio_output['jobs'][0]
+        logger.debug(f"作业数据键：{list(job.keys())}")
+        
+        if 'read' in job:
+            logger.debug(f"read 数据键：{list(job['read'].keys())}")
+        if 'write' in job:
+            logger.debug(f"write 数据键：{list(job['write'].keys())}")
         
         # 根据读写类型选择数据源
         if 'read' in rw_type.lower():
