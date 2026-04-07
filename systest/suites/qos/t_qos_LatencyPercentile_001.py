@@ -118,10 +118,6 @@ class Test(TestCase):
         
         self.logger.info("✅ 前置条件检查通过")
         return True
-        # Postcondition 检查
-        self._check_postcondition()
-        # Postcondition 检查
-        self._check_postcondition()
     
     def execute(self) -> Dict[str, Any]:
         """执行 QoS 延迟百分位测试"""
