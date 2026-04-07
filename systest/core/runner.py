@@ -412,7 +412,7 @@ class TestRunner:
 
         # 每次运行都自动做一次环境检测，确保配置是最新的
         # 如果检测结果变化，自动更新 runtime.json
-        from check_env import EnvironmentChecker
+        from bin.check_env import EnvironmentChecker
         checker = EnvironmentChecker(mode='deploy', verbose=False, config_dir=self.config_dir)
         checker.collect_storage()
         checker.collect_test_directory()

@@ -422,12 +422,7 @@ class UFSDevice:
                     except Exception:
                         pass
                     
-                    # 方法 2：如果上面失败，退而求其次，找到第一个可用的
-                    # （单设备场景下这仍然有效）
-                    health_dir = ufs_dir / 'health_descriptor'
-                    if health_dir.exists():
-                        self.logger.debug(f"使用第一个可用的健康目录：{health_dir}")
-                        return health_dir
+
         
         self.logger.warning(f"未找到 UFS 健康目录")
         return None

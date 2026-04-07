@@ -132,7 +132,7 @@ class Test(TestCase):
             result = self.fio.run(FIOConfig(**fio_args))
             
             # 解析结果
-            job_data = result.get('jobs', [{}])[0]
+            job_data = result.raw.get('jobs', [{}])[0]
             
             # 提取读写IOPS
             read_iops = job_data.get('read', {}).get('iops', 0)
