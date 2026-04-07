@@ -793,6 +793,38 @@ class TestRunner:
                     'duration': 0
                 })
 
+        # 套件执行总结
+        total = len(results)
+        passed = sum(1 for r in results if r['status'] == 'PASS' or r['status'] == 'DRY-RUN-PASS')
+        failed = sum(1 for r in results if r['status'] == 'FAIL')
+        errors = sum(1 for r in results if r['status'] == 'ERROR')
+        skipped = sum(1 for r in results if r['status'] == 'SKIP')
+        aborted = sum(1 for r in results if r['status'] == 'ABORT')
+        
+        logger.info("=" * 60)
+        logger.info(f"📊 测试套件执行总结：{suite_name}")
+        logger.info("=" * 60)
+        logger.info(f"  总计：{total} 个测试用例")
+        logger.info(f"  ✅ PASS:  {passed}")
+        logger.info(f"  ❌ FAIL:  {failed}")
+        logger.info(f"  💥 ERROR: {errors}")
+        logger.info(f"  ⏭️  SKIP:  {skipped}")
+        logger.info(f"  ⏹️  ABORT: {aborted}")
+        logger.info("-" * 60)
+        
+        # 判断套件整体是否通过
+        if failed > 0 or errors > 0:
+            suite_status = '❌ FAIL'
+            logger.info(f"📋 套件状态：{suite_status} ({failed + errors} 个测试失败)")
+        elif passed > 0:
+            suite_status = '✅ PASS'
+            logger.info(f"📋 套件状态：{suite_status} (所有测试通过)")
+        else:
+            suite_status = '⚠️  SKIP'
+            logger.info(f"📋 套件状态：{suite_status} (所有测试跳过)")
+        
+        logger.info("=" * 60)
+        
         return results
 
     def run_test(self, test_name: str) -> Dict[str, Any]:
