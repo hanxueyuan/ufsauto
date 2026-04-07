@@ -157,10 +157,14 @@ class EnvironmentChecker:
             self._record('storage', '📋 块设备', '\n' + out)
             
             # 解析块设备列表，找到 UFS 设备
+            first_disk = None
             for line in out.strip().split('\n'):
                 parts = line.split()
                 if len(parts) >= 3 and parts[2] == 'disk':
                     dev_name = parts[0]
+                    # 保存第一个磁盘，供后面回退使用
+                    if first_disk is None:
+                        first_disk = dev_name
                     # 检查是否是 UFS 设备（通过 /sys/block 检查驱动）
                     driver_path = f'/sys/block/{dev_name}/device/driver'
                     if os.path.exists(driver_path):
@@ -172,6 +176,12 @@ class EnvironmentChecker:
                                 break
                         except Exception:
                             pass
+            
+            # 如果已经通过 dmesg 找到了 UFS 主机控制器，但没通过驱动匹配到
+            # 直接使用第一个块设备（UFS 通常是第一个磁盘）
+            if ufs_found and not device_path and first_disk:
+                device_path = f'/dev/{first_disk}'
+                self._record('storage', 'UFS 设备路径', f'{device_path} (auto-detected: UFS host found, using first disk)')
         
         # 如果没找到 UFS 设备，尝试通过 SCSI host 查找
         if not device_path and 'scsi_host' in ufs_info:
@@ -295,15 +305,23 @@ class EnvironmentChecker:
             if not os.access(mount, os.W_OK):
                 continue
             
-            if avail_gb >= 2 and avail_gb > max_avail_gb:
+            # 优先选可用空间最大的，至少 2GB 比较理想
+            # 如果找不到 ≥2GB 的，就用最大的那个（有空间总比没空间好）
+            if avail_gb > max_avail_gb:
                 max_avail_gb = avail_gb
                 best_mount = mount
         
         if best_mount:
-            self._record('test_dir', '建议测试目录', f'{best_mount}/ufs_test (可用 {max_avail_gb:.1f} GB)')
+            # 不管空间大小，只要找到一个可用的，就用它
+            # 如果空间小于 2GB 会在日志里提示，但仍然使用它
+            if max_avail_gb >= 2:
+                self._record('test_dir', '建议测试目录', f'{best_mount}/ufs_test (可用 {max_avail_gb:.1f} GB)')
+            else:
+                self._record('test_dir', '建议测试目录', f'{best_mount}/ufs_test (可用 {max_avail_gb:.1f} GB，小于推荐的 2GB)')
             self.runtime_config['test_dir'] = f'{best_mount}/ufs_test'
         else:
-            self._record('test_dir', '建议测试目录', '/tmp/ufs_test (所有挂载点 < 2GB)')
+            # 实在找不到，才回退到 /tmp
+            self._record('test_dir', '建议测试目录', '/tmp/ufs_test (未找到其他可写挂载点)')
             self.runtime_config['test_dir'] = '/tmp/ufs_test'
 
     # ── 内部工具 ──────────────────────────────────────────
