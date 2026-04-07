@@ -265,13 +265,14 @@ class FIO:
         self.retries = retries
         self.logger = logger or logging.getLogger(__name__)
     
-    def run(self, config: FIOConfig, dry_run: bool = False) -> FIOMetrics:
+    def run(self, config: FIOConfig, dry_run: bool = False, allowed_prefixes: list = None) -> FIOMetrics:
         """
         执行 FIO 测试
         
         Args:
             config: FIO 配置
             dry_run: 是否仅打印命令不执行
+            allowed_prefixes: 允许的文件路径前缀列表（如 ['/tmp', '/mapdata']）
         
         Returns:
             FIOMetrics: 性能指标
@@ -279,6 +280,14 @@ class FIO:
         Raises:
             FIOError: FIO 执行失败
         """
+        # 验证 filename 路径
+        filename = Path(config.filename)
+        if allowed_prefixes:
+            # 检查是否在允许的目录内
+            if not any(str(filename).startswith(p) for p in allowed_prefixes):
+                # 也允许设备路径（/dev/ 开头）
+                if not str(filename).startswith('/dev/'):
+                    raise FIOError(f"非法的 filename 路径：{config.filename} (必须在允许的目录内或设备路径)")
         cmd = config.to_args()
         
         self.logger.info(f"执行 FIO 测试：{config.name}")

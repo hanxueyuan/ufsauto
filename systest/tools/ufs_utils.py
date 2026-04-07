@@ -19,6 +19,7 @@ Usage:
 """
 
 import os
+import re
 import subprocess
 import logging
 from pathlib import Path
@@ -26,6 +27,39 @@ from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
+
+
+def validate_device_path(device_path: str) -> bool:
+    """验证设备路径是否合法
+    
+    Args:
+        device_path: 设备路径（如 /dev/sda）
+    
+    Returns:
+        bool: 路径是否合法
+    
+    安全规则:
+        1. 必须是 /dev/ 下的块设备
+        2. 不能包含路径遍历符号（..）
+        3. 只允许 sd*, mmcblk*, nvme* 等标准命名
+    """
+    if not device_path or not isinstance(device_path, str):
+        return False
+    
+    # 防止路径遍历攻击
+    if '..' in device_path:
+        return False
+    
+    # 只允许标准设备命名模式
+    # /dev/sd[a-z]+  (如 /dev/sda, /dev/sdb)
+    # /dev/mmcblk[0-9]+  (如 /dev/mmcblk0)
+    # /dev/nvme[0-9]+n[0-9]+  (如 /dev/nvme0n1)
+    pattern = r'^/dev/(sd[a-z]+|mmcblk[0-9]+|nvme[0-9]+n[0-9]+)$'
+    if not re.match(pattern, device_path):
+        return False
+    
+    return True
+
 
 
 @dataclass
@@ -157,6 +191,9 @@ class UFSDevice:
             device_path: UFS 设备路径
             logger: 日志记录器
         """
+        # 验证设备路径
+        if not validate_device_path(device_path):
+            raise ValueError(f"非法的设备路径：{device_path} (必须是 /dev/sd*, /dev/mmcblk*, 或 /dev/nvme*n*)")
         self.device_path = device_path
         self.logger = logger or logging.getLogger(__name__)
         

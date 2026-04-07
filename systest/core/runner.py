@@ -81,13 +81,20 @@ class TestCase:
             self.test_dir.mkdir(parents=True, exist_ok=True)
 
     def get_test_file_path(self, name: str) -> Path:
+        """获取测试文件路径，统一放在全局测试目录下"""
         """获取测试文件路径,统一放在全局测试目录下
 
         Args:
             name: 测试文件名称(如 "seq_read")
         """
         if self.test_dir:
-            return self.test_dir / f'ufs_test_{name}'
+            test_file = self.test_dir / f"ufs_test_{name}"
+            # 验证路径在 test_dir 下（防止路径遍历）
+            try:
+                test_file.resolve().relative_to(self.test_dir.resolve())
+            except ValueError:
+                raise RuntimeError(f"测试文件路径不在测试目录内：{test_file}")
+            return test_file
         else:
             # 回退到 /tmp
             return Path(f'/tmp/ufs_test_{name}')
@@ -469,9 +476,18 @@ class TestRunner:
 
     def _resolve_test_dir(self):
         """确定测试目录：用户指定 > 自动检测 > 回退默认"""
+        # 允许的测试目录前缀（安全白名单）
+        allowed_prefixes = ['/tmp', '/mapdata']
+        
         # 1) 用户手动指定（最高优先级）
         if self.test_dir_override:
-            self.test_dir = Path(self.test_dir_override).absolute()
+            test_dir = Path(self.test_dir_override).absolute()
+            # 验证路径是否在允许的目录内
+            if not any(str(test_dir).startswith(p) for p in allowed_prefixes):
+                logger.error(f"❌ 测试目录不在允许的范围内：{test_dir}")
+                logger.error(f"💡 允许的目录前缀：{allowed_prefixes}")
+                raise RuntimeError(f"测试目录必须在以下目录之一：{allowed_prefixes}")
+            self.test_dir = test_dir
             self.test_dir.mkdir(parents=True, exist_ok=True)
             logger.info(f"✅ 测试目录：{self.test_dir} (手动指定)")
             return
