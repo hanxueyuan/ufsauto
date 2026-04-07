@@ -275,16 +275,14 @@ class EnvironmentChecker:
         best_mount = None
         for line in out.strip().split('\n'):
             parts = line.strip().split()
-            if use_simple:
-                if len(parts) >= 2:
-                    mount, avail_str = parts[0], parts[1]
-                else:
-                    continue
-            else:
-                if len(parts) >= 4:
-                    mount, avail_str = parts[0], parts[3]
-                else:
-                    continue
+            if len(parts) < 2:
+                continue  # 至少需要两列
+            
+            # 健壮解析：
+            # use_simple = True  -> -o TARGET,AVAIL => 总是 TARGET=第一列 AVAIL=最后一列
+            # use_simple = False -> -o TARGET,SIZE,FSUSED,FSAVAIL => TARGET=第一列 FSAVAIL=最后一列
+            mount = parts[0]
+            avail_str = parts[-1]  # AVAIL / FSAVAIL 总是最后一列
             
             # 解析可用大小
             avail_gb = 0
