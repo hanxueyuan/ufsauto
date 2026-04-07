@@ -25,6 +25,9 @@ from typing import Dict, List, Optional, Any
 # 默认 logger(向后兼容)
 logger = logging.getLogger(__name__)
 
+# 性能阈值常量
+PERFORMANCE_THRESHOLD = 0.9  # 性能达标阈值（90%）
+
 
 class TestAborted(Exception):
     """测试被中断"""
@@ -294,7 +297,7 @@ class TestCase:
             should_fail = False
             fail_reasons = []
             
-            if not validate_passed:
+            if not passed:
                 should_fail = True
                 fail_reasons.append("验证未通过")
             
