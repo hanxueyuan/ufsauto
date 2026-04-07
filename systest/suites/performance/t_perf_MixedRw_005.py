@@ -125,7 +125,7 @@ class Test(TestCase):
                 'iodepth': self.iodepth,
                 'rw': 'randrw',
                 'rwmixread': self.rw_mix,
-                'output-format': 'json'
+                'output_format': 'json'
             }
             
             # 执行FIO测试
