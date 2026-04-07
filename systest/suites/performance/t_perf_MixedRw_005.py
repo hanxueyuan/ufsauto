@@ -129,7 +129,7 @@ class Test(TestCase):
             }
             
             # 执行FIO测试
-            result = self.fio.run(FIOConfig(**fio_args))
+            result = self.fio.run(FIOConfig(**fio_args), direct=True)
             
             # 解析结果
             job_data = result.raw.get('jobs', [{}])[0]
