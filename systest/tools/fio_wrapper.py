@@ -321,12 +321,21 @@ class FIO:
                     stderr_msg = result.stderr.strip() if result.stderr else '无错误输出'
                     raise FIOError(f"FIO 未输出任何数据。可能原因：1) 设备路径错误 2) 权限不足 3) FIO 安装问题。stderr: {stderr_msg}")
                 
+                # 过滤 FIO 警告信息，提取 JSON 部分
+                # FIO 可能在 JSON 前输出警告信息（如 iodepth 警告）
+                import re
+                json_match = re.search(r'\{.*\}', result.stdout, re.DOTALL)
+                if json_match:
+                    json_str = json_match.group(0)
+                else:
+                    json_str = result.stdout
+                
                 # 检查输出是否是 JSON 格式
-                if not result.stdout.strip().startswith('{'):
-                    raise FIOError(f"FIO 输出格式错误（非 JSON）: {result.stdout[:200]}...")
+                if not json_str.strip().startswith('{'):
+                    raise FIOError(f"FIO 输出格式错误（非 JSON）: {json_str[:200]}...")
                 
                 try:
-                    fio_output = json.loads(result.stdout)
+                    fio_output = json.loads(json_str)
                 except json.JSONDecodeError as e:
                     raise FIOError(f"FIO 输出解析失败：{e}. 输出内容：{result.stdout[:500]}...")
                 
