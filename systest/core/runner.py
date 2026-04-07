@@ -375,12 +375,13 @@ class TestRunner:
     """测试执行引擎"""
 
     def __init__(self, device: str = None, test_dir: str = None, verbose: bool = False, dry_run: bool = False,
-                 ci_mode: bool = False):
+                 ci_mode: bool = False, quick_factor: float = 1.0):
         self.device_override = device  # 用户手动指定
         self.test_dir_override = test_dir  # 用户手动指定
         self.verbose = verbose
         self.dry_run = dry_run
         self.ci_mode = ci_mode  # CI/CD 环境模式
+        self.quick_factor = quick_factor  # 快速模式因子 (0.5 = 时间减半)
         self.suites_dir = Path(__file__).parent.parent / 'suites'
         self.config_dir = Path(__file__).parent.parent / 'config'
         self.test_dir = None  # 最终确定的测试目录
@@ -738,6 +739,11 @@ class TestRunner:
                     verbose=self.verbose,
                     logger=logger
                 )
+                
+                # 快速模式：调整 runtime 参数
+                if self.quick_factor != 1.0 and hasattr(test_instance, 'runtime'):
+                    test_instance.runtime = int(test_instance.runtime * self.quick_factor)
+                    test_instance.logger.info(f"⚡ 快速模式：runtime 调整为 {test_instance.runtime}s")
 
                 result = test_instance.run()
                 results.append(result)

@@ -141,13 +141,14 @@ def cmd_run(args):
         
         # 执行每个套件
         for suite_name in suites_to_run:
-            # 初始化组件
+            # 初始化组件（传递 quick_factor 用于调整 runtime）
             runner = TestRunner(
                 device=args.device,
                 test_dir=args.test_dir,
                 verbose=args.verbose,
                 dry_run=args.dry_run,
-                ci_mode=args.ci if hasattr(args, 'ci') else False
+                ci_mode=args.ci if hasattr(args, 'ci') else False,
+                quick_factor=quick_factor
             )
             collector = ResultCollector(output_dir=args.output)
             reporter = ReportGenerator(template='default')
