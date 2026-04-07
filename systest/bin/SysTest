@@ -425,7 +425,37 @@ def main():
     subparsers = parser.add_subparsers(dest='command', help='可用命令')
 
     # run 命令
-    run_parser = subparsers.add_parser('run', help='执行测试')
+    run_parser = subparsers.add_parser('run', 
+        help='执行测试',
+        description='执行 UFS 性能/可靠性测试',
+        epilog='''示例:
+  # 运行完整性能测试套件
+  python3 bin/SysTest run --suite=performance
+  
+  # 运行 QoS 测试套件（车规级延迟测试）
+  python3 bin/SysTest run --suite=qos
+  
+  # 快速性能验证（缩短测试时间）
+  python3 bin/SysTest run --suite=performance --quick
+  
+  # 运行单个测试项
+  python3 bin/SysTest run --test=t_perf_SeqReadBurst_001
+  
+  # 批量测试 3 次，间隔 60 秒
+  python3 bin/SysTest run --suite=performance --batch=3 --interval=60
+  
+  # 指定设备和测试目录
+  python3 bin/SysTest run --suite=performance --device=/dev/sda --test-dir=/mapdata/ufs_test
+  
+  # 使用预设配置（如 configs/ufs31_128GB.json）
+  python3 bin/SysTest run --suite=performance --config=configs/ufs31_128GB.json
+  
+  # CI/CD 环境模式（启用环境验证）
+  python3 bin/SysTest run --suite=performance --ci
+  
+  # 模拟执行（不实际运行测试，验证框架）
+  python3 bin/SysTest run --suite=performance --dry-run
+''')
     run_parser.add_argument('--suite', '-s', help='测试套件名称 (performance/qos/reliability)')
     run_parser.add_argument('--test', '-t', help='单个测试项名称')
     run_parser.add_argument('--all', '-a', action='store_true', help='运行所有测试套件')
@@ -444,12 +474,33 @@ def main():
     run_parser.set_defaults(func=cmd_run)
 
     # list 命令
-    list_parser = subparsers.add_parser('list', help='列出可用测试')
+    list_parser = subparsers.add_parser('list', 
+        help='列出可用测试',
+        description='列出所有可用的测试套件和测试项',
+        epilog='''示例:
+  # 列出所有测试套件
+  python3 bin/SysTest list
+  
+  # 显示详细信息（包含测试项描述）
+  python3 bin/SysTest list --detail
+''')
     list_parser.add_argument('--detail', action='store_true', help='显示详细信息')
     list_parser.set_defaults(func=cmd_list)
 
     # report 命令
-    report_parser = subparsers.add_parser('report', help='生成/查看报告')
+    report_parser = subparsers.add_parser('report', 
+        help='生成/查看报告',
+        description='生成或查看测试报告',
+        epilog='''示例:
+  # 查看最新测试报告
+  python3 bin/SysTest report --latest
+  
+  # 查看指定 ID 的报告
+  python3 bin/SysTest report --id=SysTest_performance_20260407_103000
+  
+  # 导出 CSV 格式结果
+  python3 bin/SysTest report --latest --export-csv
+''')
     report_parser.add_argument('--latest', action='store_true', help='查看最新报告')
     report_parser.add_argument('--id', help='指定报告 ID')
     report_parser.add_argument('--open', action='store_true', help='在浏览器中打开')
@@ -457,7 +508,22 @@ def main():
     report_parser.set_defaults(func=cmd_report)
 
     # config 命令
-    config_parser = subparsers.add_parser('config', help='查看/管理配置')
+    config_parser = subparsers.add_parser('config', 
+        help='查看/管理配置',
+        description='查看或修改运行时配置',
+        epilog='''示例:
+  # 显示当前配置内容
+  python3 bin/SysTest config --show
+  
+  # 设置设备路径
+  python3 bin/SysTest config --device=/dev/sda
+  
+  # 设置测试目录
+  python3 bin/SysTest config --test-dir=/mapdata/ufs_test
+  
+  # 重置配置为默认值
+  python3 bin/SysTest config --reset
+''')
     config_parser.add_argument('--show', action='store_true', help='显示配置内容')
     config_parser.add_argument('--reset', action='store_true', help='重置配置为默认值')
     config_parser.add_argument('--device', help='设置设备路径')
@@ -465,15 +531,45 @@ def main():
     config_parser.set_defaults(func=cmd_config)
 
     # check-env 命令
-    check_env_parser = subparsers.add_parser('check-env', help='检查环境并生成配置')
+    check_env_parser = subparsers.add_parser('check-env', 
+        help='检查环境并生成配置',
+        description='检测 UFS 设备和测试目录，自动生成 runtime.json 配置',
+        epilog='''示例:
+  # 检查环境并自动保存配置（默认行为）
+  python3 bin/SysTest check-env
+  
+  # 生成 JSON 报告
+  python3 bin/SysTest check-env --report
+  
+  # 详细输出模式
+  python3 bin/SysTest check-env -v
+  
+  # 只检测不保存配置
+  python3 bin/SysTest check-env --no-save
+''')
     check_env_parser.add_argument('--report', action='store_true', help='生成 JSON 报告')
     check_env_parser.add_argument('--output', default='env_check_report.json', help='报告输出路径')
-    check_env_parser.add_argument('--save-config', action='store_true', help='将检测结果保存为 runtime.json')
+    check_env_parser.add_argument('--no-save', action='store_true', help='不保存配置文件 (默认会自动保存 runtime.json)')
     check_env_parser.add_argument('--verbose', '-v', action='store_true', help='详细输出')
     check_env_parser.set_defaults(func=cmd_check_env)
 
     # compare-baseline 命令
-    compare_parser = subparsers.add_parser('compare-baseline', help='对比性能基线')
+    compare_parser = subparsers.add_parser('compare-baseline', 
+        help='对比性能基线',
+        description='对比两组测试结果的性能差异',
+        epilog='''示例:
+  # 对比开发板和 CI/CD 的测试结果
+  python3 bin/SysTest compare-baseline --dev=results/SysTest_perf_dev --ci=results/SysTest_perf_ci
+  
+  # 对比两个基线目录
+  python3 bin/SysTest compare-baseline --baseline1=baseline_v1 --baseline2=baseline_v2
+  
+  # 设置允许差异阈值为 15%
+  python3 bin/SysTest compare-baseline --baseline1=baseline_v1 --baseline2=baseline_v2 --threshold=0.15
+  
+  # 输出报告到指定路径
+  python3 bin/SysTest compare-baseline --baseline1=baseline_v1 --baseline2=baseline_v2 --output=comparison_report.json
+''')
     compare_parser.add_argument('--dev', help='开发板测试结果目录')
     compare_parser.add_argument('--ci', help='CI/CD 测试结果目录')
     compare_parser.add_argument('--baseline1', help='第一个基线目录')
