@@ -324,7 +324,8 @@ class FIO:
                 # 过滤 FIO 警告信息，提取 JSON 部分
                 # FIO 可能在 JSON 前输出警告信息（如 iodepth 警告）
                 import re
-                json_match = re.search(r'\{.*\}', result.stdout, re.DOTALL)
+                # 使用更精确的正则：匹配从 { 开始到最后一个 } 结束
+                json_match = re.search(r'\{[\s\S]*\}', result.stdout)
                 if json_match:
                     json_str = json_match.group(0)
                 else:
