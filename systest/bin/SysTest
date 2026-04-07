@@ -449,9 +449,6 @@ def main():
   SysTest config --test-dir=/mapdata/ufs_test  # 设置测试目录
   SysTest config --reset                       # 重置配置
 
-对比分析:
-  SysTest compare-baseline --baseline1 baseline_v1 --baseline2 baseline_v2
-  SysTest compare-baseline --baseline1 baseline_v1 --baseline2 baseline_v2 --threshold=0.15
 
 完整工作流:
   # 车规级 UFS 3.1 测试流程
