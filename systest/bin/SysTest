@@ -82,11 +82,15 @@ def cmd_run(args):
     if args.device:
         logger.info(f"设备：{args.device} (指定)")
     else:
-        logger.warning("⚠️  未指定设备路径，将使用默认值 /dev/ufs0")
+        logger.warning("⚠️  未指定设备路径，将使用默认值 /dev/sda")
         logger.warning("    建议先运行: python3 bin/SysTest check-env --save-config")
-        args.device = '/dev/ufs0'
+        args.device = '/dev/sda'
     if args.test_dir:
         logger.info(f"测试目录：{args.test_dir} (指定)")
+    else:
+        logger.warning("⚠️  未指定测试目录，将使用默认值 /mapdata/ufs_test")
+        logger.warning("    建议先运行: python3 bin/SysTest check-env --save-config")
+        args.test_dir = '/mapdata/ufs_test'
     if args.quick:
         logger.info("模式：快速模式 (测试时间缩短 50%)")
     if args.batch > 1:
