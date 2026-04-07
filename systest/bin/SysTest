@@ -347,8 +347,8 @@ def cmd_check_env(args):
     cmd = [sys.executable, str(check_script)]
     if args.report:
         cmd.extend(['--report', '--output', args.output])
-    if args.save_config:
-        cmd.append('--save-config')
+    if args.no_save:
+        cmd.append('--no-save')
     if args.verbose:
         cmd.append('-v')
 

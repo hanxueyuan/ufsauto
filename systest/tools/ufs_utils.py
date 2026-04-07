@@ -546,42 +546,43 @@ def auto_detect_ufs() -> Dict[str, Any]:
     except Exception:
         ufshcd_loaded = False
 
+
     if ufshcd_loaded:
         # 同时扫描 sd* 和 mmcblk* 设备（某些平台 UFS 命名为 mmcblk*）
         for pattern in ['/sys/block/sd*', '/sys/block/mmcblk*']:
             for blk in sorted(_glob.glob(pattern)):
-            dev_name = os.path.basename(blk)
-            try:
-                # 往上找 driver，看是否是 ufshcd
-                # 典型路径: /sys/block/sda/device/../../..  指向 host adapter
-                for depth in range(2, 6):
-                    driver_link = os.path.join(blk, 'device', *(['..'] * depth), 'driver')
-                    driver_link = os.path.normpath(driver_link)
-                    if os.path.islink(driver_link):
-                        driver_name = os.path.basename(os.readlink(driver_link))
-                        if 'ufshcd' in driver_name:
-                            result['found'] = True
-                            result['device'] = f'/dev/{dev_name}'
-                            result['controller'] = driver_name
+                dev_name = os.path.basename(blk)
+                try:
+                    # 往上找 driver，看是否是 ufshcd
+                    # 典型路径：/sys/block/sda/device/../../..  指向 host adapter
+                    for depth in range(2, 6):
+                        driver_link = os.path.join(blk, 'device', *(['..'] * depth), 'driver')
+                        driver_link = os.path.normpath(driver_link)
+                        if os.path.islink(driver_link):
+                            driver_name = os.path.basename(os.readlink(driver_link))
+                            if 'ufshcd' in driver_name:
+                                result['found'] = True
+                                result['device'] = f'/dev/{dev_name}'
+                                result['controller'] = driver_name
 
-                            # 读取 vendor / model / rev
-                            dev_dir = os.path.join(blk, 'device')
-                            result['vendor'] = _read_attr(os.path.join(dev_dir, 'vendor'))
-                            result['model'] = _read_attr(os.path.join(dev_dir, 'model'))
-                            result['fw_version'] = _read_attr(os.path.join(dev_dir, 'rev'))
+                                # 读取 vendor / model / rev
+                                dev_dir = os.path.join(blk, 'device')
+                                result['vendor'] = _read_attr(os.path.join(dev_dir, 'vendor'))
+                                result['model'] = _read_attr(os.path.join(dev_dir, 'model'))
+                                result['fw_version'] = _read_attr(os.path.join(dev_dir, 'rev'))
 
-                            # 容量
-                            size_str = _read_attr(os.path.join(blk, 'size'))
-                            if size_str:
-                                try:
-                                    sectors = int(size_str)
-                                    result['capacity_gb'] = round(sectors * 512 / (1024 ** 3))
-                                except ValueError:
-                                    pass
+                                # 容量
+                                size_str = _read_attr(os.path.join(blk, 'size'))
+                                if size_str:
+                                    try:
+                                        sectors = int(size_str)
+                                        result['capacity_gb'] = round(sectors * 512 / (1024 ** 3))
+                                    except ValueError:
+                                        pass
 
-                            return result
-            except Exception:
-                continue
+                                return result
+                except Exception:
+                    continue
 
     # ── 方法 2：回退检查 /dev/disk/by-id/ ──
 
