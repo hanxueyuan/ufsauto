@@ -219,25 +219,22 @@ class TestCase:
         self.logger.debug(f"Teardown: {self.name}")
 
         # 自动清理测试文件
-        if hasattr(self, 'test_file') and self.test_file and isinstance(self.test_file, Path):
+        if hasattr(self, "test_file") and self.test_file and isinstance(self.test_file, Path):
             if self.test_file.exists():
                 try:
+                    file_size = self.test_file.stat().st_size
                     self.test_file.unlink()
-                    self.logger.debug(f"🧹 已清理测试文件: {self.test_file}")
+                    self.logger.debug(f"🧹 已清理测试文件：{self.test_file} ({file_size / 1024 / 1024:.1f} MB)")
                 except Exception as e:
-                    self.logger.warning(f"⚠️  清理测试文件失败: {e}")
-
-        # 自动记录测试后健康状态(Postcondition 对比用)
-        try:
-            from tools.ufs_utils import UFSDevice
-            ufs = UFSDevice(self.device, logger=self.logger)
-            self._post_test_health = ufs.get_health_status()
-            self.logger.debug(f"📊 记录测试后健康状态: {self._post_test_health.get('status', 'Unknown')}")
-        except Exception as e:
-            self.logger.warning(f"⚠️  测试后健康状态记录失败: {e}")
-            self._post_test_health = None
-
-        return True
+                    self.logger.warning(f"⚠️  清理测试文件失败：{e}")
+                    if self.test_file.exists():
+                        try:
+                            file_size = self.test_file.stat().st_size
+                            if file_size > 100 * 1024 * 1024:  # > 100MB
+                                self.logger.warning(f"⚠️  测试文件未删除：{self.test_file} ({file_size / 1024 / 1024:.1f} MB)")
+                                self.logger.warning(f"💡 请手动删除以释放空间：rm {self.test_file}")
+                        except Exception:
+                            pass
 
     def run(self) -> Dict[str, Any]:
         """完整执行流程"""
@@ -466,62 +463,39 @@ class TestRunner:
             return {}
 
     def _resolve_test_dir(self):
-        """确定测试目录：用户指定 > 自动检测结果（已更新到 runtime_config）
-
-        现在环境检测和配置更新已经在 __init__ 开头完成了,
-        这里只需要处理用户手动覆盖和最后的创建验证
-        """
+        """确定测试目录：用户指定 > 自动检测 > 回退默认"""
         # 1) 用户手动指定（最高优先级）
         if self.test_dir_override:
             self.test_dir = Path(self.test_dir_override).absolute()
-            if not self.test_dir.exists():
-                self.test_dir.mkdir(parents=True, exist_ok=True)
-            logger.info(f"✅ 测试目录: {self.test_dir} (手动指定)")
-            return
-
-        # 2) 从自动检测结果读取（已经更新到 runtime_config）
-        if self.runtime_config.get('test_dir'):
-            config_test_dir = self.runtime_config['test_dir']
-            self.test_dir = Path(config_test_dir).absolute()
-            try:
-                if not self.test_dir.exists():
-                    self.test_dir.mkdir(parents=True, exist_ok=True)
-                logger.info(f"✅ 测试目录: {self.test_dir} (自动检测)")
-            except Exception as e:
-                logger.warning(f"⚠️  无法创建测试目录: {self.test_dir} ({e})")
-                # 多级回退：先试开发板默认
-                try:
-                    self.test_dir = Path('/mapdata/ufs_test').absolute()
-                    if not self.test_dir.exists():
-                        self.test_dir.mkdir(parents=True, exist_ok=True)
-                    logger.warning(f"⚠️  回退到开发板默认：{self.test_dir}")
-                except Exception:
-                    # 最后回退到 /tmp
-                    self.test_dir = Path('/tmp/ufs_test').absolute()
-                    if not self.test_dir.exists():
-                        self.test_dir.mkdir(parents=True, exist_ok=True)
-                    logger.warning(f"⚠️  回退到临时目录：{self.test_dir}")
-                if not self.test_dir.exists():
-                    self.test_dir.mkdir(parents=True, exist_ok=True)
-                logger.warning(f"⚠️  回退到开发板默认: {self.test_dir}")
-            return
-
-        # 3) 极端情况：自动检测也没给出结果，回退默认
-        try:
-                    self.test_dir = Path('/mapdata/ufs_test').absolute()
-                    if not self.test_dir.exists():
-                        self.test_dir.mkdir(parents=True, exist_ok=True)
-                    logger.warning(f"⚠️  回退到开发板默认：{self.test_dir}")
-                except Exception:
-                    # 最后回退到 /tmp
-                    self.test_dir = Path('/tmp/ufs_test').absolute()
-                    if not self.test_dir.exists():
-                        self.test_dir.mkdir(parents=True, exist_ok=True)
-                    logger.warning(f"⚠️  回退到临时目录：{self.test_dir}")
-        if not self.test_dir.exists():
             self.test_dir.mkdir(parents=True, exist_ok=True)
-        logger.warning(f"⚠️  自动检测失败，使用开发板默认: {self.test_dir}")
+            logger.info(f"✅ 测试目录：{self.test_dir} (手动指定)")
+            return
 
+        # 2) 从自动检测结果读取
+        if self.runtime_config.get("test_dir"):
+            self.test_dir = Path(self.runtime_config["test_dir"]).absolute()
+            self.test_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"✅ 测试目录：{self.test_dir} (自动检测)")
+            return
+
+        # 3) 回退策略（顺序尝试，确保至少一个成功）
+        fallback_dirs = [
+            Path('/mapdata/ufs_test').absolute(),
+            Path('/tmp/ufs_test').absolute(),
+        ]
+        for fallback in fallback_dirs:
+            try:
+                fallback.mkdir(parents=True, exist_ok=True)
+                self.test_dir = fallback
+                logger.warning(f"⚠️  回退到默认目录：{self.test_dir}")
+                return
+            except Exception:
+                continue
+        
+        # 所有回退都失败（极罕见）
+        self.test_dir = Path('/tmp/ufs_test').absolute()
+        self.test_dir.mkdir(parents=True, exist_ok=True)
+        logger.error(f"❌ 所有回退目录创建失败，强制使用：{self.test_dir}")
     def _validate_ci_environment(self):
         """CI/CD 环境验证 - 检测常见低级配置错误
 

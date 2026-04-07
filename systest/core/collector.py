@@ -84,10 +84,14 @@ class ResultCollector:
         # 保存每个测试用例的详细日志
         for result in results:
             if 'log_file' in result:
-                log_src = Path(result['log_file'])
-                if log_src.exists():
-                    log_dst = test_dir / f"{result['name']}.log"
-                    shutil.copy2(log_src, log_dst)
+                try:
+                    log_src = Path(result['log_file'])
+                    if log_src.exists():
+                        log_dst = test_dir / f"{result['name']}.log"
+                        shutil.copy2(log_src, log_dst)
+                except Exception as e:
+                    logger.warning(f"⚠️  日志文件复制失败 {result['name']}: {e}")
+                    # 继续处理其他结果，不中断整个流程
         
         # 保存汇总信息
         summary_path = test_dir / 'summary.txt'
