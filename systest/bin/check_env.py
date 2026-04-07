@@ -215,10 +215,10 @@ class EnvironmentChecker:
         if device_path:
             self.runtime_config['device'] = device_path
         else:
-            # 如果仍然没找到，使用默认值并提示用户
-            self._record('storage', '⚠️  设备路径', '未自动检测到，将使用默认值 /dev/ufs0')
+            # 如果仍然没找到，使用默认值 /dev/sda（开发板 UFS 通常是 sda）
+            self._record('storage', '⚠️  设备路径', f'未自动检测到，将使用默认值 /dev/sda')
             self._record('storage', '💡 提示', '请手动指定设备路径: --device=/dev/sdX')
-            self.runtime_config['device'] = '/dev/ufs0'
+            self.runtime_config['device'] = '/dev/sda'
     
     def collect_permissions(self):
         try:
@@ -321,9 +321,9 @@ class EnvironmentChecker:
                 self._record('test_dir', '建议测试目录', f'{best_mount}/ufs_test (可用 {max_avail_gb:.1f} GB，小于推荐的 2GB)')
             self.runtime_config['test_dir'] = f'{best_mount}/ufs_test'
         else:
-            # 实在找不到，才回退到 /tmp
-            self._record('test_dir', '建议测试目录', '/tmp/ufs_test (未找到其他可写挂载点)')
-            self.runtime_config['test_dir'] = '/tmp/ufs_test'
+            # 实在找不到，才回退到默认 /mapdata/ufs_test（开发板常用挂载点）
+            self._record('test_dir', '建议测试目录', '/mapdata/ufs_test (未找到其他可写挂载点，使用开发板默认)')
+            self.runtime_config['test_dir'] = '/mapdata/ufs_test'
 
     # ── 内部工具 ──────────────────────────────────────────
 
