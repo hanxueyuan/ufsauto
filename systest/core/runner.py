@@ -401,40 +401,42 @@ class TestRunner:
         # 加载运行时配置
         self.runtime_config = self._load_runtime_config()
 
-        # 确定设备路径：用户指定 > runtime_config > 自动检测 > 默认值
+        # 每次运行都自动做一次环境检测，确保配置是最新的
+        # 如果检测结果变化，自动更新 runtime.json
+        from check_env import EnvironmentChecker
+        checker = EnvironmentChecker(mode='deploy', verbose=False, config_dir=self.config_dir)
+        checker.collect_storage()
+        checker.collect_test_directory()
+        
+        # 更新 runtime_config 用最新检测结果
+        if checker.runtime_config.get('device'):
+            self.runtime_config['device'] = checker.runtime_config['device']
+        if checker.runtime_config.get('test_dir'):
+            self.runtime_config['test_dir'] = checker.runtime_config['test_dir']
+        
+        # 检测完成后自动保存更新配置
+        try:
+            config_path = self.config_dir / 'runtime.json'
+            # 保留原有其他字段（system、toolchain 等），只更新设备和目录
+            merged = {**self.runtime_config, **checker.runtime_config}
+            merged['env_checked_at'] = checker.runtime_config.get('env_checked_at')
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(merged, f, indent=2, ensure_ascii=False)
+            logger.info(f"✅ 配置已自动更新: {config_path} (最新环境检测结果)")
+            self.runtime_config = merged
+        except Exception as e:
+            logger.warning(f"⚠️  自动保存配置失败: {e} (继续使用当前检测结果)")
+
+        # 确定设备路径：用户指定 > 最新自动检测结果
         if self.device_override:
             self.device = self.device_override
             logger.info(f"✅ 设备路径: {self.device} (手动指定)")
         elif self.runtime_config.get('device'):
-            # 检查配置的设备是否存在，如果不存在则自动重新检测
-            config_device = self.runtime_config['device']
-            if Path(config_device).exists():
-                self.device = config_device
-                logger.info(f"✅ 设备路径: {self.device} (从 runtime.json 读取)")
-            else:
-                logger.warning(f"⚠️  配置的设备不存在: {config_device}，将自动重新检测")
-                # 自动重新检测设备
-                from check_env import EnvironmentChecker
-                checker = EnvironmentChecker(mode='deploy', verbose=False, config_dir=self.config_dir)
-                checker.collect_storage()
-                # checker.collect_storage 会自动设置 runtime_config['device']
-                if checker.runtime_config.get('device'):
-                    self.device = checker.runtime_config['device']
-                    logger.info(f"✅ 自动检测到设备: {self.device}")
-                else:
-                    self.device = '/dev/sda'
-                    logger.warning(f"⚠️  自动检测失败，使用默认值: {self.device} (开发板通用)")
+            self.device = self.runtime_config['device']
+            logger.info(f"✅ 设备路径: {self.device} (自动检测)")
         else:
-            # 没有配置，自动检测
-            from check_env import EnvironmentChecker
-            checker = EnvironmentChecker(mode='deploy', verbose=False, config_dir=self.config_dir)
-            checker.collect_storage()
-            if checker.runtime_config.get('device'):
-                self.device = checker.runtime_config['device']
-                logger.info(f"✅ 自动检测到设备: {self.device}")
-            else:
-                self.device = '/dev/sda'
-                logger.warning(f"⚠️  自动检测失败，使用默认值: {self.device} (开发板通用)")
+            self.device = '/dev/sda'
+            logger.warning(f"⚠️  自动检测失败，使用默认值: {self.device} (开发板通用)")
 
         # 确定测试目录
         self._resolve_test_dir()
@@ -464,14 +466,10 @@ class TestRunner:
             return {}
 
     def _resolve_test_dir(self):
-        """确定测试目录：用户指定 > runtime_config > 自动检测 > /tmp
+        """确定测试目录：用户指定 > 自动检测结果（已更新到 runtime_config）
 
-        生产模式(默认):自动根据存储情况选择测试目录
-        测试模式(CI/CD):用户手动指定 --test-dir
-
-        环境检查警告:
-            - 找不到 ≥2GB 可用空间 → 报 warning,回退到 /tmp
-            - findmnt 命令失败 → 报 warning,回退到 /tmp
+        现在环境检测和配置更新已经在 __init__ 开头完成了,
+        这里只需要处理用户手动覆盖和最后的创建验证
         """
         # 1) 用户手动指定（最高优先级）
         if self.test_dir_override:
@@ -481,156 +479,35 @@ class TestRunner:
             logger.info(f"✅ 测试目录: {self.test_dir} (手动指定)")
             return
 
-        # 2) 从 runtime_config 读取（check-env --save-config 生成的配置）
+        # 2) 从自动检测结果读取（已经更新到 runtime_config）
         if self.runtime_config.get('test_dir'):
             config_test_dir = self.runtime_config['test_dir']
             self.test_dir = Path(config_test_dir).absolute()
             try:
                 if not self.test_dir.exists():
                     self.test_dir.mkdir(parents=True, exist_ok=True)
-                logger.info(f"✅ 测试目录: {self.test_dir} (从 runtime.json 读取)")
+                logger.info(f"✅ 测试目录: {self.test_dir} (自动检测)")
             except Exception as e:
                 logger.warning(f"⚠️  无法创建测试目录: {self.test_dir} ({e})")
-                logger.warning("    将自动重新检测测试目录")
-                # 配置不可用，走自动检测
-                logger.info("🔍 自动选择测试目录 (配置目录不可用)")
-                # 继续往下执行，走第3步自动检测
-            else:
-                # 成功创建，直接返回
-                return
-
-        # 3) 实时自动检测（向后兼容）
-        logger.info("🔍 自动选择测试目录 (runtime.json 未配置)")
-
-        try:
-            # 先尝试新版 findmnt (支持 FSUSED, FSAVAIL)
-            # 不限制文件系统类型，所有挂载点都参与选择
-            rc, out, err = self._run(['findmnt', '-n', '-o', 'TARGET,SIZE,FSUSED,FSAVAIL'])
-
-            # 如果失败,尝试旧版 findmnt (只支持 TARGET,AVAIL)
-            if rc != 0 and 'unknown column' in err.lower():
-                rc, out, err = self._run(['findmnt', '-n', '-o', 'TARGET,AVAIL'])
-                use_simple_format = True
-            else:
-                use_simple_format = False
-
-            if rc != 0:
-                logger.warning("⚠️  环境检查警告:findmnt 命令执行失败")
-                logger.warning(f"    原因:{err if err else '命令不存在或权限不足'}")
-                logger.warning("    建议:检查 findmnt 工具是否安装,或手动指定 --test-dir")
-                self.test_dir = Path('/tmp/ufs_test').absolute()
+                # 极端情况：自动检测也失败了，回退到开发板默认
+                self.test_dir = Path('/mapdata/ufs_test').absolute()
                 if not self.test_dir.exists():
                     self.test_dir.mkdir(parents=True, exist_ok=True)
-                logger.warning(f"⚠️  回退到：{self.test_dir} (临时目录，不推荐用于生产测试)")
-                return
-
-            if not out.strip():
-                logger.warning("⚠️  环境检查警告:未找到合适的挂载点")
-                logger.warning("    原因:系统中没有 ext4/xfs/btrfs 类型的挂载点")
-                logger.warning("    建议:检查存储设备是否正确挂载,或手动指定 --test-dir")
-                self.test_dir = Path('/tmp/ufs_test').absolute()
-                if not self.test_dir.exists():
-                    self.test_dir.mkdir(parents=True, exist_ok=True)
-                logger.warning(f"⚠️  回退到:{self.test_dir} (临时目录,不推荐用于生产测试)")
-                return
-
-            # 遍历所有挂载点,找可用空间最大的
-            max_avail_gb = 0
-            best_mount = None
-            candidate_mounts = []
-            lines = out.strip().split('\n')
-
-            for line in lines:
-                parts = line.strip().split()
-                if use_simple_format:
-                    # 旧版格式: TARGET AVAIL
-                    if len(parts) < 2:
-                        continue
-                    mount = parts[0]
-                    avail_str = parts[1]
-                else:
-                    # 新版格式: TARGET SIZE FSUSED FSAVAIL
-                    if len(parts) < 4:
-                        continue
-                    mount = parts[0]
-                    avail_str = parts[3]
-
-                # 解析可用大小
-                avail_gb = 0
-                try:
-                    if avail_str.endswith('G'):
-                        avail_gb = float(avail_str[:-1])
-                    elif avail_str.endswith('T'):
-                        avail_gb = float(avail_str[:-1]) * 1024
-                    elif avail_str.endswith('M'):
-                        avail_gb = float(avail_str[:-1]) / 1024
-                except Exception:
-                    continue
-
-                candidate_mounts.append((mount, avail_gb))
-
-                # 跳过根目录（通常是只读的）
-                if mount == '/':
-                    continue
-
-                # 检查挂载点是否可读写
-                if not os.access(mount, os.W_OK):
-                    continue
-
-                # 需要至少 2GB 可用空间
-                if avail_gb >= 2 and avail_gb > max_avail_gb:
-                    max_avail_gb = avail_gb
-                    best_mount = mount
-
-            if best_mount:
-                # ✅ 找到合适空间
-                candidate = Path(best_mount) / 'ufs_test'
-                if not candidate.exists():
-                    candidate.mkdir(parents=True, exist_ok=True)
-                self.test_dir = candidate.absolute()
-                logger.info(f"✅ 测试目录:{self.test_dir} (自动选择 - 生产模式)")
-                logger.info(f"    挂载点:{best_mount},可用空间:{max_avail_gb:.1f}GB")
-                return
-            else:
-                # ⚠️ 找不到 ≥2GB 空间
-                logger.warning("⚠️  环境检查警告:未找到合适的测试目录")
-                logger.warning("    原因:所有挂载点可用空间 < 2GB (测试最低要求)")
-
-                if candidate_mounts:
-                    logger.warning("    当前挂载点列表:")
-                    for mount, avail in sorted(candidate_mounts, key=lambda x: x[1], reverse=True)[:5]:
-                        logger.warning(f"      {mount}: {avail:.1f}GB 可用")
-                else:
-                    logger.warning("    当前无可用挂载点")
-
-                logger.warning("    建议:")
-                logger.warning("      1. 检查存储设备是否正确挂载")
-                logger.warning("      2. 清理磁盘空间或扩展存储容量")
-                logger.warning("      3. 手动指定测试目录:SysTest run --test-dir=/path/to/dir")
-
-                self.test_dir = Path('/tmp/ufs_test').absolute()
-                if not self.test_dir.exists():
-                    self.test_dir.mkdir(parents=True, exist_ok=True)
-                logger.warning(f"⚠️  回退到:{self.test_dir} (临时目录,不推荐用于生产测试)")
-                logger.warning("    注意:/tmp 目录可能空间不足或为内存文件系统,可能导致测试失败")
-                return
-
-        except Exception as e:
-            logger.warning("⚠️  环境检查警告:自动选择测试目录失败")
-            logger.warning(f"    原因:{e}")
-            logger.warning("    建议:手动指定测试目录 --test-dir")
-            self.test_dir = Path('/tmp/ufs_test').absolute()
-            if not self.test_dir.exists():
-                self.test_dir.mkdir(parents=True, exist_ok=True)
-            logger.warning(f"⚠️  回退到:{self.test_dir} (临时目录,不推荐用于生产测试)")
+                logger.warning(f"⚠️  回退到开发板默认: {self.test_dir}")
             return
+
+        # 3) 极端情况：自动检测也没给出结果，回退默认
+        self.test_dir = Path('/mapdata/ufs_test').absolute()
+        if not self.test_dir.exists():
+            self.test_dir.mkdir(parents=True, exist_ok=True)
+        logger.warning(f"⚠️  自动检测失败，使用开发板默认: {self.test_dir}")
 
     def _validate_ci_environment(self):
         """CI/CD 环境验证 - 检测常见低级配置错误
 
         检查项:
         1. 测试目录是否回退到 /tmp (CI 应手动指定)
-        2. 设备路径是否为默认值 (CI 应手动指定)
+        2. 设备路径是否为默认值 (CI 应手动指定 --device 或运行 check-env --save-config)
         3. runtime.json 是否存在 (CI 应有配置文件)
 
         Returns:
@@ -644,7 +521,8 @@ class TestRunner:
             errors.append("测试目录回退到 /tmp (CI 环境应手动指定 --test-dir)")
 
         # 2. 检查设备路径是否为默认值
-        if self.device == '/dev/ufs0' and not self.device_override and not self.runtime_config.get('device'): errors.append("设备路径为默认值 /dev/ufs0 (CI 环境应手动指定 --device 或运行 check-env --save-config)")
+        if self.device == '/dev/ufs0' and not self.device_override and not self.runtime_config.get('device'): 
+            errors.append("设备路径为默认值 /dev/ufs0 (CI 环境应手动指定 --device 或运行 check-env --save-config)")
 
         # 3. 检查 runtime.json 是否存在
         config_path = self.config_dir / 'runtime.json'
@@ -653,7 +531,7 @@ class TestRunner:
 
         # 输出结果
         if errors:
-            logger.error("" + "=" * 60)
+            logger.error("=" * 60)
             logger.error("CI 环境验证失败")
             logger.error("=" * 60)
             for i, err in enumerate(errors, 1):
@@ -668,7 +546,7 @@ class TestRunner:
             raise RuntimeError("CI 环境验证失败，请检查上述错误并修复")
 
         if warnings:
-            logger.warning("" + "=" * 60)
+            logger.warning("=" * 60)
             logger.warning("CI 环境验证警告")
             logger.warning("=" * 60)
             for i, warn in enumerate(warnings, 1):
