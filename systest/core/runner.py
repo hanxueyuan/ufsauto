@@ -401,16 +401,40 @@ class TestRunner:
         # 加载运行时配置
         self.runtime_config = self._load_runtime_config()
 
-        # 确定设备路径：用户指定 > runtime_config > 默认值
+        # 确定设备路径：用户指定 > runtime_config > 自动检测 > 默认值
         if self.device_override:
             self.device = self.device_override
             logger.info(f"✅ 设备路径: {self.device} (手动指定)")
         elif self.runtime_config.get('device'):
-            self.device = self.runtime_config['device']
-            logger.info(f"✅ 设备路径: {self.device} (从 runtime.json 读取)")
+            # 检查配置的设备是否存在，如果不存在则自动重新检测
+            config_device = self.runtime_config['device']
+            if Path(config_device).exists():
+                self.device = config_device
+                logger.info(f"✅ 设备路径: {self.device} (从 runtime.json 读取)")
+            else:
+                logger.warning(f"⚠️  配置的设备不存在: {config_device}，将自动重新检测")
+                # 自动重新检测设备
+                from check_env import EnvironmentChecker
+                checker = EnvironmentChecker(mode='deploy', verbose=False, config_dir=self.config_dir)
+                checker.collect_storage()
+                # checker.collect_storage 会自动设置 runtime_config['device']
+                if checker.runtime_config.get('device'):
+                    self.device = checker.runtime_config['device']
+                    logger.info(f"✅ 自动检测到设备: {self.device}")
+                else:
+                    self.device = '/dev/sda'
+                    logger.warning(f"⚠️  自动检测失败，使用默认值: {self.device} (开发板通用)")
         else:
-            self.device = '/dev/ufs0'
-            logger.warning(f"⚠️  设备路径: {self.device} (默认值，建议运行 check-env --save-config)")
+            # 没有配置，自动检测
+            from check_env import EnvironmentChecker
+            checker = EnvironmentChecker(mode='deploy', verbose=False, config_dir=self.config_dir)
+            checker.collect_storage()
+            if checker.runtime_config.get('device'):
+                self.device = checker.runtime_config['device']
+                logger.info(f"✅ 自动检测到设备: {self.device}")
+            else:
+                self.device = '/dev/sda'
+                logger.warning(f"⚠️  自动检测失败，使用默认值: {self.device} (开发板通用)")
 
         # 确定测试目录
         self._resolve_test_dir()
@@ -465,14 +489,15 @@ class TestRunner:
                 if not self.test_dir.exists():
                     self.test_dir.mkdir(parents=True, exist_ok=True)
                 logger.info(f"✅ 测试目录: {self.test_dir} (从 runtime.json 读取)")
-            except PermissionError:
-                logger.warning(f"⚠️  无法创建测试目录: {self.test_dir} (权限不足)")
-                logger.warning("    建议: 使用 sudo 运行，或手动指定 --test-dir")
-                # 回退到用户可写的目录
-                self.test_dir = Path.home() / 'ufs_test'
-                self.test_dir.mkdir(parents=True, exist_ok=True)
-                logger.warning(f"⚠️  回退到: {self.test_dir}")
-            return
+            except Exception as e:
+                logger.warning(f"⚠️  无法创建测试目录: {self.test_dir} ({e})")
+                logger.warning("    将自动重新检测测试目录")
+                # 配置不可用，走自动检测
+                logger.info("🔍 自动选择测试目录 (配置目录不可用)")
+                # 继续往下执行，走第3步自动检测
+            else:
+                # 成功创建，直接返回
+                return
 
         # 3) 实时自动检测（向后兼容）
         logger.info("🔍 自动选择测试目录 (runtime.json 未配置)")
