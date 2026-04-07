@@ -316,7 +316,19 @@ class FIO:
                     )
                 
                 # 解析 JSON 输出
-                fio_output = json.loads(result.stdout)
+                # 检查 stdout 是否为空
+                if not result.stdout or not result.stdout.strip():
+                    stderr_msg = result.stderr.strip() if result.stderr else '无错误输出'
+                    raise FIOError(f"FIO 未输出任何数据。可能原因：1) 设备路径错误 2) 权限不足 3) FIO 安装问题。stderr: {stderr_msg}")
+                
+                # 检查输出是否是 JSON 格式
+                if not result.stdout.strip().startswith('{'):
+                    raise FIOError(f"FIO 输出格式错误（非 JSON）: {result.stdout[:200]}...")
+                
+                try:
+                    fio_output = json.loads(result.stdout)
+                except json.JSONDecodeError as e:
+                    raise FIOError(f"FIO 输出解析失败：{e}. 输出内容：{result.stdout[:500]}...")
                 
                 # 转换为标准化指标
                 metrics = FIOMetrics.from_fio_output(fio_output, config.rw)
