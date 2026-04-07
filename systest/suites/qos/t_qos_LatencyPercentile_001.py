@@ -22,6 +22,7 @@ QoS 延迟百分位测试
 """
 
 import sys
+import json
 from pathlib import Path
 
 # 添加 core 和 tools 模块路径
@@ -131,20 +132,54 @@ class Test(TestCase):
                 direct=True,
             )
             
-            # 提取延迟百分位数据
-            lat_p50 = metrics_obj.latency_ns.get('percentile', {}).get('50.000000', 0) / 1000  # ns → μs
-            lat_p99 = metrics_obj.latency_ns.get('percentile', {}).get('99.000000', 0) / 1000
-            lat_p9999 = metrics_obj.latency_ns.get('percentile', {}).get('99.990000', 0) / 1000
+            # 提取完整的延迟分布数据
+            lat_ns = metrics_obj.latency_ns
+            percentiles = lat_ns.get('percentile', {})
             
-            self.logger.info(f"  p50 延迟：{lat_p50:.1f} μs")
-            self.logger.info(f"  p99 延迟：{lat_p99:.1f} μs")
-            self.logger.info(f"  p99.99 延迟：{lat_p9999:.1f} μs")
-            
-            return {
-                'lat_p50': lat_p50,
-                'lat_p99': lat_p99,
-                'lat_p9999': lat_p9999,
+            # 收集所有百分位数据
+            lat_distribution = {
+                'p50': percentiles.get('50.000000', 0) / 1000,  # ns → μs
+                'p90': percentiles.get('90.000000', 0) / 1000,
+                'p95': percentiles.get('95.000000', 0) / 1000,
+                'p99': percentiles.get('99.000000', 0) / 1000,
+                'p99.9': percentiles.get('99.900000', 0) / 1000,
+                'p99.99': percentiles.get('99.990000', 0) / 1000,
+                'p99.999': percentiles.get('99.999000', 0) / 1000,
+                'min': lat_ns.get('min', 0) / 1000,
+                'max': lat_ns.get('max', 0) / 1000,
+                'mean': lat_ns.get('mean', 0) / 1000,
+                'stddev': lat_ns.get('stddev', 0) / 1000,
             }
+            
+            self.logger.info("📊 延迟分布数据:")
+            self.logger.info(f"  最小值：{lat_distribution['min']:.1f} μs")
+            self.logger.info(f"  p50:    {lat_distribution['p50']:.1f} μs")
+            self.logger.info(f"  p90:    {lat_distribution['p90']:.1f} μs")
+            self.logger.info(f"  p95:    {lat_distribution['p95']:.1f} μs")
+            self.logger.info(f"  p99:    {lat_distribution['p99']:.1f} μs")
+            self.logger.info(f"  p99.9:  {lat_distribution['p99.9']:.1f} μs")
+            self.logger.info(f"  p99.99: {lat_distribution['p99.99']:.1f} μs")
+            self.logger.info(f"  p99.999:{lat_distribution['p99.999']:.1f} μs")
+            self.logger.info(f"  最大值：{lat_distribution['max']:.1f} μs")
+            self.logger.info(f"  平均值：{lat_distribution['mean']:.1f} μs")
+            self.logger.info(f"  标准差：{lat_distribution['stddev']:.1f} μs")
+            
+            # 保存延迟分布数据到文件（用于后续绘制图表）
+            try:
+                distribution_file = self.test_file.parent / f'qos_latency_distribution_{self.test_file.stem}.json'
+                with open(distribution_file, 'w', encoding='utf-8') as f:
+                    json.dump({
+                        'test_name': self.name,
+                        'timestamp': self.start_time.isoformat() if hasattr(self, 'start_time') else 'N/A',
+                        'device': self.device,
+                        'distribution': lat_distribution,
+                        'raw_fio': metrics_obj.raw.get('jobs', [{}])[0] if metrics_obj.raw else {}
+                    }, f, indent=2, ensure_ascii=False)
+                self.logger.info(f"📁 延迟分布数据已保存：{distribution_file}")
+            except Exception as e:
+                self.logger.warning(f"⚠️  保存分布数据失败：{e}")
+            
+            return lat_distribution
             
         except FIOError as e:
             self.logger.error(f"FIO 执行失败：{e}")
@@ -154,9 +189,9 @@ class Test(TestCase):
         """验证延迟百分位是否达标"""
         self.logger.info("验证延迟百分位指标...")
         
-        lat_p50 = result.get('lat_p50', 0)
-        lat_p99 = result.get('lat_p99', 0)
-        lat_p9999 = result.get('lat_p9999', 0)
+        lat_p50 = result.get('p50', 0)
+        lat_p99 = result.get('p99', 0)
+        lat_p9999 = result.get('p99.99', 0)
         
         # 验证 p50
         if lat_p50 > self.p50_latency_us:
