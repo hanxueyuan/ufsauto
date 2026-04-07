@@ -1,0 +1,60 @@
+{
+  "thresholds": {
+    "performance": {
+      "t_perf_SeqReadBurst_001": {
+        "metric": "bandwidth_mbps",
+        "target": 300,
+        "tolerance": 0.2,
+        "unit": "MB/s"
+      },
+      "t_perf_SeqWriteBurst_002": {
+        "metric": "bandwidth_mbps",
+        "target": 150,
+        "tolerance": 0.2,
+        "unit": "MB/s"
+      },
+      "t_perf_RandReadBurst_003": {
+        "metric": "iops",
+        "target": 30000,
+        "tolerance": 0.2,
+        "unit": "IOPS"
+      },
+      "t_perf_RandWriteBurst_004": {
+        "metric": "iops",
+        "target": 10000,
+        "tolerance": 0.2,
+        "unit": "IOPS"
+      },
+      "t_perf_MixedRw_005": {
+        "metric": "bandwidth_mbps",
+        "target": 100,
+        "tolerance": 0.2,
+        "unit": "MB/s"
+      }
+    },
+    "qos": {
+      "t_qos_LatencyPercentile_001": {
+        "metric": "p9999_latency_ms",
+        "target": 2,
+        "tolerance": 0.25,
+        "unit": "ms"
+      },
+      "t_qos_TailLatencyRatio_003": {
+        "metric": "tail_ratio",
+        "target": 100,
+        "tolerance": 0.3,
+        "unit": "x"
+      }
+    }
+  },
+  "device": {
+    "max_test_file_size_gb": 64,
+    "min_test_file_size_gb": 2,
+    "default_test_file_size_gb": 16
+  },
+  "logging": {
+    "level": "INFO",
+    "save_fio_log": true,
+    "enable_system_log": true
+  }
+}

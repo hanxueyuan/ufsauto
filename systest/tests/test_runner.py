@@ -271,9 +271,9 @@ class TestRunnerUnit(unittest.TestCase):
         runner = TestRunner(dry_run=True)
         suites = runner.list_suites()
         perf = suites['performance']
-        expected = {'t_perf_SeqReadBurst_001', 't_perf_SeqWriteBurst_003', 
-                    't_perf_RandReadBurst_005', 't_perf_RandWriteBurst_007', 
-                    't_perf_MixedRw_009'}
+        expected = {'t_perf_SeqReadBurst_001', 't_perf_SeqWriteBurst_002', 
+                    't_perf_RandReadBurst_003', 't_perf_RandWriteBurst_004', 
+                    't_perf_MixedRw_005'}
         assert set(perf) == expected
 
 

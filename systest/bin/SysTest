@@ -97,7 +97,6 @@ def cmd_run(args):
             suites_to_run = [args.suite]
         elif args.test:
             # 单个测试，找到所属套件
-            from core.runner import TestRunner
             runner_tmp = TestRunner(dry_run=True)
             for suite_name, tests in runner_tmp.list_suites().items():
                 if args.test in tests:
