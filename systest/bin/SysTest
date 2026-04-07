@@ -58,6 +58,19 @@ def cmd_run(args):
                 args.test_dir = preset_config['test_dir']
             logger.info(f"📄 已加载预设配置：{args.config}")
     
+    # 自动加载默认 runtime 配置
+    default_config_path = project_root / 'config' / 'runtime.json'
+    if default_config_path.exists():
+        with open(default_config_path, 'r', encoding='utf-8') as f:
+            default_config = json.load(f)
+        # 应用默认配置：只有用户没指定的时候才覆盖
+        if default_config.get('device') and not args.device:
+            args.device = default_config['device']
+            logger.info(f"📄 已加载默认配置设备路径：{args.device} (from config/runtime.json)")
+        if default_config.get('test_dir') and not args.test_dir:
+            args.test_dir = default_config['test_dir']
+            logger.info(f"📄 已加载默认配置测试目录：{args.test_dir} (from config/runtime.json)")
+    
     logger.info(f"开始执行测试")
     if args.all:
         logger.info("模式：运行所有测试套件")
@@ -66,9 +79,13 @@ def cmd_run(args):
     elif args.test:
         logger.info(f"测试：{args.test}")
     if args.device:
-        logger.info(f"设备：{args.device} (手动指定)")
+        logger.info(f"设备：{args.device} (指定)")
+    else:
+        logger.warning("⚠️  未指定设备路径，将使用默认值 /dev/ufs0")
+        logger.warning("    建议先运行: python3 bin/SysTest check-env --save-config")
+        args.device = '/dev/ufs0'
     if args.test_dir:
-        logger.info(f"测试目录：{args.test_dir} (手动指定)")
+        logger.info(f"测试目录：{args.test_dir} (指定)")
     if args.quick:
         logger.info("模式：快速模式 (测试时间缩短 50%)")
     if args.batch > 1:

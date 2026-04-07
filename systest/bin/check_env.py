@@ -248,12 +248,13 @@ class EnvironmentChecker:
         self._record('test_dir', 'findmnt 版本', findmnt_ver)
         
         # 尝试新版 findmnt
-        rc, out, err = self._run(['findmnt', '-n', '-o', 'TARGET,SIZE,FSUSED,FSAVAIL', '-t', 'ext4,xfs,btrfs'])
+        # 不限制文件系统类型：任何可挂载的可写文件系统都可以用
+        rc, out, err = self._run(['findmnt', '-n', '-o', 'TARGET,SIZE,FSUSED,FSAVAIL'])
         
         if rc != 0 and 'unknown column' in (err or '').lower():
             self._record('test_dir', 'findmnt 兼容性', '旧版 (不支持 FSUSED/FSAVAIL)')
             # 尝试旧版格式
-            rc, out, err = self._run(['findmnt', '-n', '-o', 'TARGET,AVAIL', '-t', 'ext4,xfs,btrfs'])
+            rc, out, err = self._run(['findmnt', '-n', '-o', 'TARGET,AVAIL'])
             use_simple = True
         elif rc != 0:
             self._record('test_dir', 'findmnt 兼容性', f'不可用: {err}')
