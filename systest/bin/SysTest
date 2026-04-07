@@ -119,7 +119,7 @@ def cmd_run(args):
                 suites_to_run = ['performance', 'qos']
                 logger.info("快速模式：跳过 reliability 套件")
             else:
-                suites_to_run = ['performance', 'qos', 'reliability']
+                suites_to_run = ['performance', 'qos', ]
         elif args.suite:
             suites_to_run = [args.suite]
         elif args.test:
@@ -187,6 +187,23 @@ def cmd_run(args):
         if args.batch > 1 and i < args.batch - 1:
             logger.info(f"\n等待 {args.interval}s 后进行下一轮测试...")
             time.sleep(args.interval)
+    
+    # 批量测试结果汇总
+    if args.batch > 1:
+        logger.info("\n" + "=" * 60)
+        logger.info(f"📊 批量测试结果汇总（共 {args.batch} 轮）")
+        logger.info("=" * 60)
+        for i, result in enumerate(batch_results, 1):
+            summary = result['summary']
+            logger.info(f"  第 {i} 轮：{summary['passed']}/{summary['total']} 通过 ({summary['pass_rate']:.1f}%)")
+        
+        # 计算总体通过率
+        total_tests = sum(r['summary']['total'] for r in batch_results)
+        total_passed = sum(r['summary']['passed'] for r in batch_results)
+        overall_pass_rate = (total_passed / total_tests * 100) if total_tests > 0 else 0
+        logger.info("-" * 60)
+        logger.info(f"  总计：{total_passed}/{total_tests} 通过 ({overall_pass_rate:.1f}%)")
+        logger.info("=" * 60)
     
     # 关闭日志
     close_all_loggers()
@@ -400,40 +417,49 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 ================================================================================
-示例用法:
+快速开始:
+  SysTest check-env --save-config              # 首次使用：检查环境并保存配置
+  SysTest run --suite=performance              # 运行性能测试
+  SysTest report --latest                      # 查看最新报告
 
-[执行测试]
+执行测试:
   SysTest run --suite=performance              # 性能测试套件
   SysTest run --suite=performance --quick      # 快速模式 (时间减半)
-  SysTest run --test=t_perf_SeqReadBurst_001 -v  # 单个测试
-  SysTest run --all --batch=3                  # 批量 3 次
+  SysTest run --test=t_perf_SeqReadBurst_001   # 单个测试
+  SysTest run --test=t_perf_SeqReadBurst_001 -v  # 单个测试 (详细输出)
+  SysTest run --suite=performance --batch=3 --interval=60  # 批量 3 次，间隔 60 秒
+  SysTest run --suite=performance --device=/dev/sda --test-dir=/mapdata/ufs_test
+  SysTest run --suite=performance --config=configs/ufs31_128GB.json
+  SysTest run --suite=performance --ci         # CI/CD 模式
+  SysTest run --suite=performance --dry-run    # 模拟执行
+  SysTest run --all                            # 运行所有套件
 
-[查看信息]
+查看信息:
   SysTest list                                 # 列出所有测试
   SysTest list --detail                        # 详细信息
   SysTest report --latest                      # 查看最新报告
+  SysTest report --id=SysTest_performance_20260407_103000
+  SysTest report --latest --export-csv         # 导出 CSV
 
-[环境管理]
+环境管理:
   SysTest check-env                            # 检查环境
   SysTest check-env --save-config              # 保存配置
   SysTest config --show                        # 显示配置
   SysTest config --device=/dev/sda             # 设置设备路径
+  SysTest config --test-dir=/mapdata/ufs_test  # 设置测试目录
+  SysTest config --reset                       # 重置配置
 
-[对比分析]
-  SysTest compare-baseline --baseline1 results/gold/ --baseline2 results/current/
-
-[完整工作流]
-  # 1. 首次使用：检查环境并保存配置
-  SysTest check-env --save-config
-  
-  # 2. 运行性能测试
-  SysTest run --suite=performance
-  
-  # 3. 查看报告
-  SysTest report --latest
-  
-  # 4. 对比基线
+对比分析:
   SysTest compare-baseline --baseline1 baseline_v1 --baseline2 baseline_v2
+  SysTest compare-baseline --baseline1 baseline_v1 --baseline2 baseline_v2 --threshold=0.15
+
+完整工作流:
+  # 车规级 UFS 3.1 测试流程
+  SysTest check-env --save-config              # 1. 环境检测
+  SysTest run --suite=performance --quick      # 2. 性能测试 (快速)
+  SysTest run --suite=qos                      # 3. QoS 测试
+  SysTest report --latest                      # 4. 查看报告
+  SysTest compare-baseline --baseline1 results/gold/ --baseline2 results/current/  # 5. 对比基线
 ================================================================================
         """
     )

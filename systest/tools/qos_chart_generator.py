@@ -37,9 +37,6 @@ class QoSChartGenerator:
         return valid_count >= 5
     
     def generate_text_chart(self, distribution: Dict[str, float], test_name: str = "QoS Test") -> str:
-        """生成文本图表（仅在数据充足时调用）"""
-        if not self.has_enough_data(distribution):
-            return f"⚠️  数据不足，无法生成图表（有效百分位数据 < 5 个）"
         """
         生成文本格式的延迟分布图表（ASCII 艺术）
         
@@ -52,6 +49,9 @@ class QoSChartGenerator:
         p99.99  [████████████████████████████████████████████████████████████████] 892.1
         p99.999 [████████████████████████████████████████████████████████████████████████] 1234.5
         """
+        if not self.has_enough_data(distribution):
+            return f"⚠️  数据不足，无法生成图表（有效百分位数据 < 5 个）"
+        
         chart_lines = []
         chart_lines.append(f"📊 {test_name} 延迟分布 (μs):")
         chart_lines.append("=" * 80)
