@@ -1,9 +1,0 @@
-{
-  "device": "/dev/sda",
-  "test_dir": "/mapdata/ufs_test",
-  "device_capacity_gb": null,
-  "env_checked_at": "2026-04-07T10:01:54.380966",
-  "system": {},
-  "toolchain": {},
-  "_comment": "开发板默认配置，可运行 'python3 systest/bin/SysTest check-env --save-config' 重新生成"
-}
