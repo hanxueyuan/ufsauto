@@ -192,7 +192,7 @@ def cmd_run(args):
     close_all_loggers()
     
     # 返回码：有失败则返回 1
-    has_failure = any(r['summary']['failed'] > 0 for r in batch_results)
+    has_failure = any(r['summary']['failed'] > 0 or r['summary']['errors'] > 0 for r in batch_results)
     return 1 if has_failure else 0
 
 

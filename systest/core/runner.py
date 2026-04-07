@@ -63,7 +63,7 @@ class TestCase:
     name: str = "base_test"
     description: str = "基础测试用例"
 
-    def __init__(self, device: str = '/dev/ufs0', test_dir: Path = None, verbose: bool = False, logger=None):
+    def __init__(self, device: str = '/dev/sda', test_dir: Path = None, verbose: bool = False, logger=None):
         self.device = device
         self.test_dir = test_dir  # 全局测试目录,所有测试共用
         self.verbose = verbose
@@ -556,8 +556,8 @@ class TestRunner:
             errors.append("测试目录回退到 /tmp (CI 环境应手动指定 --test-dir)")
 
         # 2. 检查设备路径是否为默认值
-        if self.device == '/dev/ufs0' and not self.device_override and not self.runtime_config.get('device'): 
-            errors.append("设备路径为默认值 /dev/ufs0 (CI 环境应手动指定 --device 或运行 check-env --save-config)")
+        if self.device == '/dev/sda' and not self.device_override and not self.runtime_config.get('device'): 
+            errors.append("设备路径为默认值 /dev/sda (CI 环境应手动指定 --device 或运行 check-env --save-config)")
 
         # 3. 检查 runtime.json 是否存在
         config_path = self.config_dir / 'runtime.json'

@@ -54,7 +54,7 @@ def validate_device_path(device_path: str) -> bool:
     # /dev/sd[a-z]+  (如 /dev/sda, /dev/sdb)
     # /dev/mmcblk[0-9]+  (如 /dev/mmcblk0)
     # /dev/nvme[0-9]+n[0-9]+  (如 /dev/nvme0n1)
-    pattern = r'^/dev/(sd[a-z]+|mmcblk[0-9]+|nvme[0-9]+n[0-9]+)$'
+    pattern = r'^/dev/(sd[a-z]+|mmcblk[0-9]+|nvme[0-9]+n[0-9]+|vd[a-z]+|vd[a-z]+)$'
     if not re.match(pattern, device_path):
         return False
     
