@@ -120,7 +120,7 @@ class Test(TestCase):
                 os.unlink(self.test_file)
             
             # 使用 fio_wrapper 便捷 API 执行
-            metrics_obj = self.fio.run_rand_write(
+            metrics_obj = self.fio.run_rand_write(direct=True, 
                 filename=self.test_file,
                 size=self.size,
                 runtime=self.runtime,

@@ -174,7 +174,7 @@ class Test(TestCase):
         
         try:
             # 使用 fio_wrapper 便捷 API 执行
-            metrics_obj = self.fio.run_seq_read(
+            metrics_obj = self.fio.run_seq_read(direct=True, 
                 filename=self.test_file,
                 size=self.size,
                 runtime=self.runtime,
