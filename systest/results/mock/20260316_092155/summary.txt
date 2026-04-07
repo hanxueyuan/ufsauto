@@ -1,0 +1,15 @@
+UFS 系统测试报告
+测试 ID: 20260316_092155
+生成时间：2026-03-16 09:21:55
+
+测试摘要:
+  总计：4 项
+  通过：3 项
+  失败：1 项
+  通过率：75.0%
+
+测试结果:
+  ✅ seq_read_burst - 2150.5 MB/s
+  ✅ seq_write_burst - 1680.3 MB/s
+  ❌ seq_write_sustained - 180.5 MB/s
+  ✅ rand_write_burst - 340.2 K IOPS

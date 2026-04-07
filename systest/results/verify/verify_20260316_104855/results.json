@@ -1,0 +1,54 @@
+{
+  "test_id": "verify_20260316_104855",
+  "timestamp": "2026-03-16T10:48:55.961798",
+  "device": "/dev/zero",
+  "test_results": {
+    "test_id": "verify_001",
+    "suite": "performance",
+    "timestamp": "2026-03-16T10:48:55.961907",
+    "device": "/dev/zero",
+    "test_cases": [
+      {
+        "test_name": "t_performance_sequential_read_burst_001",
+        "status": "PASS",
+        "metrics": {
+          "bandwidth": 2150.5,
+          "iops": 0,
+          "latency_avg": 120.5
+        }
+      },
+      {
+        "test_name": "t_performance_sequential_write_burst_003",
+        "status": "PASS",
+        "metrics": {
+          "bandwidth": 1680.3,
+          "iops": 0,
+          "latency_avg": 150.2
+        }
+      },
+      {
+        "test_name": "t_performance_random_write_burst_007",
+        "status": "FAIL",
+        "metrics": {
+          "bandwidth": 0,
+          "iops": 280.5,
+          "latency_avg": 200.5
+        }
+      }
+    ],
+    "summary": {
+      "total": 3,
+      "passed": 2,
+      "failed": 1,
+      "errors": 0,
+      "pass_rate": 66.7
+    }
+  },
+  "system_info": {
+    "hostname": "verify-host",
+    "kernel": "5.15.0",
+    "cpu_count": 8,
+    "memory_total": 8192,
+    "python_version": "3.11.2"
+  }
+}
