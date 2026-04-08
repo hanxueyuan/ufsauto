@@ -1,24 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Sequential Write Performance Test
-Test UFS device sequential write bandwidth (Burst mode)
-
-Test Case ID: t_perf_SeqWriteBurst_002
-Test Objective: Verify UFS device sequential write Burst performance
-Prerequisites:
-    1. UFS device is mounted
-    2. Sufficient available space (>= 2GB)
-    3. FIO tool is installed
-Test Steps:
-    1. Execute FIO sequential write test (128K block, 60s, including 10s ramp)
-    2. Validate bandwidth, IOPS, latency meet targets
-Expected Metrics (reference):
-    - Bandwidth >= 1650 MB/s
-    - Average latency < 300 us
-    - p99.999 tail latency < 8000 us (8ms)
-Test Duration: Approximately 70 seconds (including ramp)
-"""
 
 import os
 import sys
@@ -37,8 +18,6 @@ from ufs_utils import UFSDevice
 
 
 class Test(TestCase):
-    """Sequential write performance test"""
-
     name = "seq_write_burst"
     description = "Sequential write performance test (Burst mode)"
 
@@ -72,12 +51,10 @@ class Test(TestCase):
         self.max_tail_latency_us = max_tail_latency_us
         self.verify_mode = verify
 
-        # Initialize tools
         self.fio = FIO(timeout=self.runtime + self.ramp_time + 30, logger=self.logger)
         self.ufs = UFSDevice(device, logger=self.logger)
 
     def setup(self) -> bool:
-        """Check prerequisites"""
         self.logger.info("Checking prerequisites...")
 
         if not self.ufs.exists():
@@ -100,7 +77,6 @@ class Test(TestCase):
             self.logger.error(f"Insufficient device permissions: {self.device}")
             return False
 
-        # Check device health status
         health = self.ufs.get_health_status()
         if health['status'] != 'OK':
             self.logger.warning(f"Device health status abnormal: {health['status']}")
@@ -114,7 +90,6 @@ class Test(TestCase):
         return True
 
     def _parse_size_mb(self, size_str: str) -> int:
-        """Parse size string to MB"""
         size_str = size_str.lower()
         if size_str.endswith('g'):
             return int(size_str[:-1]) * 1024
@@ -126,18 +101,15 @@ class Test(TestCase):
             try:
                 return int(size_str) // 1024 // 1024
             except ValueError:
-                return 1024  # Default 1GB
+                return 1024
 
     def execute(self) -> Dict[str, Any]:
-        """Execute FIO sequential write test"""
         self.logger.info("Starting sequential write performance test...")
 
         try:
-            # Delete existing test file
             if Path(self.test_file).exists():
                 os.unlink(self.test_file)
 
-            # Use fio_wrapper convenience API to execute
             metrics_obj = self.fio.run_seq_write(
                 filename=self.test_file,
                 direct=True,
@@ -149,7 +121,6 @@ class Test(TestCase):
                 ramp_time=self.ramp_time
             )
 
-            # Convert to standard metrics format
             lat = metrics_obj.latency_ns
             metrics = {
                 'bandwidth': {
@@ -162,30 +133,29 @@ class Test(TestCase):
                     'unit': 'IOPS'
                 },
                 'latency_avg': {
-                    'value': lat['mean'] / 1000,  # ns -> us
+                    'value': lat.get('mean', 0) / 1000,
                     'unit': 'us',
                     'target': self.max_avg_latency_us
                 },
                 'latency_p99': {
-                    'value': lat['percentile'].get('99.0', 0) / 1000,
+                    'value': lat.get('percentile', {}).get('99.0', 0) / 1000,
                     'unit': 'us'
                 },
                 'latency_p9999': {
-                    'value': lat['percentile'].get('99.99', 0) / 1000,
+                    'value': lat.get('percentile', {}).get('99.99', 0) / 1000,
                     'unit': 'us'
                 },
                 'latency_p99999': {
-                    'value': lat['percentile'].get('99.999', 0) / 1000,
+                    'value': lat.get('percentile', {}).get('99.999', 0) / 1000,
                     'unit': 'us',
                     'target': self.max_tail_latency_us
                 },
                 'runtime': {
-                    'value': metrics_obj.raw['jobs'][0]['elapsed'],
+                    'value': metrics_obj.raw.get('jobs', [{}])[0].get('elapsed', 0),
                     'unit': 's'
                 }
             }
 
-            # Log results summary
             self.logger.info("Test completed, results summary:")
             self.logger.info(f"  Bandwidth: {metrics['bandwidth']['value']:.1f} MB/s (target: >= {self.target_bw_mbps})")
             self.logger.info(f"  IOPS: {metrics['iops']['value']:.0f}")
@@ -199,16 +169,10 @@ class Test(TestCase):
             raise
 
     def validate(self, result: Dict[str, Any]) -> bool:
-        """Validate test results meet targets
-
-        Performance test principle: Record failures for non-compliance, but always return True
-        Final status is automatically judged by framework based on failures
-        """
         self.logger.info("Validating test results...")
 
         all_ok = True
 
-        # Validate bandwidth - fail only if below 90% of target
         bw = result['bandwidth']['value']
         target = self.target_bw_mbps
         if bw < target * 0.9:
@@ -220,13 +184,11 @@ class Test(TestCase):
             )
             all_ok = False
         elif bw < target:
-            # Between 90%-100% of target, log warning but not failure
             self.logger.warning(
                 f"Bandwidth below target: {bw:.1f} MB/s < {target} MB/s,"
                 " but within tolerance (>= 90%), test continues"
             )
 
-        # Validate average latency
         avg_lat = result['latency_avg']['value']
         if avg_lat > self.max_avg_latency_us:
             self.record_failure(
@@ -237,7 +199,6 @@ class Test(TestCase):
             )
             all_ok = False
 
-        # Validate tail latency (p99.999)
         tail_lat = result['latency_p99999']['value']
         if tail_lat > self.max_tail_latency_us:
             self.record_failure(
@@ -248,7 +209,6 @@ class Test(TestCase):
             )
             all_ok = False
 
-        # Postcondition check (hardware health)
         self._check_postcondition()
 
         if all_ok:
@@ -256,8 +216,7 @@ class Test(TestCase):
         else:
             self.logger.warning(f"Total {len(self._failures)} validations failed")
 
-        return True  # Performance test always returns True, framework judges final status based on failures
+        return True
 
     def teardown(self) -> bool:
-        """Post-test cleanup - parent class auto cleans test file"""
         return super().teardown()

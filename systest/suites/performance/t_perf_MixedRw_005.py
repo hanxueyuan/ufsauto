@@ -1,24 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Mixed Read/Write Performance Test
-Test UFS device mixed random read/write IOPS (70% read/30% write, 4K QD32)
-
-Test Case ID: t_perf_MixedRw_005
-Test Objective: Verify UFS device mixed read/write IOPS performance
-Prerequisites:
-    1. UFS device is mounted
-    2. Sufficient available space (>= 2GB)
-    3. FIO tool is installed
-Test Steps:
-    1. Execute FIO mixed read/write test (4K block, QD32, 70/30, 60s, including 10s ramp)
-    2. Validate total IOPS, read/write IOPS distribution, latency meet targets
-Expected Metrics (reference):
-    - Total IOPS >= 150,000
-    - Average latency < 200 us
-    - p99.999 tail latency < 8000 us
-Test Duration: Approximately 70 seconds (including ramp)
-"""
 
 import os
 import sys
@@ -26,7 +7,6 @@ import subprocess
 from pathlib import Path
 from typing import Dict, Any
 
-# Add core and tools module paths
 core_dir = Path(__file__).parent.parent.parent / 'core'
 tools_dir = Path(__file__).parent.parent.parent / 'tools'
 sys.path.insert(0, str(core_dir))
@@ -38,8 +18,6 @@ from ufs_utils import UFSDevice
 
 
 class Test(TestCase):
-    """Mixed read/write performance test"""
-
     name = "mixed_rw"
     description = "Mixed random read/write performance test (70% read/30% write)"
 
@@ -56,9 +34,9 @@ class Test(TestCase):
         ioengine: str = 'sync',
         iodepth: int = 32,
         rw_mix: int = 70,
-        target_total_iops: float = 150000,  # Adjust based on specific device
-        max_avg_latency_us: float = 200,  # Adjust based on specific device
-        max_tail_latency_us: float = 8000,  # Adjust based on specific device
+        target_total_iops: float = 150000,
+        max_avg_latency_us: float = 200,
+        max_tail_latency_us: float = 8000,
     ):
         super().__init__(device, test_dir, verbose, logger)
         self.test_file = self.get_test_file_path('mixed_rw')
@@ -73,12 +51,10 @@ class Test(TestCase):
         self.max_avg_latency_us = max_avg_latency_us
         self.max_tail_latency_us = max_tail_latency_us
 
-        # Initialize tools
         self.fio = FIO(timeout=self.runtime + self.ramp_time + 30, logger=self.logger)
         self.ufs = UFSDevice(device, logger=self.logger)
 
     def setup(self) -> bool:
-        """Check prerequisites"""
         self.logger.info("Checking prerequisites...")
 
         if not self.ufs.exists():
@@ -109,27 +85,10 @@ class Test(TestCase):
         self.logger.info("Prerequisites check passed")
         return True
 
-    def _parse_size_mb(self, size_str: str) -> int:
-        """Parse size string to MB"""
-        size_str = size_str.lower()
-        if size_str.endswith('g'):
-            return int(size_str[:-1]) * 1024
-        elif size_str.endswith('m'):
-            return int(size_str[:-1])
-        elif size_str.endswith('k'):
-            return max(1, int(size_str[:-1]) // 1024)
-        else:
-            try:
-                return int(size_str) // 1024 // 1024
-            except ValueError:
-                return 1024  # Default 1GB
-
     def execute(self) -> Dict[str, Any]:
-        """Execute test logic"""
         self.logger.info("Starting mixed read/write performance test...")
 
         try:
-            # Build FIO test parameters
             fio_args = {
                 'filename': self.test_file,
                 'bs': self.bs,
@@ -143,31 +102,25 @@ class Test(TestCase):
                 'output_format': 'json'
             }
 
-            # Add direct=True parameter
             fio_args['direct'] = True
             result = self.fio.run(FIOConfig(**fio_args))
 
-            # Parse results
             job_data = result.raw.get('jobs', [{}])[0]
 
-            # Extract read/write IOPS
             read_iops = job_data.get('read', {}).get('iops', 0)
             write_iops = job_data.get('write', {}).get('iops', 0)
             total_iops = read_iops + write_iops
 
-            # Extract latency data
-            read_lat_ns = job_data.get('read', {}).get('lat_ns', {})
-            write_lat_ns = job_data.get('write', {}).get('lat_ns', {})
+            read_lat_ns = job_data.get('read', {}).get('lat_ns') or {}
+            write_lat_ns = job_data.get('write', {}).get('lat_ns') or {}
 
-            avg_read_latency_us = read_lat_ns.get('mean', 0) / 1000  # Convert to us
-            avg_write_latency_us = write_lat_ns.get('mean', 0) / 1000  # Convert to us
-            # IOPS weighted average latency
+            avg_read_latency_us = read_lat_ns.get('mean', 0) / 1000
+            avg_write_latency_us = write_lat_ns.get('mean', 0) / 1000
             if total_iops > 0:
                 avg_latency_us = (avg_read_latency_us * read_iops + avg_write_latency_us * write_iops) / total_iops
             else:
                 avg_latency_us = (avg_read_latency_us + avg_write_latency_us) / 2
 
-            # Extract tail latency
             read_clat_ns = job_data.get('read', {}).get('clat_ns', {}).get('percentile', {})
             write_clat_ns = job_data.get('write', {}).get('clat_ns', {}).get('percentile', {})
 
@@ -196,11 +149,6 @@ class Test(TestCase):
             return {'error': str(e), 'pass': False}
 
     def validate(self, result: Dict[str, Any]) -> bool:
-        """
-        Validate results.
-        For performance tests, return True. Metrics compliance is recorded via failures.
-        """
-        # Check if there are errors
         if 'error' in result:
             self.record_failure(
                 "FIO Execution",
@@ -208,14 +156,12 @@ class Test(TestCase):
                 f"Execution failed: {result['error']}",
                 "FIO execution failed"
             )
-            return True  # Let framework handle failure recording
+            return True
 
-        # Validate performance metrics
         total_iops = result.get('total_iops', 0)
         avg_latency_us = result.get('avg_latency_us', float('inf'))
         p99999_latency_us = result.get('p99999_latency_us', float('inf'))
 
-        # Record metrics compliance
         if total_iops >= self.target_total_iops:
             self.logger.info(f"Total IOPS: {total_iops:.0f} >= {self.target_total_iops}")
         else:
@@ -246,14 +192,12 @@ class Test(TestCase):
                 "Tail latency exceeds target"
             )
 
-        # Execute Postcondition check (hardware reliability validation)
         self._check_postcondition()
 
         if hasattr(self, '_failures') and len(self._failures) > 0:
             self.logger.warning(f"Total {len(self._failures)} validations failed")
 
-        return True  # Performance test always returns True, framework judges final status based on failures
+        return True
 
     def teardown(self) -> bool:
-        """Post-test cleanup - parent class auto cleans test file"""
         return super().teardown()

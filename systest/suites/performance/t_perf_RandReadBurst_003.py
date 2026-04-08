@@ -173,25 +173,25 @@ class Test(TestCase):
                     'unit': 'MB/s'
                 },
                 'latency_avg': {
-                    'value': lat['mean'] / 1000,  # ns -> us
+                    'value': lat.get('mean', 0) / 1000,
                     'unit': 'us',
                     'target': self.max_avg_latency_us
                 },
                 'latency_p99': {
-                    'value': lat['percentile'].get('99.0', 0) / 1000,
+                    'value': lat.get('percentile', {}).get('99.0', 0) / 1000,
                     'unit': 'us'
                 },
                 'latency_p9999': {
-                    'value': lat['percentile'].get('99.99', 0) / 1000,
+                    'value': lat.get('percentile', {}).get('99.99', 0) / 1000,
                     'unit': 'us'
                 },
                 'latency_p99999': {
-                    'value': lat['percentile'].get('99.999', 0) / 1000,
+                    'value': lat.get('percentile', {}).get('99.999', 0) / 1000,
                     'unit': 'us',
                     'target': self.max_tail_latency_us
                 },
                 'runtime': {
-                    'value': metrics_obj.raw['jobs'][0]['elapsed'],
+                    'value': metrics_obj.raw.get('jobs', [{}])[0].get('elapsed', 0),
                     'unit': 's'
                 }
             }

@@ -1,24 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Random Write Performance Test
-Test UFS device random write IOPS (4K QD32)
-
-Test Case ID: t_perf_RandWriteBurst_004
-Test Objective: Verify UFS device random write IOPS performance
-Prerequisites:
-    1. UFS device is mounted
-    2. Sufficient available space (>= 2GB)
-    3. FIO tool is installed
-Test Steps:
-    1. Execute FIO random write test (4K block, QD32, 60s, including 10s ramp)
-    2. Validate IOPS, bandwidth, latency meet targets
-Expected Metrics (reference):
-    - IOPS >= 100,000
-    - Average latency < 150 us
-    - p99.999 tail latency < 8000 us
-Test Duration: Approximately 70 seconds (including ramp)
-"""
 
 import os
 import sys
@@ -32,13 +13,11 @@ sys.path.insert(0, str(core_dir))
 sys.path.insert(0, str(tools_dir))
 
 from runner import TestCase
-from fio_wrapper import FIO, FIOError, FIOMetrics
+from fio_wrapper import FIO, FIOError, FIOConfig
 from ufs_utils import UFSDevice
 
 
 class Test(TestCase):
-    """Random write performance test"""
-
     name = "rand_write_burst"
     description = "Random write performance test (4K QD32)"
 
@@ -70,12 +49,10 @@ class Test(TestCase):
         self.max_avg_latency_us = max_avg_latency_us
         self.max_tail_latency_us = max_tail_latency_us
 
-        # Initialize tools
         self.fio = FIO(timeout=self.runtime + self.ramp_time + 30, logger=self.logger)
         self.ufs = UFSDevice(device, logger=self.logger)
 
     def setup(self) -> bool:
-        """Check prerequisites"""
         self.logger.info("Checking prerequisites...")
 
         if not self.ufs.exists():
@@ -95,10 +72,9 @@ class Test(TestCase):
             return False
 
         if not os.access(self.device, os.R_OK | os.W_OK):
-            self.logger.error(f"Insufficient device permissions: {self.device}")
+            self.logger.error(f"Insufficient device permissions")
             return False
 
-        # Check device health status
         health = self.ufs.get_health_status()
         if health['status'] != 'OK':
             self.logger.warning(f"Device health status abnormal: {health['status']}")
@@ -111,31 +87,13 @@ class Test(TestCase):
         self.logger.info("Prerequisites check passed")
         return True
 
-    def _parse_size_mb(self, size_str: str) -> int:
-        """Parse size string to MB"""
-        size_str = size_str.lower()
-        if size_str.endswith('g'):
-            return int(size_str[:-1]) * 1024
-        elif size_str.endswith('m'):
-            return int(size_str[:-1])
-        elif size_str.endswith('k'):
-            return max(1, int(size_str[:-1]) // 1024)
-        else:
-            try:
-                return int(size_str) // 1024 // 1024
-            except ValueError:
-                return 1024  # Default 1GB
-
     def execute(self) -> Dict[str, Any]:
-        """Execute FIO random write test"""
         self.logger.info("Starting random write performance test...")
 
         try:
-            # Delete existing test file
             if Path(self.test_file).exists():
                 os.unlink(self.test_file)
 
-            # Use fio_wrapper convenience API to execute
             metrics_obj = self.fio.run_rand_write(
                 filename=self.test_file,
                 direct=True,
@@ -147,7 +105,6 @@ class Test(TestCase):
                 ramp_time=self.ramp_time
             )
 
-            # Convert to standard metrics format
             lat = metrics_obj.latency_ns
             metrics = {
                 'iops': {
@@ -160,30 +117,29 @@ class Test(TestCase):
                     'unit': 'MB/s'
                 },
                 'latency_avg': {
-                    'value': lat['mean'] / 1000,  # ns -> us
+                    'value': lat.get('mean', 0) / 1000,
                     'unit': 'us',
                     'target': self.max_avg_latency_us
                 },
                 'latency_p99': {
-                    'value': lat['percentile'].get('99.0', 0) / 1000,
+                    'value': lat.get('percentile', {}).get('99.0', 0) / 1000,
                     'unit': 'us'
                 },
                 'latency_p9999': {
-                    'value': lat['percentile'].get('99.99', 0) / 1000,
+                    'value': lat.get('percentile', {}).get('99.99', 0) / 1000,
                     'unit': 'us'
                 },
                 'latency_p99999': {
-                    'value': lat['percentile'].get('99.999', 0) / 1000,
+                    'value': lat.get('percentile', {}).get('99.999', 0) / 1000,
                     'unit': 'us',
                     'target': self.max_tail_latency_us
                 },
                 'runtime': {
-                    'value': metrics_obj.raw['jobs'][0]['elapsed'],
+                    'value': metrics_obj.raw.get('jobs', [{}])[0].get('elapsed', 0),
                     'unit': 's'
                 }
             }
 
-            # Log results summary
             self.logger.info("Test completed, results summary:")
             self.logger.info(f"  IOPS: {metrics['iops']['value']:.0f} (target: >= {self.target_iops})")
             self.logger.info(f"  Bandwidth: {metrics['bandwidth']['value']:.1f} MB/s")
@@ -197,16 +153,10 @@ class Test(TestCase):
             raise
 
     def validate(self, result: Dict[str, Any]) -> bool:
-        """Validate test results meet targets
-
-        Performance test principle: Record failures for non-compliance, but always return True
-        Final status is automatically judged by framework based on failures
-        """
         self.logger.info("Validating test results...")
 
         all_ok = True
 
-        # Validate IOPS - fail only if below 90% of target
         iops = result['iops']['value']
         target = self.target_iops
         if iops < target * 0.9:
@@ -218,13 +168,11 @@ class Test(TestCase):
             )
             all_ok = False
         elif iops < target:
-            # Between 90%-100% of target, log warning but not failure
             self.logger.warning(
                 f"IOPS below target: {iops:.0f} < {target:.0f},"
                 " but within tolerance (>= 90%), test continues"
             )
 
-        # Validate average latency
         avg_lat = result['latency_avg']['value']
         if avg_lat > self.max_avg_latency_us:
             self.record_failure(
@@ -235,7 +183,6 @@ class Test(TestCase):
             )
             all_ok = False
 
-        # Validate tail latency (p99.999)
         tail_lat = result['latency_p99999']['value']
         if tail_lat > self.max_tail_latency_us:
             self.record_failure(
@@ -246,7 +193,6 @@ class Test(TestCase):
             )
             all_ok = False
 
-        # Postcondition check (hardware health)
         self._check_postcondition()
 
         if all_ok:
@@ -254,8 +200,7 @@ class Test(TestCase):
         else:
             self.logger.warning(f"Total {len(self._failures)} validations failed")
 
-        return True  # Performance test always returns True, framework judges final status based on failures
+        return True
 
     def teardown(self) -> bool:
-        """Post-test cleanup - parent class auto cleans test file"""
         return super().teardown()
