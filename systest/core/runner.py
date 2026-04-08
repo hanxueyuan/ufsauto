@@ -11,6 +11,7 @@
     SKIP  - 前置条件不满足,测试未执行(设备不存在、空间不足、工具未安装等)。
     ABORT - 测试被中断或超时(用户 Ctrl+C、超时 kill)。
 """
+import re
 
 import logging
 import signal
@@ -20,6 +21,7 @@ import time
 import os
 from pathlib import Path
 from datetime import datetime
+import re
 from typing import Dict, List, Optional, Any
 logger = logging.getLogger(__name__)
 
@@ -135,7 +137,7 @@ class TestCase:
             self._pre_test_health = ufs.get_health_status()
             self.logger.debug(f"📊 记录健康基线: {self._pre_test_health.get('status', 'Unknown')}")
         except Exception as e:
-            self.logger.warning(f"⚠️  健康状态记录失败: {e}")
+            self.logger.warning(f"⚠️  健康状态记录失败: {type(e).__name__}: {e}")
             self._pre_test_health = None
 
         return True
