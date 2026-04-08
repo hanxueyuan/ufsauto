@@ -15,6 +15,37 @@ yum install fio      # CentOS/RHEL
 fio --version
 ```
 
+### systemd 服务部署（推荐）
+
+```bash
+# 安装 systemd 服务
+cd /path/to/ufsauto/deploy
+sudo bash install-service.sh
+```
+
+服务会自动：
+- 安装项目到 `/opt/ufsauto`
+- 创建测试目录 `/mapdata/ufs_test`
+- 配置每天凌晨 2 点自动运行
+- 启用日志记录到 journal
+
+**常用命令**:
+```bash
+# 查看服务状态
+systemctl status ufs-systest.timer
+
+# 手动运行测试
+systemctl start ufs-systest.service
+
+# 查看日志
+journalctl -u ufs-systest.service -f
+
+# 禁用定时任务
+systemctl disable ufs-systest.timer
+```
+
+### 手动运行
+
 ### 环境检查
 
 ```bash
