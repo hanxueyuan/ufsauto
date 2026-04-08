@@ -391,6 +391,15 @@ class FIO:
                 return metrics
                 
             except subprocess.TimeoutExpired as e:
+                # 显式杀死进程组（包括孙进程），防止资源泄漏
+                import signal
+                import os
+                try:
+                    if e.pid:
+                        os.killpg(os.getpgid(e.pid), signal.SIGKILL)
+                        self.logger.debug(f"已杀死超时进程组：{e.pid}")
+                except ProcessLookupError:
+                    pass  # 进程已不存在
                 last_error = FIOError(f"FIO 执行超时（{self.timeout}s）")
                 self.logger.warning(f"尝试 {attempt}/{self.retries}: {last_error}")
                 
