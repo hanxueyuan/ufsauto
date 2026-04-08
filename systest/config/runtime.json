@@ -1,0 +1,20 @@
+{
+  "development": {
+    "device": "/dev/sda",
+    "test_dir": "/tmp/ufs_test",
+    "verbose": true,
+    "log_level": "DEBUG"
+  },
+  "testing": {
+    "device": "/dev/sda",
+    "test_dir": "/mapdata/ufs_test",
+    "verbose": true,
+    "log_level": "INFO"
+  },
+  "production": {
+    "device": "/dev/ufs0",
+    "test_dir": "/mapdata/ufs_test",
+    "verbose": false,
+    "log_level": "WARNING"
+  }
+}
