@@ -27,3 +27,5 @@ fio_test_*
 .idea/
 *.swp
 *.swo
+results/
+results/
