@@ -84,34 +84,42 @@ class ResultCollector:
         # 保存每个测试用例的详细日志
         for result in results:
             if 'log_file' in result:
-                try:
-                    log_src = Path(result['log_file'])
-                    if log_src.exists():
+                log_src = Path(result['log_file'])
+                log_size = 0
+                # 提前获取文件大小，供异常处理使用
+                if log_src.exists():
+                    try:
                         log_size = log_src.stat().st_size
+                    except Exception:
+                        pass
+
+                try:
+                    if log_src.exists():
                         log_dst = test_dir / f"{result['name']}.log"
-                        
+
                         # 大文件复制进度提示
                         if log_size > 100 * 1024 * 1024:  # > 100MB
                             logger.info(f"📄 开始复制大日志文件：{result['name']} ({log_size / 1024 / 1024:.1f} MB)")
                             logger.info(f"   目标：{log_dst}")
-                        
-                        log_dst = test_dir / f"{result['name']}.log"
+
                         shutil.copy2(log_src, log_dst)
                         logger.debug(f"📄 日志已复制：{result['name']} ({log_size / 1024 / 1024:.1f} MB)")
                 except Exception as e:
-                    # 尝试获取文件大小
-                    try:
-                        log_size = log_src.stat().st_size if log_src.exists() else 0
-                        if log_size > 500 * 1024 * 1024:  # > 500MB
-                            logger.warning(f"⚠️  大日志文件复制失败 {result['name']} ({log_size / 1024 / 1024:.1f} MB): {e}")
-                            logger.warning(f"💡 文件较大，复制可能需要更多空间或时间")
-                            logger.warning(f"💡 可手动清理：rm {log_dst}")
-                        else:
-                            logger.warning(f"⚠️  日志文件复制失败 {result['name']} ({log_size / 1024 / 1024:.1f} MB): {e}")
-                        logger.warning(f"💡  建议：手动复制或删除大日志文件以释放空间")
-                    except Exception:
-                        logger.warning(f"⚠️  日志文件复制失败 {result['name']}: {e}")
-                    # 继续处理其他结果，不中断整个流程
+                    # 异常处理中不再次获取文件大小，直接使用之前获取的值
+                    if log_size > 500 * 1024 * 1024:  # > 500MB
+                        logger.warning(f"⚠️  大日志文件复制失败 {result['name']} ({log_size / 1024 / 1024:.1f} MB): {e}")
+                        logger.warning(f"💡 文件较大，复制可能需要更多空间或时间")
+                        logger.warning(f"💡 可手动清理：rm {log_dst}")
+                    else:
+                        logger.warning(f"⚠️  日志文件复制失败 {result['name']} ({log_size / 1024 / 1024:.1f} MB): {e}")
+                    logger.warning(f"💡  建议：手动复制或删除大日志文件以释放空间")
+                    # 清理可能部分创建的文件
+                    if 'log_dst' in locals() and log_dst.exists():
+                        try:
+                            log_dst.unlink()
+                        except Exception:
+                            pass
+                # 继续处理其他结果，不中断整个流程
         
         # 保存汇总信息
         summary_path = test_dir / 'summary.txt'

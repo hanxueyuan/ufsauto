@@ -502,17 +502,30 @@ class TestRunner:
         """确定测试目录：用户指定 > 自动检测 > 回退默认"""
         # 允许的测试目录前缀（安全白名单）
         allowed_prefixes = ['/tmp', '/mapdata']
-        
+
         # 1) 用户手动指定（最高优先级）
         if self.test_dir_override:
             test_dir = Path(self.test_dir_override).absolute()
             # 验证路径是否在允许的目录内（解析真实路径，防止符号链接攻击）
             try:
                 real_path = test_dir.resolve()
+                # 再次验证 resolve 后的真实路径也在允许目录内
                 if not any(str(real_path).startswith(p) for p in allowed_prefixes):
-                    logger.error(f"❌ 测试目录不在允许的范围内：{test_dir}")
+                    logger.error(f"❌ 测试目录不在允许的范围内：{test_dir} (真实路径：{real_path})")
                     logger.error(f"💡 允许的目录前缀：{allowed_prefixes}")
                     raise RuntimeError(f"测试目录必须在以下目录之一：{allowed_prefixes}")
+            except FileNotFoundError:
+                # 目录不存在，resolve 会失败，先创建目录再验证
+                try:
+                    test_dir.mkdir(parents=True, exist_ok=True)
+                    real_path = test_dir.resolve()
+                    if not any(str(real_path).startswith(p) for p in allowed_prefixes):
+                        logger.error(f"❌ 测试目录不在允许的范围内：{test_dir} (真实路径：{real_path})")
+                        logger.error(f"💡 允许的目录前缀：{allowed_prefixes}")
+                        raise RuntimeError(f"测试目录必须在以下目录之一：{allowed_prefixes}")
+                except Exception as e:
+                    logger.error(f"❌ 测试目录验证失败：{e}")
+                    raise
             except Exception as e:
                 logger.error(f"❌ 测试目录验证失败：{e}")
                 raise

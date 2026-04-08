@@ -382,11 +382,11 @@ class UFSDevice:
                 warn_file = health_dir / 'critical_warning'
                 if warn_file.exists():
                     health['critical_warning'] = int(warn_file.read_text().strip())
-                
+
                 # 判断整体状态
                 if health['critical_warning'] > 0:
                     health['status'] = 'WARNING'
-                elif health['pre_eol_info'] != '0x00':
+                elif health['pre_eol_info'] not in ('0x00', None, 'N/A', ''):
                     health['status'] = 'PRE_EOL'
                     
             except Exception as e:

@@ -245,7 +245,7 @@ class ReportGenerator:
         """创建失效分析 HTML"""
         test_name = result.get('name', 'unknown_test')
         status = result.get('status', 'UNKNOWN')
-        duration = float(result.get('duration', 0.0))  # 统一使用 float
+        duration = float(result.get('duration') or 0.0)  # 处理 None 值
         
         # 收集失败详情
         failures = result.get('failures', [])

@@ -372,13 +372,21 @@ class FIO:
                     # 保存完整输出到临时文件供调试
                     import tempfile
                     debug_file = Path(tempfile.mktemp(suffix='_fio_debug.json'))
-                    with open(debug_file, 'w', encoding='utf-8') as f:
-                        f.write(result.stdout)
-                    self.logger.error(f"FIO 输出解析失败：{e}")
-                    self.logger.error(f"  调试文件已保存：{debug_file}")
-                    self.logger.error(f"  stdout 长度：{len(result.stdout)} chars")
-                    self.logger.error(f"  stderr 长度：{len(result.stderr)} chars")
-                    raise FIOError(f"FIO 输出解析失败：{e}. 调试文件：{debug_file}")
+                    try:
+                        with open(debug_file, 'w', encoding='utf-8') as f:
+                            f.write(result.stdout)
+                        self.logger.error(f"FIO 输出解析失败：{e}")
+                        self.logger.error(f"  调试文件已保存：{debug_file}")
+                        self.logger.error(f"  stdout 长度：{len(result.stdout)} chars")
+                        self.logger.error(f"  stderr 长度：{len(result.stderr)} chars")
+                        raise FIOError(f"FIO 输出解析失败：{e}. 调试文件：{debug_file}")
+                    finally:
+                        # 清理临时调试文件，防止磁盘泄漏
+                        if debug_file.exists():
+                            try:
+                                debug_file.unlink()
+                            except Exception:
+                                pass  # 忽略清理失败
                 
                 # 转换为标准化指标
                 metrics = FIOMetrics.from_fio_output(fio_output, config.rw)
@@ -395,11 +403,11 @@ class FIO:
                 import signal
                 import os
                 try:
-                    if e.pid:
+                    if e.pid is not None:
                         os.killpg(os.getpgid(e.pid), signal.SIGKILL)
                         self.logger.debug(f"已杀死超时进程组：{e.pid}")
-                except ProcessLookupError:
-                    pass  # 进程已不存在
+                except (ProcessLookupError, ValueError):
+                    pass  # 进程已不存在或 pid 无效
                 last_error = FIOError(f"FIO 执行超时（{self.timeout}s）")
                 self.logger.warning(f"尝试 {attempt}/{self.retries}: {last_error}")
                 

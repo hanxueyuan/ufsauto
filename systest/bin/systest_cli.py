@@ -55,20 +55,28 @@ def cmd_run(args):
     if hasattr(args, 'config') and args.config:
         config_path = Path(args.config)
         if config_path.exists():
-            with open(config_path, 'r', encoding='utf-8') as f:
-                preset_config = json.load(f)
+            try:
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    preset_config = json.load(f)
+            except json.JSONDecodeError as e:
+                logger.error(f"❌ 预设配置文件格式错误：{config_path}: {e}")
+                return 2
             # 应用预设配置
             if preset_config.get('device') and not args.device:
                 args.device = preset_config['device']
             if preset_config.get('test_dir') and not args.test_dir:
                 args.test_dir = preset_config['test_dir']
             logger.info(f"📄 已加载预设配置：{args.config}")
-    
+
     # 自动加载默认 runtime 配置
     default_config_path = project_root / 'config' / 'runtime.json'
     if default_config_path.exists():
-        with open(default_config_path, 'r', encoding='utf-8') as f:
-            default_config = json.load(f)
+        try:
+            with open(default_config_path, 'r', encoding='utf-8') as f:
+                default_config = json.load(f)
+        except json.JSONDecodeError as e:
+            logger.warning(f"⚠️  默认配置文件格式错误：{default_config_path}: {e} (继续使用空配置)")
+            default_config = {}
         # 应用默认配置：只有用户没指定的时候才覆盖
         if default_config.get('device') and not args.device:
             args.device = default_config['device']
@@ -102,52 +110,56 @@ def cmd_run(args):
         logger.info(f"批量测试：{args.batch} 次，间隔{args.interval}s")
     logger.info(f"测试 ID: {test_id}")
     logger.debug(f"日志文件:{logger.get_log_file()}")
-    
+
     # 批量测试
     batch_results = []
+
+    # 效率优化：在批量循环外先初始化一次 TestRunner，避免重复环境检测
+    # 只有当用户指定了 --device 或 --test-dir 时才在每次循环中重新初始化
+    needs_reinit_per_batch = args.device or args.test_dir
+
+    # 快速模式：调整测试参数（缩短时间）
+    quick_factor = 0.5 if args.quick else 1.0
+    if args.quick:
+        logger.info(f"快速模式：测试时间缩短为 {quick_factor*100:.0f}%")
+
+    # 确定要运行的套件（在批量循环外只做一次）
+    suites_to_run = []
+    if args.all:
+        suites_to_run = ['performance', 'qos']
+    elif args.suite:
+        suites_to_run = [args.suite]
+    elif args.test:
+        # 单个测试，找到所属套件
+        runner_tmp = TestRunner(dry_run=True)
+        for suite_name, tests in runner_tmp.list_suites().items():
+            if args.test in tests:
+                suites_to_run = [suite_name]
+                break
+
+    if not suites_to_run:
+        logger.error("未指定测试套件或测试项")
+        return 2
+
     for i in range(args.batch):
         if args.batch > 1:
             logger.info(f"\n{'='*60}")
             logger.info(f"批量测试 {i+1}/{args.batch}")
             logger.info(f"{'='*60}")
-        
-        # 确定要运行的套件
-        suites_to_run = []
-        if args.all:
-            if args.quick:
-                suites_to_run = ['performance', 'qos']
-            else:
-                suites_to_run = ['performance', 'qos', ]
-        elif args.suite:
-            suites_to_run = [args.suite]
-        elif args.test:
-            # 单个测试，找到所属套件
-            runner_tmp = TestRunner(dry_run=True)
-            for suite_name, tests in runner_tmp.list_suites().items():
-                if args.test in tests:
-                    suites_to_run = [suite_name]
-                    break
-        
-        if not suites_to_run:
-            logger.error("未指定测试套件或测试项")
-            return 2
-        
-        # 快速模式：调整测试参数（缩短时间）
-        quick_factor = 0.5 if args.quick else 1.0
-        if args.quick:
-            logger.info(f"快速模式：测试时间缩短为 {quick_factor*100:.0f}%")
-        
+
         # 执行每个套件
         for suite_name in suites_to_run:
             # 初始化组件（传递 quick_factor 用于调整 runtime）
-            runner = TestRunner(
-                device=args.device,
-                test_dir=args.test_dir,
-                verbose=args.verbose,
-                dry_run=args.dry_run,
-                ci_mode=args.ci if hasattr(args, 'ci') else False,
-                quick_factor=quick_factor
-            )
+            # 优化：如果用户没有手动指定参数，复用 Runner 避免重复环境检测
+            if needs_reinit_per_batch or i == 0:
+                runner = TestRunner(
+                    device=args.device,
+                    test_dir=args.test_dir,
+                    verbose=args.verbose,
+                    dry_run=args.dry_run,
+                    ci_mode=args.ci if hasattr(args, 'ci') else False,
+                    quick_factor=quick_factor
+                )
             collector = ResultCollector(output_dir=args.output)
             reporter = ReportGenerator(template='default')
             

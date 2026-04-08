@@ -10,6 +10,7 @@ from typing import Dict, Any
 
 from runner import TestCase
 from fio_wrapper import FIO, FIOConfig
+from ufs_utils import UFSDevice
 
 
 class PerformanceTestCase(TestCase):
