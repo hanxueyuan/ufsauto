@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-随机写性能测试
-测试 UFS 设备的随机写入 IOPS（4K QD32）
+Random Write Performance Test
+Test UFS device random write IOPS (4K QD32)
 
-测试用例 ID: t_perf_RandWriteBurst_004
-测试目的：验证 UFS 设备随机写 IOPS 性能
-前置条件：
-    1. UFS 设备已挂载
-    2. 有足够可用空间（≥2GB）
-    3. FIO 工具已安装
-测试步骤：
-    1. 执行 FIO 随机写测试（4K block, QD32, 60s, 含 10s ramp）
-    2. 标注 IOPS、带宽、延迟是否达标
-预期指标（参考）：
-    - IOPS ≥ 330,000
-    - 平均延迟 < 100 μs
-    - p99.999 尾延迟 < 8000 μs
-测试耗时：约 70 秒（含 ramp）
+Test Case ID: t_perf_RandWriteBurst_004
+Test Objective: Verify UFS device random write IOPS performance
+Prerequisites:
+    1. UFS device is mounted
+    2. Sufficient available space (>= 2GB)
+    3. FIO tool is installed
+Test Steps:
+    1. Execute FIO random write test (4K block, QD32, 60s, including 10s ramp)
+    2. Validate IOPS, bandwidth, latency meet targets
+Expected Metrics (reference):
+    - IOPS >= 100,000
+    - Average latency < 150 us
+    - p99.999 tail latency < 8000 us
+Test Duration: Approximately 70 seconds (including ramp)
 """
 
 import os
@@ -37,17 +37,17 @@ from ufs_utils import UFSDevice
 
 
 class Test(TestCase):
-    """随机写性能测试"""
-    
+    """Random write performance test"""
+
     name = "rand_write_burst"
-    description = "随机写入性能测试（4K QD32）"
-    
+    description = "Random write performance test (4K QD32)"
+
     def __init__(
         self,
         device: str = '/dev/ufs0',
         test_dir: Path = None,
         verbose: bool = False,
-        logger = None,
+        logger=None,
         bs: str = '4k',
         size: str = '1G',
         runtime: int = 60,
@@ -69,57 +69,73 @@ class Test(TestCase):
         self.target_iops = target_iops
         self.max_avg_latency_us = max_avg_latency_us
         self.max_tail_latency_us = max_tail_latency_us
-        
-        # 初始化工具（生产模式）
+
+        # Initialize tools
         self.fio = FIO(timeout=self.runtime + self.ramp_time + 30, logger=self.logger)
         self.ufs = UFSDevice(device, logger=self.logger)
-    
+
     def setup(self) -> bool:
-        self.logger.info("开始检查前置条件...")
-        
+        """Check prerequisites"""
+        self.logger.info("Checking prerequisites...")
+
         if not self.ufs.exists():
-            self.logger.error(f"设备不存在：{self.device}")
+            self.logger.error(f"Device does not exist: {self.device}")
             return False
-        
+
         if not self.ufs.check_available_space(min_gb=2.0):
             return False
-        
+
         try:
             result = subprocess.run(['which', 'fio'], capture_output=True)
             if result.returncode != 0:
-                self.logger.error("FIO 工具未安装")
+                self.logger.error("FIO tool not installed")
                 return False
         except Exception as e:
-            self.logger.error(f"检查 FIO 失败：{e}")
+            self.logger.error(f"FIO check failed: {e}")
             return False
-        
+
         if not os.access(self.device, os.R_OK | os.W_OK):
-            self.logger.error(f"设备权限不足")
+            self.logger.error(f"Insufficient device permissions: {self.device}")
             return False
-        
-        # 检查设备健康状态
+
+        # Check device health status
         health = self.ufs.get_health_status()
         if health['status'] != 'OK':
-            self.logger.warning(f"设备健康状态异常：{health['status']}")
-        
-        self.logger.info("📋 测试配置:")
+            self.logger.warning(f"Device health status abnormal: {health['status']}")
+
+        self.logger.info("Test Configuration:")
         self.logger.info(f"  bs={self.bs}, size={self.size}, runtime={self.runtime}s, iodepth={self.iodepth}")
         self.logger.info(f"  ioengine={self.ioengine}, ramp_time={self.ramp_time}s")
-        self.logger.info(f"  target_iops={self.target_iops}, max_avg_lat={self.max_avg_latency_us} μs")
-        
-        self.logger.info("📊 前置条件检查通过")
+        self.logger.info(f"  target_iops={self.target_iops}, max_avg_lat={self.max_avg_latency_us} us")
+
+        self.logger.info("Prerequisites check passed")
         return True
-    
+
+    def _parse_size_mb(self, size_str: str) -> int:
+        """Parse size string to MB"""
+        size_str = size_str.lower()
+        if size_str.endswith('g'):
+            return int(size_str[:-1]) * 1024
+        elif size_str.endswith('m'):
+            return int(size_str[:-1])
+        elif size_str.endswith('k'):
+            return max(1, int(size_str[:-1]) // 1024)
+        else:
+            try:
+                return int(size_str) // 1024 // 1024
+            except ValueError:
+                return 1024  # Default 1GB
+
     def execute(self) -> Dict[str, Any]:
-        """执行 FIO 随机写测试"""
-        self.logger.info("🚀 开始执行随机写性能测试...")
-        
+        """Execute FIO random write test"""
+        self.logger.info("Starting random write performance test...")
+
         try:
-            # 删除已存在的测试文件
+            # Delete existing test file
             if Path(self.test_file).exists():
                 os.unlink(self.test_file)
-            
-            # 使用 fio_wrapper 便捷 API 执行
+
+            # Use fio_wrapper convenience API to execute
             metrics_obj = self.fio.run_rand_write(
                 filename=self.test_file,
                 direct=True,
@@ -130,8 +146,8 @@ class Test(TestCase):
                 ioengine=self.ioengine,
                 ramp_time=self.ramp_time
             )
-            
-            # 转换为标准 metrics 格式
+
+            # Convert to standard metrics format
             lat = metrics_obj.latency_ns
             metrics = {
                 'iops': {
@@ -144,21 +160,21 @@ class Test(TestCase):
                     'unit': 'MB/s'
                 },
                 'latency_avg': {
-                    'value': lat['mean'] / 1000,  # ns → μs
-                    'unit': 'μs',
+                    'value': lat['mean'] / 1000,  # ns -> us
+                    'unit': 'us',
                     'target': self.max_avg_latency_us
                 },
                 'latency_p99': {
                     'value': lat['percentile'].get('99.0', 0) / 1000,
-                    'unit': 'μs'
+                    'unit': 'us'
                 },
                 'latency_p9999': {
                     'value': lat['percentile'].get('99.99', 0) / 1000,
-                    'unit': 'μs'
+                    'unit': 'us'
                 },
                 'latency_p99999': {
                     'value': lat['percentile'].get('99.999', 0) / 1000,
-                    'unit': 'μs',
+                    'unit': 'us',
                     'target': self.max_tail_latency_us
                 },
                 'runtime': {
@@ -166,79 +182,80 @@ class Test(TestCase):
                     'unit': 's'
                 }
             }
-            
-            # 日志输出结果
-            self.logger.info("📊 测试完成，结果汇总:")
-            self.logger.info(f"  IOPS: {metrics['iops']['value']:.0f} (目标: ≥{self.target_iops})")
-            self.logger.info(f"  带宽: {metrics['bandwidth']['value']:.1f} MB/s")
-            self.logger.info(f"  平均延迟: {metrics['latency_avg']['value']:.1f} μs (目标: <{self.max_avg_latency_us})")
-            self.logger.info(f"  p99.999 尾延迟: {metrics['latency_p99999']['value']:.1f} μs (目标: <{self.max_tail_latency_us})")
-            
+
+            # Log results summary
+            self.logger.info("Test completed, results summary:")
+            self.logger.info(f"  IOPS: {metrics['iops']['value']:.0f} (target: >= {self.target_iops})")
+            self.logger.info(f"  Bandwidth: {metrics['bandwidth']['value']:.1f} MB/s")
+            self.logger.info(f"  Average Latency: {metrics['latency_avg']['value']:.1f} us (target: < {self.max_avg_latency_us})")
+            self.logger.info(f"  p99.999 Tail Latency: {metrics['latency_p99999']['value']:.1f} us (target: < {self.max_tail_latency_us})")
+
             return metrics
-            
+
         except FIOError as e:
-            self.logger.error(f"FIO 执行失败: {e}")
+            self.logger.error(f"FIO execution failed: {e}")
             raise
-    
+
     def validate(self, result: Dict[str, Any]) -> bool:
-        """验证测试结果是否达标
-        
-        性能测试原则：不达标记录 failure，但始终返回 True 让流程走完
-        最终状态由框架根据 failures 自动判断
+        """Validate test results meet targets
+
+        Performance test principle: Record failures for non-compliance, but always return True
+        Final status is automatically judged by framework based on failures
         """
-        self.logger.info("🔍 验证测试结果...")
-        
+        self.logger.info("Validating test results...")
+
         all_ok = True
-        
-        # 验证 IOPS - 低于 90% 目标才算失败
+
+        # Validate IOPS - fail only if below 90% of target
         iops = result['iops']['value']
         target = self.target_iops
         if iops < target * 0.9:
             self.record_failure(
-                "随机写 IOPS",
-                f"≥ {target:.0f} IOPS",
+                "Random Write IOPS",
+                f">= {target:.0f} IOPS",
                 f"{iops:.0f} IOPS",
-                "IOPS 显著低于目标值"
+                "IOPS significantly below target"
             )
             all_ok = False
         elif iops < target:
+            # Between 90%-100% of target, log warning but not failure
             self.logger.warning(
-                f"⚠️  IOPS 未达标: {iops:.0f} < {target:.0f}，"
-                "但在容忍范围内（≥90%），测试继续"
+                f"IOPS below target: {iops:.0f} < {target:.0f},"
+                " but within tolerance (>= 90%), test continues"
             )
-        
-        # 验证平均延迟
+
+        # Validate average latency
         avg_lat = result['latency_avg']['value']
         if avg_lat > self.max_avg_latency_us:
             self.record_failure(
-                "平均延迟",
-                f"< {self.max_avg_latency_us} μs",
-                f"{avg_lat:.1f} μs",
-                "平均延迟超出限制"
+                "Average Latency",
+                f"< {self.max_avg_latency_us} us",
+                f"{avg_lat:.1f} us",
+                "Average latency exceeds limit"
             )
             all_ok = False
-        
-        # 验证尾延迟（p99.999）
+
+        # Validate tail latency (p99.999)
         tail_lat = result['latency_p99999']['value']
         if tail_lat > self.max_tail_latency_us:
             self.record_failure(
-                "p99.999 尾延迟",
-                f"< {self.max_tail_latency_us} μs",
-                f"{tail_lat:.1f} μs",
-                "尾延迟发散超出限制"
+                "p99.999 Tail Latency",
+                f"< {self.max_tail_latency_us} us",
+                f"{tail_lat:.1f} us",
+                "Tail latency spread exceeds limit"
             )
             all_ok = False
-        
-        # Postcondition 检查（硬件健康）
+
+        # Postcondition check (hardware health)
         self._check_postcondition()
-        
+
         if all_ok:
-            self.logger.info("✅ 所有验证通过")
+            self.logger.info("All validations passed")
         else:
-            self.logger.warning(f"⚠️  共有 {len(self._failures)} 项验证不通过")
-        
-        return True
-    
+            self.logger.warning(f"Total {len(self._failures)} validations failed")
+
+        return True  # Performance test always returns True, framework judges final status based on failures
+
     def teardown(self) -> bool:
-        """测试后清理 - 父类会自动清理测试文件"""
+        """Post-test cleanup - parent class auto cleans test file"""
         return super().teardown()

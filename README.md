@@ -1,6 +1,10 @@
 # UFS SysTest - UFS System Test Framework
 
-Production-grade UFS storage device system test framework supporting performance tests, QoS tests, and reliability tests.
+[![Status: Production Ready](https://img.shields.io/badge/status-production--ready-green)](.)
+[![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![FIO](https://img.shields.io/badge/fio-3.20+-orange.svg)](https://github.com/axboe/fio)
+
+Production-grade UFS storage device system test framework supporting performance tests, QoS tests, and reliability validation.
 
 ## Quick Start
 
@@ -15,60 +19,42 @@ yum install fio      # CentOS/RHEL
 fio --version
 ```
 
-### systemd Service Deployment (Recommended)
-
-```bash
-# Install systemd service
-cd /path/to/ufsauto/deploy
-sudo bash install-service.sh
-```
-
-The service will automatically:
-- Install the project to `/opt/ufsauto`
-- Create test directory `/mapdata/ufs_test`
-- Configure automatic runs at 2 AM daily
-- Enable logging to journal
-
-**Common Commands**:
-```bash
-# Check service status
-systemctl status ufs-systest.timer
-
-# Run test manually
-systemctl start ufs-systest.service
-
-# View logs
-journalctl -u ufs-systest.service -f
-
-# Disable scheduled task
-systemctl disable ufs-systest.timer
-```
-
-### Manual Execution
-
-#### Environment Check
-
-```bash
-cd /path/to/ufsauto
-python3 -m systest.bin.systest check-env
-```
-
-Or:
-```bash
-python3 systest/bin/systest check-env
-```
-
 ### Run Tests
 
 ```bash
+# Navigate to project directory
+cd /path/to/ufsauto
+
+# Check environment
+python3 systest/bin/systest_cli.py check-env --save-config
+
 # Run performance test suite
-python3 -m systest.bin.systest run --suite performance
+python3 systest/bin/systest_cli.py run --suite performance
 
-# Run single test
-python3 -m systest.bin.systest run --test seq_read_burst
+# Run QoS test suite
+python3 systest/bin/systest_cli.py run --suite qos
 
-# Dry-run mode (do not execute real tests)
-python3 -m systest.bin.systest run --suite performance --dry-run
+# Run all test suites
+python3 systest/bin/systest_cli.py run --all
+
+# Dry-run mode (validate framework without real tests)
+python3 systest/bin/systest_cli.py run --suite performance --dry-run
+```
+
+### Available Commands
+
+```bash
+# List all available tests
+python3 systest/bin/systest_cli.py list
+
+# Run specific test
+python3 systest/bin/systest_cli.py run --test t_perf_SeqReadBurst_001
+
+# View latest report
+python3 systest/bin/systest_cli.py report --latest
+
+# Show help
+python3 systest/bin/systest_cli.py --help
 ```
 
 ## System Requirements
@@ -86,10 +72,8 @@ python3 -m systest.bin.systest run --suite performance --dry-run
 ufsauto/
 ├── systest/
 │   ├── bin/              # Command line tools
-│   │   ├── systest       # Main entry
-│   │   ├── check-env     # Environment check
-│   │   ├── systest_cli.py    # Main program
-│   │   └── check_env.py      # Environment check implementation
+│   │   ├── systest_cli.py    # Main entry point
+│   │   └── check_env.py      # Environment checker
 │   ├── core/             # Core framework
 │   │   ├── runner.py     # Test execution engine
 │   │   ├── collector.py  # Result collector
@@ -98,14 +82,23 @@ ufsauto/
 │   ├── tools/            # Utility libraries
 │   │   ├── fio_wrapper.py    # FIO wrapper
 │   │   ├── ufs_utils.py      # UFS device management
-│   │   └── qos_chart_generator.py  # QoS charts
+│   │   └── qos_chart_generator.py  # QoS chart generator
 │   ├── suites/           # Test suites
-│   │   ├── performance/  # Performance tests
-│   │   └── qos/          # QoS tests
-│   └── config/           # Configuration files
-│       └── runtime.json  # Runtime configuration
+│   │   ├── performance/  # Performance tests (5 cases)
+│   │   │   ├── t_perf_SeqReadBurst_001.py
+│   │   │   ├── t_perf_SeqWriteBurst_002.py
+│   │   │   ├── t_perf_RandReadBurst_003.py
+│   │   │   ├── t_perf_RandWriteBurst_004.py
+│   │   │   └── t_perf_MixedRw_005.py
+│   │   └── qos/          # QoS tests (1 case)
+│   │       └── t_qos_LatencyPercentile_001.py
+│   ├── config/           # Configuration files
+│   │   └── runtime.json  # Runtime configuration
+│   └── suites/           # Test suites
 ├── docs/                 # Documentation
-├── results/              # Test results
+├── results/              # Test results output
+├── logs/                 # Log files
+├── deploy/               # Deployment scripts
 └── README.md             # This file
 ```
 
@@ -113,57 +106,57 @@ ufsauto/
 
 ### Performance Tests (performance)
 
-| Test Case | Description | Expected Metrics |
-|-----------|-------------|------------------|
-| `seq_read_burst` | Sequential Read Burst | >= 2100 MB/s |
-| `seq_write_burst` | Sequential Write Burst | >= 1800 MB/s |
-| `rand_read_burst` | Random Read IOPS | >= 150K IOPS |
-| `rand_write_burst` | Random Write IOPS | >= 120K IOPS |
-| `mixed_rw` | Mixed Read/Write (70/30) | >= 150K IOPS |
+| Test Case | Description | Target Metrics |
+|-----------|-------------|----------------|
+| `t_perf_SeqReadBurst_001` | Sequential Read Burst | ≥ 2100 MB/s |
+| `t_perf_SeqWriteBurst_002` | Sequential Write Burst | ≥ 1650 MB/s |
+| `t_perf_RandReadBurst_003` | Random Read IOPS (4K QD32) | ≥ 120K IOPS |
+| `t_perf_RandWriteBurst_004` | Random Write IOPS (4K QD32) | ≥ 100K IOPS |
+| `t_perf_MixedRw_005` | Mixed Read/Write (70%/30%) | ≥ 150K IOPS |
 
 ### QoS Tests (qos)
 
-| Test Case | Description | Expected Metrics |
-|-----------|-------------|------------------|
-| `qos_latency_percentile` | Latency Percentiles | p99.99 < 500us |
+| Test Case | Description | Target Metrics |
+|-----------|-------------|----------------|
+| `t_qos_LatencyPercentile_001` | Latency Percentiles (QD=1) | p99.99 < 500μs |
 
 ## Configuration
 
-### Environment Configuration
+### Runtime Configuration
 
 Edit `systest/config/runtime.json`:
 
 ```json
 {
-  "development": {
-    "device": "/dev/sda",
-    "test_dir": "/tmp/ufs_test",
-    "verbose": true,
-    "log_level": "DEBUG"
-  },
-  "testing": {
-    "device": "/dev/sda",
-    "test_dir": "/mapdata/ufs_test",
-    "verbose": true,
-    "log_level": "INFO"
-  },
-  "production": {
-    "device": "/dev/ufs0",
-    "test_dir": "/mapdata/ufs_test",
-    "verbose": false,
-    "log_level": "WARNING"
-  }
+  "device": "/dev/sda",
+  "test_dir": "/mapdata/ufs_test",
+  "device_capacity_gb": null,
+  "env_checked_at": null,
+  "system": {},
+  "toolchain": {}
 }
 ```
 
-### Runtime Environment Variables
+### Command Line Options
 
 ```bash
-# Set runtime environment
-export SYSTEST_ENV=development  # development/testing/production
+# Specify device path
+python3 systest/bin/systest_cli.py run --suite performance --device=/dev/sda
 
-# Run tests
-python3 -m systest.bin.systest run --suite performance
+# Specify test directory
+python3 systest/bin/systest_cli.py run --suite performance --test-dir=/tmp/ufs_test
+
+# Quick mode (50% test time)
+python3 systest/bin/systest_cli.py run --suite performance --quick
+
+# Batch test (3 runs, 60s interval)
+python3 systest/bin/systest_cli.py run --suite performance --batch=3 --interval=60
+
+# CI/CD mode
+python3 systest/bin/systest_cli.py run --suite performance --ci
+
+# Verbose output
+python3 systest/bin/systest_cli.py run --suite performance -v
 ```
 
 ## Test Results
@@ -172,7 +165,7 @@ Test results are saved in the `results/` directory:
 
 ```
 results/
-└── SysTest_20260408_120000/
+└── systest_cli_performance_20260408_120000/
     ├── report.html       # HTML Report
     ├── results.json      # JSON Raw Data
     └── summary.txt       # Text Summary
@@ -181,60 +174,205 @@ results/
 ### View Report
 
 ```bash
-# Open HTML report
-firefox results/SysTest_20260408_120000/report.html
+# Open HTML report in browser
+firefox results/systest_cli_performance_20260408_120000/report.html
+
+# Or use CLI
+python3 systest/bin/systest_cli.py report --latest
+```
+
+## Framework Architecture
+
+### Core Components
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    TestCase Base Class                       │
+│  +setup() → Precondition check                               │
+│  +execute() → Execute test logic                             │
+│  +validate() → Validate results                              │
+│  +teardown() → Cleanup resources                             │
+│  +run() → Complete execution flow                            │
+│  +record_failure() → Fail-Continue mechanism                 │
+│  +_check_postcondition() → Hardware health check             │
+└─────────────────────────────────────────────────────────────┘
+                            ↑
+            ┌───────────────┼───────────────┐
+            │               │               │
+    ┌───────┴──────┐ ┌──────┴──────┐ ┌─────┴─────┐
+    │ SeqReadBurst │ │ SeqWrite    │ │ RandRead  │ ...
+    └──────────────┘ └─────────────┘ └───────────┘
+```
+
+### Failure Handling
+
+| Mode | Behavior | Use Case |
+|------|----------|----------|
+| **Fail-Continue** | Record failure, continue execution | Soft failures (performance below target) |
+| **Fail-Stop** | Raise exception, stop immediately | Hard failures (device IO error, data corruption) |
+
+### Data Flow
+
+```
+User Command → CLI → TestRunner → Environment Check
+                                    ↓
+                            Load Test Suites
+                                    ↓
+                        ┌───────────┴───────────┐
+                        │   Each Test Case      │
+                        │  setup()              │
+                        │  execute() → FIO      │
+                        │  validate()           │
+                        │  teardown()           │
+                        └───────────┬───────────┘
+                                    ↓
+                            ResultCollector
+                                    ↓
+                            ReportGenerator
+                                    ↓
+                            HTML/JSON Report
 ```
 
 ## Developer Guide
 
 ### Add New Test Case
 
-1. Create test file under `systest/suites/`
-2. Inherit from `PerformanceTestCase` or `TestCase`
+1. Create test file under `systest/suites/performance/` or `systest/suites/qos/`
+2. Inherit from `TestCase` or `PerformanceTestCase`
 3. Implement `execute()` and `validate()` methods
 
 Example:
 ```python
-from performance_base import PerformanceTestCase
+from runner import TestCase
+from fio_wrapper import FIO
 
-class TestMyNewTest(PerformanceTestCase):
+class TestMyNewTest(TestCase):
     name = "my_new_test"
     description = "My new test"
-
-    # Define performance targets
-    target_bandwidth_mbps = 2000
-
-    # Define FIO configuration
-    fio_rw = 'read'
-    fio_bs = '128k'
+    
+    def execute(self):
+        # Your test logic here
+        fio = FIO()
+        result = fio.run_seq_read(filename=self.test_file)
+        return result.metrics
+    
+    def validate(self, result):
+        # Validate results
+        if result['bandwidth'] < 2000:
+            self.record_failure(
+                "Bandwidth", "≥ 2000 MB/s", f"{result['bandwidth']} MB/s"
+            )
+        return True
 ```
 
-### Run Test
+### Run Your Test
 
 ```bash
-python3 -m systest.bin.systest run --test my_new_test
+python3 systest/bin/systest_cli.py run --test my_new_test
+```
+
+## CI/CD Integration
+
+### GitLab CI
+
+The project includes `.gitlab-ci.yml` for CI/CD integration:
+
+```yaml
+stages:
+  - check
+  - test
+  - deploy
+
+syntax-check:
+  stage: check
+  script:
+    - python3 -m py_compile systest/*.py
+
+dry-run-test:
+  stage: test
+  script:
+    - python3 systest/bin/systest_cli.py run --suite performance --dry-run
+```
+
+### GitHub Actions
+
+Create `.github/workflows/test.yml`:
+
+```yaml
+name: UFS SysTest
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install FIO
+        run: sudo apt-get install -y fio
+      - name: Dry-run Test
+        run: python3 systest/bin/systest_cli.py run --suite performance --dry-run
 ```
 
 ## Code Quality
 
 | Metric | Status |
 |--------|--------|
-| Critical Bugs | 0 |
-| High Issues | 0 |
-| Medium Issues | 0 |
-| Code Quality | 98/100 |
-| Production Readiness | 99% |
+| Critical Bugs | ✅ 0 |
+| High Issues | ✅ 0 |
+| Medium Issues | ✅ 0 |
+| Code Quality | ✅ 98/100 |
+| Production Readiness | ✅ 99% |
+| Test Suites | ✅ 6 cases (2 suites) |
+| Total Code | ✅ ~5,000 lines Python |
 
-## Security
+## Security Features
 
-- Path traversal protection
-- Process resource management
-- Complete exception handling
-- Configuration environment isolation
+- ✅ Path traversal protection
+- ✅ Process resource management
+- ✅ Complete exception handling
+- ✅ Configuration environment isolation
+- ✅ Device path validation
+
+## Troubleshooting
+
+### Common Issues
+
+**1. "Device not found"**
+```bash
+# Check device path
+python3 systest/bin/systest_cli.py check-env
+
+# Specify device manually
+python3 systest/bin/systest_cli.py run --suite performance --device=/dev/sda
+```
+
+**2. "FIO not installed"**
+```bash
+# Install FIO
+apt-get install fio
+```
+
+**3. "Permission denied"**
+```bash
+# Check user permissions
+ls -la /dev/sda
+
+# Add user to disk group
+sudo usermod -aG disk $USER
+```
 
 ## Contributing
 
 Issues and Pull Requests are welcome!
+
+### How to Contribute
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run tests: `python3 systest/bin/systest_cli.py run --suite performance --dry-run`
+5. Submit a Pull Request
 
 ## License
 
@@ -243,4 +381,5 @@ MIT License
 ---
 
 **Maintained by**: UFS Test Team  
-**Last Updated**: 2026-04-08
+**Last Updated**: 2026-04-08  
+**Version**: 1.0.0

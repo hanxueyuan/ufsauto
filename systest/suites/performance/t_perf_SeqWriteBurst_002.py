@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-顺序写性能测试
-测试 UFS 设备的顺序写入带宽（Burst 模式）
+Sequential Write Performance Test
+Test UFS device sequential write bandwidth (Burst mode)
 
-测试用例 ID: t_perf_SeqWriteBurst_002
-测试目的：验证 UFS 设备顺序写 Burst 性能
-前置条件：
-    1. UFS 设备已挂载
-    2. 有足够可用空间（≥2GB）
-    3. FIO 工具已安装
-测试步骤：
-    1. 执行 FIO 顺序写测试（128K block, 60s, 含 10s ramp）
-    2. 标注带宽、IOPS、延迟是否达标
-预期指标（参考）：
-    - 带宽 ≥ 1650 MB/s
-    - 平均延迟 < 300 μs
-    - p99.999 尾延迟 < 8000 μs (8ms)
-测试耗时：约 70 秒（含 ramp）
+Test Case ID: t_perf_SeqWriteBurst_002
+Test Objective: Verify UFS device sequential write Burst performance
+Prerequisites:
+    1. UFS device is mounted
+    2. Sufficient available space (>= 2GB)
+    3. FIO tool is installed
+Test Steps:
+    1. Execute FIO sequential write test (128K block, 60s, including 10s ramp)
+    2. Validate bandwidth, IOPS, latency meet targets
+Expected Metrics (reference):
+    - Bandwidth >= 1650 MB/s
+    - Average latency < 300 us
+    - p99.999 tail latency < 8000 us (8ms)
+Test Duration: Approximately 70 seconds (including ramp)
 """
 
 import os
@@ -37,11 +37,11 @@ from ufs_utils import UFSDevice
 
 
 class Test(TestCase):
-    """顺序写性能测试"""
-    
+    """Sequential write performance test"""
+
     name = "seq_write_burst"
-    description = "顺序写入性能测试（Burst 模式）"
-    
+    description = "Sequential write performance test (Burst mode)"
+
     def __init__(
         self,
         device: str = '/dev/ufs0',
@@ -71,50 +71,50 @@ class Test(TestCase):
         self.max_avg_latency_us = max_avg_latency_us
         self.max_tail_latency_us = max_tail_latency_us
         self.verify_mode = verify
-        
-        # 初始化工具
+
+        # Initialize tools
         self.fio = FIO(timeout=self.runtime + self.ramp_time + 30, logger=self.logger)
         self.ufs = UFSDevice(device, logger=self.logger)
-    
+
     def setup(self) -> bool:
-        """检查前置条件"""
-        self.logger.info("开始检查前置条件...")
-        
+        """Check prerequisites"""
+        self.logger.info("Checking prerequisites...")
+
         if not self.ufs.exists():
-            self.logger.error(f"设备不存在：{self.device}")
+            self.logger.error(f"Device does not exist: {self.device}")
             return False
-        
+
         if not self.ufs.check_available_space(min_gb=2.0):
             return False
-        
+
         try:
             result = subprocess.run(['which', 'fio'], capture_output=True)
             if result.returncode != 0:
-                self.logger.error("FIO 工具未安装")
+                self.logger.error("FIO tool not installed")
                 return False
         except Exception as e:
-            self.logger.error(f"检查 FIO 失败：{e}")
+            self.logger.error(f"FIO check failed: {e}")
             return False
-        
+
         if not os.access(self.device, os.R_OK | os.W_OK):
-            self.logger.error(f"设备权限不足：{self.device}")
+            self.logger.error(f"Insufficient device permissions: {self.device}")
             return False
-        
-        # 检查设备健康状态
+
+        # Check device health status
         health = self.ufs.get_health_status()
         if health['status'] != 'OK':
-            self.logger.warning(f"设备健康状态异常：{health['status']}")
-        
-        self.logger.info("📋 测试配置:")
+            self.logger.warning(f"Device health status abnormal: {health['status']}")
+
+        self.logger.info("Test Configuration:")
         self.logger.info(f"  bs={self.bs}, size={self.size}, runtime={self.runtime}s")
         self.logger.info(f"  ioengine={self.ioengine}, iodepth={self.iodepth}, ramp_time={self.ramp_time}s")
-        self.logger.info(f"  target_bw={self.target_bw_mbps} MB/s, max_avg_lat={self.max_avg_latency_us} μs")
-        
-        self.logger.info("📊 前置条件检查通过")
+        self.logger.info(f"  target_bw={self.target_bw_mbps} MB/s, max_avg_lat={self.max_avg_latency_us} us")
+
+        self.logger.info("Prerequisites check passed")
         return True
-    
+
     def _parse_size_mb(self, size_str: str) -> int:
-        """解析大小字符串为 MB"""
+        """Parse size string to MB"""
         size_str = size_str.lower()
         if size_str.endswith('g'):
             return int(size_str[:-1]) * 1024
@@ -126,18 +126,18 @@ class Test(TestCase):
             try:
                 return int(size_str) // 1024 // 1024
             except ValueError:
-                return 1024  # 默认 1GB
-    
+                return 1024  # Default 1GB
+
     def execute(self) -> Dict[str, Any]:
-        """执行 FIO 顺序写测试"""
-        self.logger.info("🚀 开始执行顺序写性能测试...")
-        
+        """Execute FIO sequential write test"""
+        self.logger.info("Starting sequential write performance test...")
+
         try:
-            # 删除已存在的测试文件
+            # Delete existing test file
             if Path(self.test_file).exists():
                 os.unlink(self.test_file)
-            
-            # 使用 fio_wrapper 便捷 API 执行
+
+            # Use fio_wrapper convenience API to execute
             metrics_obj = self.fio.run_seq_write(
                 filename=self.test_file,
                 direct=True,
@@ -148,8 +148,8 @@ class Test(TestCase):
                 iodepth=self.iodepth,
                 ramp_time=self.ramp_time
             )
-            
-            # 转换为标准 metrics 格式
+
+            # Convert to standard metrics format
             lat = metrics_obj.latency_ns
             metrics = {
                 'bandwidth': {
@@ -162,21 +162,21 @@ class Test(TestCase):
                     'unit': 'IOPS'
                 },
                 'latency_avg': {
-                    'value': lat['mean'] / 1000,  # ns → μs
-                    'unit': 'μs',
+                    'value': lat['mean'] / 1000,  # ns -> us
+                    'unit': 'us',
                     'target': self.max_avg_latency_us
                 },
                 'latency_p99': {
                     'value': lat['percentile'].get('99.0', 0) / 1000,
-                    'unit': 'μs'
+                    'unit': 'us'
                 },
                 'latency_p9999': {
                     'value': lat['percentile'].get('99.99', 0) / 1000,
-                    'unit': 'μs'
+                    'unit': 'us'
                 },
                 'latency_p99999': {
                     'value': lat['percentile'].get('99.999', 0) / 1000,
-                    'unit': 'μs',
+                    'unit': 'us',
                     'target': self.max_tail_latency_us
                 },
                 'runtime': {
@@ -184,80 +184,80 @@ class Test(TestCase):
                     'unit': 's'
                 }
             }
-            
-            # 日志输出结果
-            self.logger.info("📊 测试完成，结果汇总:")
-            self.logger.info(f"  带宽: {metrics['bandwidth']['value']:.1f} MB/s (目标: ≥{self.target_bw_mbps})")
+
+            # Log results summary
+            self.logger.info("Test completed, results summary:")
+            self.logger.info(f"  Bandwidth: {metrics['bandwidth']['value']:.1f} MB/s (target: >= {self.target_bw_mbps})")
             self.logger.info(f"  IOPS: {metrics['iops']['value']:.0f}")
-            self.logger.info(f"  平均延迟: {metrics['latency_avg']['value']:.1f} μs (target: <{self.max_avg_latency_us})")
-            self.logger.info(f"  p99.999 尾延迟: {metrics['latency_p99999']['value']:.1f} μs (target: <{self.max_tail_latency_us})")
-            
+            self.logger.info(f"  Average Latency: {metrics['latency_avg']['value']:.1f} us (target: < {self.max_avg_latency_us})")
+            self.logger.info(f"  p99.999 Tail Latency: {metrics['latency_p99999']['value']:.1f} us (target: < {self.max_tail_latency_us})")
+
             return metrics
-            
+
         except FIOError as e:
-            self.logger.error(f"FIO 执行失败: {e}")
+            self.logger.error(f"FIO execution failed: {e}")
             raise
-    
+
     def validate(self, result: Dict[str, Any]) -> bool:
-        """验证测试结果是否达标
-        
-        性能测试原则：不达标记录 failure，但始终返回 True 让流程走完
-        最终状态由框架根据 failures 自动判断
+        """Validate test results meet targets
+
+        Performance test principle: Record failures for non-compliance, but always return True
+        Final status is automatically judged by framework based on failures
         """
-        self.logger.info("🔍 验证测试结果...")
-        
+        self.logger.info("Validating test results...")
+
         all_ok = True
-        
-        # 验证带宽 - 低于 90% 目标才算失败
+
+        # Validate bandwidth - fail only if below 90% of target
         bw = result['bandwidth']['value']
         target = self.target_bw_mbps
         if bw < target * 0.9:
             self.record_failure(
-                "顺序写带宽",
-                f"≥ {target} MB/s",
+                "Sequential Write Bandwidth",
+                f">= {target} MB/s",
                 f"{bw:.1f} MB/s",
-                "带宽显著低于目标值"
+                "Bandwidth significantly below target"
             )
             all_ok = False
         elif bw < target:
-            # 在目标 90%-100% 之间，记录警告但不算失败
+            # Between 90%-100% of target, log warning but not failure
             self.logger.warning(
-                f"⚠️  带宽未达标: {bw:.1f} MB/s < {target} MB/s,"
-                "但在容忍范围内（≥90%），测试继续"
+                f"Bandwidth below target: {bw:.1f} MB/s < {target} MB/s,"
+                " but within tolerance (>= 90%), test continues"
             )
-        
-        # 验证平均延迟
+
+        # Validate average latency
         avg_lat = result['latency_avg']['value']
         if avg_lat > self.max_avg_latency_us:
             self.record_failure(
-                "平均延迟",
-                f"< {self.max_avg_latency_us} μs",
-                f"{avg_lat:.1f} μs",
-                "平均延迟超出限制"
+                "Average Latency",
+                f"< {self.max_avg_latency_us} us",
+                f"{avg_lat:.1f} us",
+                "Average latency exceeds limit"
             )
             all_ok = False
-        
-        # 验证尾延迟（p99.999）
+
+        # Validate tail latency (p99.999)
         tail_lat = result['latency_p99999']['value']
         if tail_lat > self.max_tail_latency_us:
             self.record_failure(
-                "p99.999 尾延迟",
-                f"< {self.max_tail_latency_us} μs",
-                f"{tail_lat:.1f} μs",
-                "尾延迟发散超出限制"
+                "p99.999 Tail Latency",
+                f"< {self.max_tail_latency_us} us",
+                f"{tail_lat:.1f} us",
+                "Tail latency spread exceeds limit"
             )
             all_ok = False
-        
-        # Postcondition 检查（硬件健康）
+
+        # Postcondition check (hardware health)
         self._check_postcondition()
-        
+
         if all_ok:
-            self.logger.info("✅ 所有验证通过")
+            self.logger.info("All validations passed")
         else:
-            self.logger.warning(f"⚠️  共有 {len(self._failures)} 项验证不通过")
-        
-        return True  # 性能测试始终返回 True，由框架根据 failures 判断最终状态
-    
+            self.logger.warning(f"Total {len(self._failures)} validations failed")
+
+        return True  # Performance test always returns True, framework judges final status based on failures
+
     def teardown(self) -> bool:
-        """测试后清理 - 父类会自动清理测试文件"""
+        """Post-test cleanup - parent class auto cleans test file"""
         return super().teardown()

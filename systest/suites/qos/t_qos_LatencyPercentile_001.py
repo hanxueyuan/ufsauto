@@ -1,31 +1,31 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-QoS 延迟百分位测试
-测试 UFS 设备的延迟分布和百分位指标
+QoS Latency Percentile Test
+Test UFS device latency distribution and percentile metrics
 
-测试用例 ID: t_qos_LatencyPercentile_001
-测试目的：验证 UFS 设备延迟百分位指标（p50/p99/p99.99）
-前置条件：
-    1. UFS 设备已挂载
-    2. 有足够可用空间（≥2GB）
-    3. FIO 工具已安装
-测试步骤：
-    1. 执行 FIO 随机读测试（4K block, QD=1, 60s）
-    2. 记录 p50/p99/p99.99 延迟
-    3. 验证延迟百分位是否达标
-预期指标：
-    - p50 延迟 < 50 μs
-    - p99 延迟 < 200 μs
-    - p99.99 延迟 < 500 μs
-测试耗时：约 60 秒
+Test Case ID: t_qos_LatencyPercentile_001
+Test Objective: Verify UFS device latency percentile metrics (p50/p99/p99.99)
+Prerequisites:
+    1. UFS device is mounted
+    2. Sufficient available space (>= 2GB)
+    3. FIO tool is installed
+Test Steps:
+    1. Execute FIO random read test (4K block, QD=1, 60s)
+    2. Record p50/p99/p99.99 latency
+    3. Validate latency percentiles meet targets
+Expected Metrics:
+    - p50 latency < 50 us
+    - p99 latency < 200 us
+    - p99.99 latency < 500 us
+Test Duration: Approximately 60 seconds
 """
 
 import sys
 import json
 from pathlib import Path
 
-# 添加 core 和 tools 模块路径
+# Add core and tools module paths
 core_dir = Path(__file__).parent.parent.parent / 'core'
 tools_dir = Path(__file__).parent.parent.parent / 'tools'
 sys.path.insert(0, str(core_dir))
@@ -38,25 +38,25 @@ from typing import Dict, Any
 
 
 class Test(TestCase):
-    """QoS 延迟百分位测试"""
-    
+    """QoS latency percentile test"""
+
     name = "qos_latency_percentile"
-    description = "QoS 延迟百分位测试（p50/p99/p99.99）"
-    
+    description = "QoS latency percentile test (p50/p99/p99.99)"
+
     def __init__(
         self,
         device: str = '/dev/ufs0',
         test_dir: Path = None,
         verbose: bool = False,
         logger=None,
-        # === 测试参数 ===
+        # === Test parameters ===
         bs: str = '4k',
         size: str = '1G',
         runtime: int = 60,
         ramp_time: int = 10,
         ioengine: str = 'sync',
         iodepth: int = 1,
-        # === 性能目标 ===
+        # === Performance targets ===
         p50_latency_us: float = 50,
         p99_latency_us: float = 200,
         p9999_latency_us: float = 500,
@@ -72,61 +72,61 @@ class Test(TestCase):
         self.p50_latency_us = p50_latency_us
         self.p99_latency_us = p99_latency_us
         self.p9999_latency_us = p9999_latency_us
-        
-        # 初始化工具
+
+        # Initialize tools
         self.fio = FIO(timeout=self.runtime + self.ramp_time + 30, logger=self.logger)
         self.ufs = UFSDevice(device, logger=self.logger)
-    
+
     def setup(self) -> bool:
-        """测试前准备 - 检查前置条件"""
-        self.logger.info("开始检查前置条件...")
-        
-        # 1. 检查设备是否存在
+        """Pre-test setup - Check prerequisites"""
+        self.logger.info("Checking prerequisites...")
+
+        # 1. Check device exists
         if not self.ufs.exists():
-            self.logger.error(f"设备不存在：{self.device}")
+            self.logger.error(f"Device does not exist: {self.device}")
             return False
-        self.logger.debug(f"📊 设备存在：{self.device}")
-        
-        # 2. 检查可用空间
+        self.logger.debug(f"Device exists: {self.device}")
+
+        # 2. Check available space
         if not self.ufs.check_available_space(min_gb=2.0):
-            self.logger.error("可用空间不足（需要≥2GB）")
+            self.logger.error("Insufficient available space (requires >= 2GB)")
             return False
-        self.logger.debug(f"📊 可用空间充足（≥2GB）")
-        
-        # 3. 检查 FIO 是否已安装
+        self.logger.debug(f"Available space sufficient (>= 2GB)")
+
+        # 3. Check FIO is installed
         import subprocess
         try:
             result = subprocess.run(['which', 'fio'], capture_output=True, text=True)
             if result.returncode != 0:
-                self.logger.error("FIO 工具未安装")
+                self.logger.error("FIO tool not installed")
                 return False
-            self.logger.debug(f"📊 FIO 已安装")
+            self.logger.debug(f"FIO installed")
         except Exception as e:
-            self.logger.error(f"FIO 检查失败：{e}")
+            self.logger.error(f"FIO check failed: {e}")
             return False
-        
-        # 4. 检查设备权限
+
+        # 4. Check device permissions
         if not self.ufs.check_device():
-            self.logger.error(f"设备权限不足：{self.device}")
+            self.logger.error(f"Insufficient device permissions: {self.device}")
             return False
-        self.logger.debug(f"📊 设备权限正常")
-        
-        # 5. 记录健康基线
+        self.logger.debug(f"Device permissions OK")
+
+        # 5. Record health baseline
         health = self.ufs.get_health_status()
         self._pre_test_health = health
-        self.logger.debug(f"📊 健康基线：{health['status']}")
-        
-        self.logger.info("✅ 前置条件检查通过")
+        self.logger.debug(f"Health baseline: {health['status']}")
+
+        self.logger.info("Prerequisites check passed")
         return True
-    
+
     def execute(self) -> Dict[str, Any]:
-        """执行 QoS 延迟百分位测试"""
-        self.logger.info("开始执行 QoS 延迟百分位测试...")
+        """Execute QoS latency percentile test"""
+        self.logger.info("Starting QoS latency percentile test...")
         self.logger.info(f"  bs={self.bs}, size={self.size}, runtime={self.runtime}s, iodepth={self.iodepth}")
-        
+
         try:
-            # 执行 FIO 随机读测试（QD=1，测量延迟）
-            self.logger.info("执行 FIO 随机读测试（QD=1）...")
+            # Execute FIO random read test (QD=1, measure latency)
+            self.logger.info("Executing FIO random read test (QD=1)...")
             metrics_obj = self.fio.run_rand_read(
                 filename=self.test_file,
                 size=self.size,
@@ -137,14 +137,14 @@ class Test(TestCase):
                 ramp_time=self.ramp_time,
                 direct=True,
             )
-            
-            # 提取完整的延迟分布数据
+
+            # Extract complete latency distribution data
             lat_ns = metrics_obj.latency_ns
             percentiles = lat_ns.get('percentile', {})
-            
-            # 收集所有百分位数据
+
+            # Collect all percentile data
             lat_distribution = {
-                'p50': percentiles.get('50.000000', 0) / 1000,  # ns → μs
+                'p50': percentiles.get('50.000000', 0) / 1000,  # ns -> us
                 'p90': percentiles.get('90.000000', 0) / 1000,
                 'p95': percentiles.get('95.000000', 0) / 1000,
                 'p99': percentiles.get('99.000000', 0) / 1000,
@@ -156,21 +156,21 @@ class Test(TestCase):
                 'mean': lat_ns.get('mean', 0) / 1000,
                 'stddev': lat_ns.get('stddev', 0) / 1000,
             }
-            
-            self.logger.info("📊 延迟分布数据:")
-            self.logger.info(f"  最小值：{lat_distribution['min']:.1f} μs")
-            self.logger.info(f"  p50:    {lat_distribution['p50']:.1f} μs")
-            self.logger.info(f"  p90:    {lat_distribution['p90']:.1f} μs")
-            self.logger.info(f"  p95:    {lat_distribution['p95']:.1f} μs")
-            self.logger.info(f"  p99:    {lat_distribution['p99']:.1f} μs")
-            self.logger.info(f"  p99.9:  {lat_distribution['p99.9']:.1f} μs")
-            self.logger.info(f"  p99.99: {lat_distribution['p99.99']:.1f} μs")
-            self.logger.info(f"  p99.999:{lat_distribution['p99.999']:.1f} μs")
-            self.logger.info(f"  最大值：{lat_distribution['max']:.1f} μs")
-            self.logger.info(f"  平均值：{lat_distribution['mean']:.1f} μs")
-            self.logger.info(f"  标准差：{lat_distribution['stddev']:.1f} μs")
-            
-            # 保存延迟分布数据到文件（用于后续绘制图表）
+
+            self.logger.info("Latency distribution data:")
+            self.logger.info(f"  min:     {lat_distribution['min']:.1f} us")
+            self.logger.info(f"  p50:     {lat_distribution['p50']:.1f} us")
+            self.logger.info(f"  p90:     {lat_distribution['p90']:.1f} us")
+            self.logger.info(f"  p95:     {lat_distribution['p95']:.1f} us")
+            self.logger.info(f"  p99:     {lat_distribution['p99']:.1f} us")
+            self.logger.info(f"  p99.9:   {lat_distribution['p99.9']:.1f} us")
+            self.logger.info(f"  p99.99:  {lat_distribution['p99.99']:.1f} us")
+            self.logger.info(f"  p99.999: {lat_distribution['p99.999']:.1f} us")
+            self.logger.info(f"  max:     {lat_distribution['max']:.1f} us")
+            self.logger.info(f"  mean:    {lat_distribution['mean']:.1f} us")
+            self.logger.info(f"  stddev:  {lat_distribution['stddev']:.1f} us")
+
+            # Save latency distribution data to file (for subsequent chart plotting)
             try:
                 distribution_file = self.test_file.parent / f'qos_latency_distribution_{self.test_file.stem}.json'
                 with open(distribution_file, 'w', encoding='utf-8') as f:
@@ -181,50 +181,50 @@ class Test(TestCase):
                         'distribution': lat_distribution,
                         'raw_fio': metrics_obj.raw.get('jobs', [{}])[0] if metrics_obj.raw else {}
                     }, f, indent=2, ensure_ascii=False)
-                self.logger.info(f"📁 延迟分布数据已保存：{distribution_file}")
+                self.logger.info(f"Latency distribution data saved: {distribution_file}")
             except Exception as e:
-                self.logger.warning(f"⚠️  保存分布数据失败：{e}")
-            
+                self.logger.warning(f"Failed to save distribution data: {e}")
+
             return lat_distribution
-            
+
         except FIOError as e:
-            self.logger.error(f"FIO 执行失败：{e}")
+            self.logger.error(f"FIO execution failed: {e}")
             raise
-    
+
     def validate(self, result: Dict[str, Any]) -> bool:
-        """验证延迟百分位是否达标"""
-        self.logger.info("验证延迟百分位指标...")
-        
+        """Validate latency percentiles meet targets"""
+        self.logger.info("Validating latency percentile metrics...")
+
         lat_p50 = result.get('p50', 0)
         lat_p99 = result.get('p99', 0)
         lat_p9999 = result.get('p99.99', 0)
-        
-        # 验证 p50
+
+        # Validate p50
         if lat_p50 > self.p50_latency_us:
             self.record_failure(
-                "p50 延迟",
-                f"< {self.p50_latency_us} μs",
-                f"{lat_p50:.1f} μs",
-                "p50 延迟超出限制"
+                "p50 Latency",
+                f"< {self.p50_latency_us} us",
+                f"{lat_p50:.1f} us",
+                "p50 latency exceeds limit"
             )
         else:
-            self.logger.info(f"  ✅ p50 延迟：{lat_p50:.1f} μs (< {self.p50_latency_us} μs)")
-        
-        # 验证 p99
+            self.logger.info(f"  p50 latency: {lat_p50:.1f} us (< {self.p50_latency_us} us)")
+
+        # Validate p99
         if lat_p99 > self.p99_latency_us:
             self.record_failure(
-                "p99 延迟",
-                f"< {self.p99_latency_us} μs",
-                f"{lat_p99:.1f} μs",
-                "p99 延迟超出限制"
+                "p99 Latency",
+                f"< {self.p99_latency_us} us",
+                f"{lat_p99:.1f} us",
+                "p99 latency exceeds limit"
             )
         else:
-            self.logger.info(f"  ✅ p99 延迟：{lat_p99:.1f} μs (< {self.p99_latency_us} μs)")
-        
-        # 验证 p99.99
+            self.logger.info(f"  p99 latency: {lat_p99:.1f} us (< {self.p99_latency_us} us)")
+
+        # Validate p99.99
         if lat_p9999 > self.p9999_latency_us:
             self.record_failure(
-                "p99.99 latency",
+                "p99.99 Latency",
                 f"< {self.p9999_latency_us} us",
                 f"{lat_p9999:.1f} us",
                 "p99.99 latency exceeds limit"
@@ -236,7 +236,7 @@ class Test(TestCase):
         self._check_postcondition()
 
         return True
-    
+
     def teardown(self) -> bool:
-        """测试后清理"""
+        """Post-test cleanup"""
         return super().teardown()
