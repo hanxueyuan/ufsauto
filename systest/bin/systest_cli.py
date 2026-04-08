@@ -111,55 +111,48 @@ def cmd_run(args):
     logger.info(f"测试 ID: {test_id}")
     logger.debug(f"日志文件:{logger.get_log_file()}")
 
-    # 批量测试
-    batch_results = []
-
-    # 效率优化：在批量循环外先初始化一次 TestRunner，避免重复环境检测
-    # 只有当用户指定了 --device 或 --test-dir 时才在每次循环中重新初始化
-    needs_reinit_per_batch = args.device or args.test_dir
-
     # 快速模式：调整测试参数（缩短时间）
     quick_factor = 0.5 if args.quick else 1.0
     if args.quick:
         logger.info(f"快速模式：测试时间缩短为 {quick_factor*100:.0f}%")
 
-    # 确定要运行的套件（在批量循环外只做一次）
-    suites_to_run = []
-    if args.all:
-        suites_to_run = ['performance', 'qos']
-    elif args.suite:
-        suites_to_run = [args.suite]
-    elif args.test:
-        # 单个测试，找到所属套件
-        runner_tmp = TestRunner(dry_run=True)
-        for suite_name, tests in runner_tmp.list_suites().items():
-            if args.test in tests:
-                suites_to_run = [suite_name]
-                break
-
-    if not suites_to_run:
-        logger.error("未指定测试套件或测试项")
-        return 2
-
+    # 批量测试
+    batch_results = []
     for i in range(args.batch):
         if args.batch > 1:
             logger.info(f"\n{'='*60}")
             logger.info(f"批量测试 {i+1}/{args.batch}")
             logger.info(f"{'='*60}")
 
+        # 确定要运行的套件
+        suites_to_run = []
+        if args.all:
+            suites_to_run = ['performance', 'qos']
+        elif args.suite:
+            suites_to_run = [args.suite]
+        elif args.test:
+            # 单个测试，找到所属套件
+            runner_tmp = TestRunner(dry_run=True)
+            for suite_name, tests in runner_tmp.list_suites().items():
+                if args.test in tests:
+                    suites_to_run = [suite_name]
+                    break
+
+        if not suites_to_run:
+            logger.error("未指定测试套件或测试项")
+            return 2
+
         # 执行每个套件
         for suite_name in suites_to_run:
             # 初始化组件（传递 quick_factor 用于调整 runtime）
-            # 优化：如果用户没有手动指定参数，复用 Runner 避免重复环境检测
-            if needs_reinit_per_batch or i == 0:
-                runner = TestRunner(
-                    device=args.device,
-                    test_dir=args.test_dir,
-                    verbose=args.verbose,
-                    dry_run=args.dry_run,
-                    ci_mode=args.ci if hasattr(args, 'ci') else False,
-                    quick_factor=quick_factor
-                )
+            runner = TestRunner(
+                device=args.device,
+                test_dir=args.test_dir,
+                verbose=args.verbose,
+                dry_run=args.dry_run,
+                ci_mode=args.ci if hasattr(args, 'ci') else False,
+                quick_factor=quick_factor
+            )
             collector = ResultCollector(output_dir=args.output)
             reporter = ReportGenerator(template='default')
             
