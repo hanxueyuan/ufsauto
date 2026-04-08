@@ -11,19 +11,16 @@
     SKIP  - 前置条件不满足,测试未执行(设备不存在、空间不足、工具未安装等)。
     ABORT - 测试被中断或超时(用户 Ctrl+C、超时 kill)。
 """
-import re
-
 import logging
+import os
+import re
 import signal
 import subprocess
-import json
 import time
-import os
-from pathlib import Path
+import json
 from datetime import datetime
-import re
-import re
-from typing import Dict, List, Optional, Any
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 # 性能阈值常量
@@ -69,6 +66,10 @@ class TestCase:
 
     def __init__(self, device: str = '/dev/sda', test_dir: Path = None, verbose: bool = False, logger=None):
         self._failures: List[Dict[str, Any]] = []
+        self.device = device
+        self.test_dir = test_dir
+        self.verbose = verbose
+        self.logger = logger or logging.getLogger(__name__)
         # 健康状态监控
         self._pre_test_health = None
         self._post_test_health = None  # 在 setup() 中初始化
@@ -77,12 +78,16 @@ class TestCase:
         if self.test_dir and not self.test_dir.exists():
             self.test_dir.mkdir(parents=True, exist_ok=True)
     def get_test_file_path(self, name: str) -> Path:
-        """获取测试文件路径，统一放在全局测试目录下"""
-        """获取测试文件路径,统一放在全局测试目录下
-            return test_file
+        """获取测试文件路径，统一放在全局测试目录下
 
         Args:
-            name: 测试文件名称(如 "seq_read")
+            name: 测试文件名称 (如 "seq_read")
+
+        Returns:
+            Path: 测试文件路径
+
+        Raises:
+            RuntimeError: 当测试文件路径不在测试目录内时抛出
         """
         if self.test_dir:
             test_file = self.test_dir / f"ufs_test_{name}"

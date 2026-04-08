@@ -1,0 +1,14 @@
+[Unit]
+Description=UFS SysTest Timer - Daily Performance Test
+Documentation=https://github.com/hanxueyuan/ufsauto
+
+[Timer]
+# 每天凌晨 2 点执行
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+RandomizedDelaySec=300
+
+Unit=ufs-systest.service
+
+[Install]
+WantedBy=timers.target

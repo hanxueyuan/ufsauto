@@ -53,7 +53,7 @@ class ResultCollector:
         
         # 计算汇总统计
         total = len(results)
-        passed = sum(1 for r in results if r.get('status') == 'PASS')
+        passed = sum(1 for r in results if r.get('status') in ['PASS', 'DRY-RUN-PASS'])
         failed = sum(1 for r in results if r.get('status') == 'FAIL')
         errors = sum(1 for r in results if r.get('status') == 'ERROR')
         pass_rate = (passed / total * 100) if total > 0 else 0

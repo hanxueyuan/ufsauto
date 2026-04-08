@@ -165,12 +165,15 @@ class ReportGenerator:
         
         for result in report_data['test_cases']:
             status = result.get('status', 'UNKNOWN')
-            status_class = status if status in ['PASS', 'FAIL', 'ERROR'] else 'ERROR'
-            
+            # DRY-RUN-PASS 显示为 PASS 样式
+            status_class = status if status in ['PASS', 'FAIL', 'ERROR', 'DRY-RUN-PASS'] else 'ERROR'
+            if status_class == 'DRY-RUN-PASS':
+                status_class = 'PASS'
+
             # 提取关键指标
             metrics = result.get('metrics', {})
             metrics_str = self._format_metrics(metrics)
-            
+
             row = f'''<tr>
                 <td>{result['name']}</td>
                 <td><span class="status {status_class}">{status}</span></td>
@@ -178,7 +181,7 @@ class ReportGenerator:
                 <td>{metrics_str}</td>
             </tr>'''
             test_rows.append(row)
-            
+
             # 收集失败项
             if status == 'FAIL':
                 failures.append(self._create_failure_analysis(result))

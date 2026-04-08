@@ -1,0 +1,29 @@
+[Unit]
+Description=UFS SysTest Service
+After=network.target
+Documentation=https://github.com/hanxueyuan/ufsauto
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/ufsauto
+ExecStart=/usr/bin/python3 -m systest.bin.systest run --suite performance
+StandardOutput=journal
+StandardError=journal
+RemainAfterExit=no
+
+# 环境变量
+Environment="SYSTEST_ENV=production"
+Environment="PYTHONUNBUFFERED=1"
+
+# 资源限制
+LimitNOFILE=65535
+LimitNPROC=4096
+
+# 安全加固
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/mapdata/ufs_test /opt/ufsauto/results
+
+[Install]
+WantedBy=multi-user.target
