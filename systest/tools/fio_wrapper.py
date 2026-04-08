@@ -369,7 +369,16 @@ class FIO:
                 try:
                     fio_output = json.loads(json_str)
                 except json.JSONDecodeError as e:
-                    raise FIOError(f"FIO 输出解析失败：{e}. 输出内容：{result.stdout[:500]}...")
+                    # 保存完整输出到临时文件供调试
+                    import tempfile
+                    debug_file = Path(tempfile.mktemp(suffix='_fio_debug.json'))
+                    with open(debug_file, 'w', encoding='utf-8') as f:
+                        f.write(result.stdout)
+                    self.logger.error(f"FIO 输出解析失败：{e}")
+                    self.logger.error(f"  调试文件已保存：{debug_file}")
+                    self.logger.error(f"  stdout 长度：{len(result.stdout)} chars")
+                    self.logger.error(f"  stderr 长度：{len(result.stderr)} chars")
+                    raise FIOError(f"FIO 输出解析失败：{e}. 调试文件：{debug_file}")
                 
                 # 转换为标准化指标
                 metrics = FIOMetrics.from_fio_output(fio_output, config.rw)

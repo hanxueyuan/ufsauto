@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-环境信息收集脚本 - 纯信息输出，不做 pass/fail 判断
+环境信息收集脚本 - 纯信息输出,不做 pass/fail 判断
 
 使用方法:
     python3 bin/SysTest check-env
@@ -21,18 +21,18 @@ from datetime import datetime
 
 
 class EnvironmentChecker:
-    """环境信息收集器 — 只报事实，不做判断"""
+    """环境信息收集器 — 只报事实,不做判断"""
 
     def __init__(self, mode='dev', verbose=False, config_dir=None):
         self.mode = mode
         self.verbose = verbose
         self.items = []
-        # config 目录在 systest/config/（bin/../config/），而不是 bin/config/
+        # config 目录在 systest/config/(bin/../config/),而不是 bin/config/
         if config_dir:
             self.config_dir = Path(config_dir)
         else:
             self.config_dir = Path(__file__).parent.parent / 'config'
-        # 收集到的关键配置（用于写入 runtime.json）
+        # 收集到的关键配置(用于写入 runtime.json)
         self.runtime_config = {
             'device': None,
             'test_dir': None,
@@ -101,18 +101,18 @@ class EnvironmentChecker:
     def collect_storage(self):
         """检测存储设备
         
-        设备类型判断方法（辅助判断，不阻断测试）：
-        1. dmesg 中查找 ufshcd 关键字（最可靠）
-        2. 列出所有块设备，识别 UFS 设备路径
+        设备类型判断方法(辅助判断,不阻断测试):
+        1. dmesg 中查找 ufshcd 关键字(最可靠)
+        2. 列出所有块设备,识别 UFS 设备路径
         
-        注意：不管设备类型如何，测试都应该继续
+        注意:不管设备类型如何,测试都应该继续
         """
         import re
         ufs_found = False
         ufs_info = {}
         device_path = None
 
-        # ========== 方法 1: dmesg 检测 ufshcd（最可靠）==========
+        # ========== 方法 1: dmesg 检测 ufshcd(最可靠)==========
         rc, out, _ = self._run(['dmesg'])
         if rc == 0:
             for line in out.split('\n'):
@@ -148,24 +148,24 @@ class EnvironmentChecker:
             if 'rate' in ufs_info:
                 self._record('storage', 'Rate', f'Rate {ufs_info["rate"]}')
         else:
-            self._record('storage', '设备类型', '未检测到 UFS（dmesg 无 ufshcd）')
-            self._record('storage', '💡 提示', '设备类型检测仅作辅助参考，不影响测试执行')
+            self._record('storage', '设备类型', '未检测到 UFS(dmesg 无 ufshcd)')
+            self._record('storage', '💡 提示', '设备类型检测仅作辅助参考,不影响测试执行')
 
-        # ========== 方法 2: 列出所有块设备，检测 UFS 设备路径 ==========
+        # ========== 方法 2: 列出所有块设备,检测 UFS 设备路径 ==========
         rc, out, _ = self._run(['lsblk', '-d', '-o', 'NAME,SIZE,TYPE,ROTA', '--noheadings'])
         if rc == 0:
             self._record('storage', '📋 块设备', '\n' + out)
             
-            # 解析块设备列表，找到 UFS 设备
+            # 解析块设备列表,找到 UFS 设备
             first_disk = None
             for line in out.strip().split('\n'):
                 parts = line.split()
                 if len(parts) >= 3 and parts[2] == 'disk':
                     dev_name = parts[0]
-                    # 保存第一个磁盘，供后面回退使用
+                    # 保存第一个磁盘,供后面回退使用
                     if first_disk is None:
                         first_disk = dev_name
-                    # 检查是否是 UFS 设备（通过 /sys/block 检查驱动）
+                    # 检查是否是 UFS 设备(通过 /sys/block 检查驱动)
                     driver_path = f'/sys/block/{dev_name}/device/driver'
                     if os.path.exists(driver_path):
                         try:
@@ -177,13 +177,13 @@ class EnvironmentChecker:
                         except Exception:
                             pass
             
-            # 如果已经通过 dmesg 找到了 UFS 主机控制器，但没通过驱动匹配到
-            # 直接使用第一个块设备（UFS 通常是第一个磁盘）
+            # 如果已经通过 dmesg 找到了 UFS 主机控制器,但没通过驱动匹配到
+            # 直接使用第一个块设备(UFS 通常是第一个磁盘)
             if ufs_found and not device_path and first_disk:
                 device_path = f'/dev/{first_disk}'
                 self._record('storage', 'UFS 设备路径', f'{device_path} (auto-detected: UFS host found, using first disk)')
         
-        # 如果没找到 UFS 设备，尝试通过 SCSI host 查找
+        # 如果没找到 UFS 设备,尝试通过 SCSI host 查找
         if not device_path and 'scsi_host' in ufs_info:
             # SCSI host0 通常对应 /dev/sda
             host_num = ufs_info['scsi_host'].replace('host', '')
@@ -215,8 +215,8 @@ class EnvironmentChecker:
         if device_path:
             self.runtime_config['device'] = device_path
         else:
-            # 如果仍然没找到，使用默认值 /dev/sda（开发板 UFS 通常是 sda）
-            self._record('storage', '⚠️  设备路径', f'未自动检测到，将使用默认值 /dev/sda')
+            # 如果仍然没找到,使用默认值 /dev/sda(开发板 UFS 通常是 sda)
+            self._record('storage', '⚠️  设备路径', f'未自动检测到,将使用默认值 /dev/sda')
             self._record('storage', '💡 提示', '请手动指定设备路径: --device=/dev/sdX')
             self.runtime_config['device'] = '/dev/sda'
     
@@ -248,7 +248,7 @@ class EnvironmentChecker:
         self._record('test_dir', 'findmnt 版本', findmnt_ver)
         
         # 尝试新版 findmnt
-        # 不限制文件系统类型：任何可挂载的可写文件系统都可以用
+        # 不限制文件系统类型:任何可挂载的可写文件系统都可以用
         rc, out, err = self._run(['findmnt', '-n', '-o', 'TARGET,SIZE,FSUSED,FSAVAIL'])
         
         if rc != 0 and 'unknown column' in (err or '').lower():
@@ -258,7 +258,7 @@ class EnvironmentChecker:
             use_simple = True
         elif rc != 0:
             self._record('test_dir', 'findmnt 兼容性', f'不可用: {err}')
-            self._record('test_dir', '建议测试目录', '/tmp/ufs_test (findmnt 不可用，回退)')
+            self._record('test_dir', '建议测试目录', '/tmp/ufs_test (findmnt 不可用,回退)')
             self.runtime_config['test_dir'] = '/tmp/ufs_test'
             return
         else:
@@ -278,7 +278,7 @@ class EnvironmentChecker:
             if len(parts) < 2:
                 continue  # 至少需要两列
             
-            # 健壮解析：
+            # 健壮解析:
             # use_simple = True  -> -o TARGET,AVAIL => 总是 TARGET=第一列 AVAIL=最后一列
             # use_simple = False -> -o TARGET,SIZE,FSUSED,FSAVAIL => TARGET=第一列 FSAVAIL=最后一列
             mount = parts[0]
@@ -296,7 +296,7 @@ class EnvironmentChecker:
             except Exception:
                 continue
             
-            # 跳过根目录（通常是只读的）
+            # 跳过根目录(通常是只读的)
             if mount == '/':
                 continue
             
@@ -304,29 +304,29 @@ class EnvironmentChecker:
             if not os.access(mount, os.W_OK):
                 continue
             
-            # 优先选可用空间最大的，至少 2GB 比较理想
-            # 如果找不到 ≥2GB 的，就用最大的那个（有空间总比没空间好）
+            # 优先选可用空间最大的,至少 2GB 比较理想
+            # 如果找不到 ≥2GB 的,就用最大的那个(有空间总比没空间好)
             if avail_gb > max_avail_gb:
                 max_avail_gb = avail_gb
                 best_mount = mount
         
         if best_mount:
-            # 不管空间大小，只要找到一个可用的，就用它
-            # 如果空间小于 2GB 会在日志里提示，但仍然使用它
+            # 不管空间大小,只要找到一个可用的,就用它
+            # 如果空间小于 2GB 会在日志里提示,但仍然使用它
             if max_avail_gb >= 2:
                 self._record('test_dir', '建议测试目录', f'{best_mount}/ufs_test (可用 {max_avail_gb:.1f} GB)')
             else:
-                self._record('test_dir', '建议测试目录', f'{best_mount}/ufs_test (可用 {max_avail_gb:.1f} GB，小于推荐的 2GB)')
+                self._record('test_dir', '建议测试目录', f'{best_mount}/ufs_test (可用 {max_avail_gb:.1f} GB,小于推荐的 2GB)')
             self.runtime_config['test_dir'] = f'{best_mount}/ufs_test'
         else:
-            # 实在找不到，才回退到默认 /mapdata/ufs_test（开发板常用挂载点）
-            self._record('test_dir', '建议测试目录', '/mapdata/ufs_test (未找到其他可写挂载点，使用开发板默认)')
+            # 实在找不到,才回退到默认 /mapdata/ufs_test(开发板常用挂载点)
+            self._record('test_dir', '建议测试目录', '/mapdata/ufs_test (未找到其他可写挂载点,使用开发板默认)')
             self.runtime_config['test_dir'] = '/mapdata/ufs_test'
 
     # ── 内部工具 ──────────────────────────────────────────
 
     def _suggest_test_directory(self, disk_name):
-        """建议测试目录：找到该磁盘上最大的已挂载分区"""
+        """建议测试目录:找到该磁盘上最大的已挂载分区"""
         try:
             rc, lsblk_out, _ = self._run(['lsblk', '-o', 'NAME,SIZE,MOUNTPOINT', '-n'])
             if rc != 0:
@@ -420,10 +420,10 @@ class EnvironmentChecker:
     def save_report(self, path='env_report.json'):
         with open(path, 'w') as f:
             json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
-        print(f'\n报告已保存：{path}')
+        print(f'\n报告已保存:{path}')
 
     def save_runtime_config(self):
-        """将关键配置写入 runtime.json，供后续脚本读取"""
+        """将关键配置写入 runtime.json,供后续脚本读取"""
         self.runtime_config['env_checked_at'] = datetime.now().isoformat()
 
         config_path = self.config_dir / 'runtime.json'
@@ -445,15 +445,15 @@ class EnvironmentChecker:
             with open(config_path, 'w', encoding='utf-8') as f:
                 json.dump(merged, f, indent=2, ensure_ascii=False)
 
-            print(f'\n✅ 配置已保存：{config_path}')
-            print(f'   设备路径：{self.runtime_config.get("device", "未检测到")}')
-            print(f'   测试目录：{self.runtime_config.get("test_dir", "未检测到")}')
+            print(f'\n✅ 配置已保存:{config_path}')
+            print(f'   设备路径:{self.runtime_config.get("device", "未检测到")}')
+            print(f'   测试目录:{self.runtime_config.get("test_dir", "未检测到")}')
         except PermissionError as e:
-            print(f'\n❌ 配置目录无法写入：{e}')
-            print(f'   建议：使用 sudo 或检查目录权限')
+            print(f'\n❌ 配置目录无法写入:{e}')
+            print(f'   建议:使用 sudo 或检查目录权限')
             raise
         except OSError as e:
-            print(f'\n❌ 配置保存失败（磁盘空间不足？）: {e}')
+            print(f'\n❌ 配置保存失败(磁盘空间不足?): {e}')
             raise
 
         return config_path
@@ -462,7 +462,7 @@ class EnvironmentChecker:
 def check_ci_environment(config_path=None):
     """CI/CD 环境验证 - 检测常见低级配置错误
 
-    专门用于 GitHub Actions 等CI 环境中，快速验证环境是否合规。
+    专门用于 GitHub Actions 等CI 环境中,快速验证环境是否合规.
     返回码: 0 = 合规, 1 = 存在问题
     """
     import sys
@@ -478,7 +478,7 @@ def check_ci_environment(config_path=None):
         runtime_path = Path(__file__).parent.parent / 'config' / 'runtime.json'
 
     if not runtime_path.exists():
-        warnings.append(f"runtime.json 不存在 (CI 使用 dry-run 模式，可忽略)")
+        warnings.append(f"runtime.json 不存在 (CI 使用 dry-run 模式,可忽略)")
     # CI 环境不需要检查配置文件内容 - 使用 dry-run 模式验证框架
 
     # 2. 检查关键工具是否安装
@@ -507,7 +507,7 @@ def check_ci_environment(config_path=None):
 
     print("=" * 60)
 
-    # 返回码：有问题则返回 1
+    # 返回码:有问题则返回 1
     return 1 if errors else 0
 
 
@@ -524,11 +524,11 @@ def main():
     p.add_argument('-v', '--verbose', action='store_true', help='详细输出')
     args = p.parse_args()
 
-    # CI 模式：快速验证环境合规性
+    # CI 模式:快速验证环境合规性
     if args.ci:
         sys.exit(check_ci_environment())
 
-    # 正常模式：收集环境信息
+    # 正常模式:收集环境信息
     checker = EnvironmentChecker(mode=args.mode, verbose=args.verbose)
     checker.run()
     if args.report:

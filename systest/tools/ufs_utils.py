@@ -398,32 +398,48 @@ class UFSDevice:
     def _find_ufs_health_dir(self) -> Optional[Path]:
         """查找 UFS 健康信息目录
         
-        根据当前设备路径匹配对应的健康目录，避免多设备场景读错信息
+        优化策略：
+        1. 优先从设备路径直接推导 sysfs 路径（高效）
+        2. 回退到遍历匹配（兼容多设备场景）
         """
         # 从设备路径提取设备名（如 /dev/sda → sda）
         device_name = Path(self.device_path).name
         
-        # 典型路径：/sys/class/ufs_device/ufsX/health_descriptor/
+        # 策略 1: 直接推导 sysfs 路径（高效）
+        # /dev/sda → /sys/block/sda/device/ → 查找 ufs 相关路径
+        sys_block = Path(f'/sys/block/{device_name}')
+        if sys_block.exists():
+            # 向上查找 driver
+            for _ in range(5):
+                driver_link = sys_block / 'device' / 'driver'
+                if driver_link.is_symlink():
+                    driver_name = os.readlink(driver_link)
+                    if 'ufs' in driver_name.lower() or 'ufshcd' in driver_name.lower():
+                        # 找到 UFS 驱动，尝试定位 health_descriptor
+                        # 典型路径：/sys/class/ufs_device/ufsX/health_descriptor/
+                        ufs_class = Path('/sys/class/ufs_device')
+                        if ufs_class.exists():
+                            for ufs_dir in ufs_class.iterdir():
+                                health_dir = ufs_dir / 'health_descriptor'
+                                if health_dir.exists():
+                                    self.logger.debug(f"✅ 直接推导找到健康目录：{health_dir}")
+                                    return health_dir
+        
+        # 策略 2: 回退到遍历匹配（兼容多设备场景）
+        self.logger.debug(f"⚠️  直接推导失败，回退到遍历匹配...")
         for base in [Path('/sys/class/ufs_device'), Path('/sys/bus/platform/drivers/ufs')]:
             if base.exists():
                 for ufs_dir in base.iterdir():
-                    # 检查这个 UFS 设备是否对应我们的目标设备
-                    # 通过检查 uevent 或 dev 文件来匹配
                     try:
-                        # 方法 1：检查 uevent 中的 DEVNAME
                         uevent_file = ufs_dir / 'uevent'
                         if uevent_file.exists():
-                            try:
-                                with open(uevent_file, 'r') as f:
-                                    uevent_content = f.read()
-                                    # 检查多种格式
-                                    if f'DEVNAME={device_name}' in uevent_content or f'DEVICE=/{device_name}' in uevent_content:
-                                        health_dir = ufs_dir / 'health_descriptor'
-                                        if health_dir.exists():
-                                            self.logger.debug(f"找到匹配的健康目录：{health_dir}")
-                                            return health_dir
-                            except Exception:
-                                pass
+                            with open(uevent_file, 'r') as f:
+                                uevent_content = f.read()
+                                if f'DEVNAME={device_name}' in uevent_content or f'DEVICE=/{device_name}' in uevent_content:
+                                    health_dir = ufs_dir / 'health_descriptor'
+                                    if health_dir.exists():
+                                        self.logger.debug(f"✅ 遍历匹配找到健康目录：{health_dir}")
+                                        return health_dir
                     except Exception:
                         pass
                     

@@ -89,6 +89,13 @@ class ResultCollector:
                     if log_src.exists():
                         log_size = log_src.stat().st_size
                         log_dst = test_dir / f"{result['name']}.log"
+                        
+                        # 大文件复制进度提示
+                        if log_size > 100 * 1024 * 1024:  # > 100MB
+                            logger.info(f"📄 开始复制大日志文件：{result['name']} ({log_size / 1024 / 1024:.1f} MB)")
+                            logger.info(f"   目标：{log_dst}")
+                        
+                        log_dst = test_dir / f"{result['name']}.log"
                         shutil.copy2(log_src, log_dst)
                         logger.debug(f"📄 日志已复制：{result['name']} ({log_size / 1024 / 1024:.1f} MB)")
                 except Exception as e:
