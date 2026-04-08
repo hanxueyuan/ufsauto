@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-测试执行引擎 - Test Runner
-负责加载测试套件、执行测试用例、收集结果
+Test Execution Engine - Test Runner
+Responsible for loading test suites, executing test cases, and collecting results.
 
-测试状态定义:
-    PASS  - 测试完成,数据采集成功。对于性能测试,指标是否达标通过 annotations 记录。
-    FAIL  - 验证不通过。用于功能测试(如数据校验失败)。性能测试一般不产生 FAIL。
-    ERROR - 测试执行过程中发生异常(FIO crash、IO error 等)。
-    SKIP  - 前置条件不满足,测试未执行(设备不存在、空间不足、工具未安装等)。
-    ABORT - 测试被中断或超时(用户 Ctrl+C、超时 kill)。
+Test Status Definitions:
+    PASS  - Test completed, data collection successful. For performance tests,
+            whether metrics meet thresholds is recorded via annotations.
+    FAIL  - Validation failed. Used for functional tests (e.g., data verification failures).
+            Performance tests generally do not produce FAIL.
+    ERROR - Exception occurred during test execution (FIO crash, IO error, etc.).
+    SKIP  - Preconditions not met, test not executed (device missing, insufficient space,
+            tools not installed, etc.).
+    ABORT - Test interrupted or timed out (user Ctrl+C, timeout kill).
 """
 import logging
 import os
@@ -21,48 +24,49 @@ import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
 logger = logging.getLogger(__name__)
 
-# 性能阈值常量
-PERFORMANCE_THRESHOLD = 0.9  # 性能达标阈值（90%）
+# Performance threshold constant
+PERFORMANCE_THRESHOLD = 0.9  # Performance pass threshold (90%)
 
 
 class TestAborted(Exception):
-    """测试被中断"""
+    """Test was aborted"""
     pass
 
 
 class FailStop(Exception):
     """
-    Fail-Stop:立刻终止当前 case 的后续逻辑。
+    Fail-Stop: Immediately terminate the current test case and stop the suite.
 
-    在 execute() 或 validate() 中 raise FailStop("原因") 即可。
-    case 状态变为 FAIL,suite 也会停下来(由 TestRunner 处理)。
+    Raise FailStop("reason") in execute() or validate() to trigger.
+    The case status becomes FAIL, and the suite will also stop (handled by TestRunner).
 
-    典型场景:设备返回 IO error、数据严重损坏、继续跑有风险。
+    Typical scenarios: Device returns IO error, severe data corruption, risk in continuing.
     """
     pass
 
 
 class TestCase:
     """
-    测试用例基类
+    Base test case class.
 
-    Failure 处理方式:
+    Failure handling modes:
 
-    1. Fail-Continue(软失败):
-       在 execute/validate 中用 self.record_failure() 记录失败,但继续执行后续逻辑。
-       case 跑完后,如果有任何 failure 记录,最终状态为 FAIL。
-       suite 继续跑下一个 case。
+    1. Fail-Continue (soft failure):
+       Use self.record_failure() in execute/validate to record failures, but continue
+       executing subsequent logic. After the case completes, if any failures were recorded,
+       the final status becomes FAIL. The suite continues to the next case.
 
-    2. Fail-Stop(硬失败):
-       在 execute/validate 中 raise FailStop("原因")。
-       case 立刻停止,最终状态为 FAIL。
-       suite 也停下来(不再跑后续 case)。
+    2. Fail-Stop (hard failure):
+       Raise FailStop("reason") in execute/validate.
+       Execution stops immediately, final status is FAIL.
+       The suite also stops (no more cases run).
     """
 
     name: str = "base_test"
-    description: str = "基础测试用例"
+    description: str = "Base test case"
 
     def __init__(self, device: str = '/dev/sda', test_dir: Path = None, verbose: bool = False, logger=None):
         self._failures: List[Dict[str, Any]] = []
@@ -70,49 +74,51 @@ class TestCase:
         self.test_dir = test_dir
         self.verbose = verbose
         self.logger = logger or logging.getLogger(__name__)
-        # 健康状态监控
+        # Health monitoring
         self._pre_test_health = None
-        self._post_test_health = None  # 在 setup() 中初始化
+        self._post_test_health = None  # Recorded before validate() in run() method
+        # Test file path (set by subclass in __init__)
+        self.test_file: Optional[Path] = None
 
-        # 如果测试目录已指定,确保它存在
+        # If test directory is specified, ensure it exists
         if self.test_dir and not self.test_dir.exists():
             self.test_dir.mkdir(parents=True, exist_ok=True)
+
     def get_test_file_path(self, name: str) -> Path:
-        """获取测试文件路径，统一放在全局测试目录下
+        """Get test file path, unified under test directory.
 
         Args:
-            name: 测试文件名称 (如 "seq_read")
+            name: Test file name (e.g., "seq_read")
 
         Returns:
-            Path: 测试文件路径
+            Path: Test file path
 
         Raises:
-            RuntimeError: 当测试文件路径不在测试目录内时抛出
+            RuntimeError: Raised when test_dir is not specified
         """
-        if self.test_dir:
-            test_file = self.test_dir / f"ufs_test_{name}"
-            # 验证路径在 test_dir 下（防止路径遍历）
-            try:
-                test_file.resolve().relative_to(self.test_dir.resolve())
-            except ValueError:
-                raise RuntimeError(f"测试文件路径不在测试目录内：{test_file}")
-            return test_file
-        else:
-            # 回退到 /tmp
-            return Path(f'/tmp/ufs_test_{name}')
+        if not self.test_dir:
+            raise RuntimeError(f"Test directory not specified, cannot create test file: {name}")
+
+        test_file = self.test_dir / f"ufs_test_{name}"
+        # Verify path is under test_dir (prevent path traversal)
+        try:
+            test_file.resolve().relative_to(self.test_dir.resolve())
+        except ValueError:
+            raise RuntimeError(f"Test file path not within test directory: {test_file}")
+        return test_file
 
     def record_failure(self, check: str, expected: str, actual: str, reason: str = ''):
         """
-        记录一个 Fail-Continue 失败(软失败)。
+        Record a Fail-Continue failure (soft failure).
 
-        调用后 case 继续执行,但最终状态会变为 FAIL。
-        所有 failure 记录会出现在结果的 'failures' 字段中。
+        After calling, the case continues execution but final status becomes FAIL.
+        All failure records appear in the result's 'failures' field.
 
         Args:
-            check: 检查项名称(如 "Pattern A 数据校验")
-            expected: 期望值
-            actual: 实际值
-            reason: 附加说明(可选)
+            check: Check item name (e.g., "Pattern A Data Verification")
+            expected: Expected value
+            actual: Actual value
+            reason: Additional explanation (optional)
         """
         failure = {
             'check': check,
@@ -123,153 +129,157 @@ class TestCase:
         }
         self._failures.append(failure)
         self.logger.warning(
-            f"❌ [Fail-Continue] {check}: 期望 {expected}, 实际 {actual}"
+            f"[Fail-Continue] {check}: Expected {expected}, Actual {actual}"
             + (f" ({reason})" if reason else "")
         )
 
     @property
     def has_failures(self) -> bool:
-        """是否有 Fail-Continue 记录"""
+        """Whether there are Fail-Continue records"""
         return len(self._failures) > 0
 
     def setup(self) -> bool:
-        """测试前准备。返回 False 则测试状态为 SKIP。"""
+        """Pre-test setup. Return False for SKIP status."""
         self.logger.debug(f"Setup: {self.name}")
 
-        # 自动记录健康基线(Postcondition 对比用)
+        # Automatically record health baseline (for Postcondition comparison)
         try:
             from tools.ufs_utils import UFSDevice
             ufs = UFSDevice(self.device, logger=self.logger)
             self._pre_test_health = ufs.get_health_status()
-            self.logger.debug(f"📊 记录健康基线: {self._pre_test_health.get('status', 'Unknown')}")
+            self.logger.debug(f"Recorded health baseline: {self._pre_test_health.get('status', 'Unknown')}")
         except Exception as e:
-            self.logger.warning(f"⚠️  健康状态记录失败: {type(e).__name__}: {e}")
+            self.logger.warning(f"Health status recording failed: {type(e).__name__}: {e}")
             self._pre_test_health = None
 
         return True
 
     def execute(self) -> Dict[str, Any]:
-        """执行测试逻辑"""
-        raise NotImplementedError("子类必须实现 execute 方法")
+        """Execute test logic"""
+        raise NotImplementedError("Subclasses must implement the execute method")
 
     def validate(self, result: Dict[str, Any]) -> bool:
         """
-        验证结果。
+        Validate results.
 
-        对于性能测试:建议永远返回 True,指标达标情况通过 result['annotations'] 记录。
-        对于功能测试:
-          - Fail-Continue:用 self.record_failure() 记录失败,返回 True 让流程走完。
-            框架会根据 self.has_failures 自动将最终状态设为 FAIL。
-          - Fail-Stop:raise FailStop("原因") 立刻终止。
-          - 也可以直接返回 False(等效于 Fail-Continue 只有一个失败项)。
+        For performance tests: Recommend always returning True; metric compliance
+        is recorded via result['annotations'].
 
-        Postcondition 检查(硬件可靠性验证)应在子类的 validate() 末尾调用
-        self._check_postcondition() 方法。
+        For functional tests:
+          - Fail-Continue: Use self.record_failure() to record failures, return True
+            to let the flow complete. Framework automatically sets final status to FAIL
+            based on self.has_failures.
+          - Fail-Stop: Raise FailStop("reason") to terminate immediately.
+          - Or directly return False (equivalent to Fail-Continue with one failure).
+
+        Postcondition checks (hardware reliability validation) should be called at
+        the end of subclass validate() via self._check_postcondition().
         """
-        raise NotImplementedError("子类必须实现 validate 方法")
+        raise NotImplementedError("Subclasses must implement the validate method")
 
     def _check_postcondition(self) -> bool:
         """
-        Postcondition 检查 - 硬件可靠性验证
+        Postcondition check - Hardware reliability validation.
 
-        检查测试前后设备健康状态变化,确保无硬件损伤。
-        子类可在 validate() 末尾调用此方法。
+        Check device health status changes before and after test to ensure no
+        hardware damage. Subclasses can call this method at the end of validate().
 
         Returns:
-            bool: 检查通过返回 True,有硬件损伤记录 failure 但返回 True(让框架处理)
+            bool: True if check passes; records failure but returns True if
+                  hardware damage detected (let framework handle it)
         """
         if not self._pre_test_health or not self._post_test_health:
-            self.logger.warning("⚠️  Postcondition 检查跳过:健康状态数据不完整")
+            self.logger.warning("Postcondition check skipped: Health status data incomplete")
             return True
 
-        # 检查健康状态恶化
+        # Check health status degradation
         pre_status = self._pre_test_health.get('status', 'OK')
         post_status = self._post_test_health.get('status', 'OK')
 
         if pre_status == 'OK' and post_status != 'OK':
             self.record_failure(
-                "设备健康状态",
+                "Device Health Status",
                 "OK",
                 post_status,
-                f"测试后设备健康状态恶化"
+                "Device health status degraded after test"
             )
 
-        # 检查坏块增加(需要具体的坏块计数逻辑)
-        # 注意:当前 ufs_utils.py 的 get_health_status() 返回简化数据
-        # 实际项目中需要从 SMART 或 UFS 描述符读取具体坏块数
+        # Check bad block increase (requires specific bad block counting logic)
+        # Note: Current ufs_utils.py get_health_status() returns simplified data
+        # Real projects need to read specific bad block counts from SMART or UFS descriptors
         pre_warning = self._pre_test_health.get('critical_warning', 0)
         post_warning = self._post_test_health.get('critical_warning', 0)
 
         if post_warning > pre_warning:
             self.record_failure(
-                "严重警告标志",
+                "Critical Warning Flag",
                 f"{pre_warning}",
                 f"{post_warning}",
-                "设备出现新的严重警告"
+                "Device has new critical warnings"
             )
 
-        # 检查预 EOL 状态变化
+        # Check pre-EOL status change
         pre_eol = self._pre_test_health.get('pre_eol_info', '0x00')
         post_eol = self._post_test_health.get('pre_eol_info', '0x00')
 
         if pre_eol == '0x00' and post_eol != '0x00':
             self.record_failure(
-                "预寿命结束状态",
-                "正常",
-                f"EOL 警告: {post_eol}",
-                "设备接近寿命终点"
+                "Pre-EOL Status",
+                "Normal",
+                f"EOL Warning: {post_eol}",
+                "Device approaching end of life"
             )
 
-        self.logger.info("✅ Postcondition 检查完成")
+        self.logger.info("Postcondition check completed")
         return True
 
     def teardown(self) -> bool:
-        """测试后清理"""
+        """Post-test cleanup"""
         self.logger.debug(f"Teardown: {self.name}")
 
-        # 自动清理测试文件
+        # Auto cleanup test file
         test_file = getattr(self, 'test_file', None)
         if test_file and isinstance(test_file, Path):
             if test_file.exists():
                 try:
                     file_size = self.test_file.stat().st_size
                     self.test_file.unlink()
-                    self.logger.debug(f"🧹 已清理测试文件：{self.test_file} ({file_size / 1024 / 1024:.1f} MB)")
+                    self.logger.debug(f"Cleaned up test file: {self.test_file} ({file_size / 1024 / 1024:.1f} MB)")
                 except Exception as e:
-                    self.logger.warning(f"⚠️  清理测试文件失败：{e}")
-                    # 尝试获取文件大小并提醒用户
+                    self.logger.warning(f"Test file cleanup failed: {e}")
+                    # Try to get file size and notify user
                     if self.test_file.exists():
                         try:
                             file_size = self.test_file.stat().st_size
-                            self.logger.warning(f"⚠️  测试文件未删除：{self.test_file} ({file_size / 1024 / 1024:.1f} MB)")
+                            self.logger.warning(f"Test file not removed: {self.test_file} ({file_size / 1024 / 1024:.1f} MB)")
                             if file_size > 100 * 1024 * 1024:  # > 100MB
-                                self.logger.warning(f"💡 文件较大，请手动删除以释放空间：rm {self.test_file}")
+                                self.logger.warning(f"File is large, please delete manually: rm {self.test_file}")
                             else:
-                                self.logger.debug(f"💡 文件较小，可手动删除：rm {self.test_file}")
+                                self.logger.debug(f"File is small, can delete manually: rm {self.test_file}")
                         except Exception as stat_error:
-                            self.logger.warning(f"⚠️  无法获取文件大小（可能已被删除或锁定）: {stat_error}")
-                            self.logger.warning(f"💡 请检查文件状态：ls -lh {self.test_file}")
+                            self.logger.warning(f"Unable to get file size (may be deleted or locked): {stat_error}")
+                            self.logger.warning(f"Check file status: ls -lh {self.test_file}")
 
     def run(self) -> Dict[str, Any]:
-        """完整执行流程"""
+        """Complete execution flow"""
         self.start_time = datetime.now()
-        self._failures = []  # 重置 failure 收集器
-        self.logger.info(f"开始执行测试:{self.name}")
+        self._failures = []  # Reset failure collector
+        self.logger.info(f"Starting test: {self.name}")
 
-        # 注册信号处理,捕获中断
+        # Register signal handler for interruption
         original_handler = signal.getsignal(signal.SIGINT)
         def _abort_handler(signum, frame):
-            raise TestAborted("测试被用户中断 (SIGINT)")
+            raise TestAborted("Test interrupted by user (SIGINT)")
 
         try:
             signal.signal(signal.SIGINT, _abort_handler)
 
             # Setup
-            self.logger.debug("执行 Setup...")
+            self.logger.debug("Executing setup...")
             if not self.setup():
                 self.end_time = datetime.now()
                 duration = (self.end_time - self.start_time).total_seconds()
-                self.logger.warning(f"前置条件不满足,跳过测试:{self.name}")
+                self.logger.warning(f"Preconditions not met, skipping test: {self.name}")
                 return {
                     'name': self.name,
                     'status': 'SKIP',
@@ -279,39 +289,50 @@ class TestCase:
                 }
 
             # Execute
-            self.logger.debug("执行测试逻辑...")
+            self.logger.debug("Executing test logic...")
             result = self.execute()
 
             # Validate
-            self.logger.debug("验证结果...")
+            self.logger.debug("Validating results...")
+
+            # Record post-test health status before validate (for Postcondition comparison)
+            try:
+                from tools.ufs_utils import UFSDevice
+                ufs = UFSDevice(self.device, logger=self.logger)
+                self._post_test_health = ufs.get_health_status()
+                self.logger.debug(f"Recorded post-test health status: {self._post_test_health.get('status', 'Unknown')}")
+            except Exception as e:
+                self.logger.warning(f"Post-test health recording failed: {type(e).__name__}: {e}")
+                self._post_test_health = None
+
             passed = self.validate(result)
 
             self.end_time = datetime.now()
             duration = (self.end_time - self.start_time).total_seconds()
 
-            # 框架层统一判断 PASS/FAIL
-            # 规则:
-            # 1. validate 返回 False → FAIL
-            # 2. 有 Fail-Continue 记录 → FAIL
-            # 3. 其他情况 → PASS
+            # Framework-level PASS/FAIL determination
+            # Rules:
+            # 1. validate returns False -> FAIL
+            # 2. Has Fail-Continue records -> FAIL
+            # 3. Otherwise -> PASS
             should_fail = False
             fail_reasons = []
-            
+
             if not passed:
                 should_fail = True
-                fail_reasons.append("验证未通过")
-            
+                fail_reasons.append("Validation failed")
+
             if self.has_failures:
                 should_fail = True
-                fail_reasons.append(f"有 {len(self._failures)} 个 Fail-Continue 项")
-            
+                fail_reasons.append(f"Has {len(self._failures)} Fail-Continue items")
+
             if should_fail:
                 status = 'FAIL'
-                self.logger.info(f"测试完成:{self.name} - ❌ FAIL ({duration:.2f}s)")
-                self.logger.info(f"  失败原因：{', '.join(fail_reasons)}")
+                self.logger.info(f"Test completed: {self.name} - FAIL ({duration:.2f}s)")
+                self.logger.info(f"  Failure reasons: {', '.join(fail_reasons)}")
             else:
                 status = 'PASS'
-                self.logger.info(f"测试完成:{self.name} - ✅ PASS ({duration:.2f}s)")
+                self.logger.info(f"Test completed: {self.name} - PASS ({duration:.2f}s)")
 
             run_result = {
                 'name': self.name,
@@ -321,18 +342,18 @@ class TestCase:
                 'timestamp': self.start_time.isoformat()
             }
 
-            # 附带 Fail-Continue 记录
+            # Attach Fail-Continue records
             if self._failures:
                 run_result['failures'] = self._failures
-                self.logger.info(f"  共 {len(self._failures)} 个失败项(Fail-Continue)")
+                self.logger.info(f"  Total {len(self._failures)} Fail-Continue items")
 
             return run_result
 
         except FailStop as e:
-            # Fail-Stop:立刻终止,状态为 FAIL
+            # Fail-Stop: Immediate termination, status is FAIL
             self.end_time = datetime.now()
             duration = (self.end_time - self.start_time).total_seconds()
-            self.logger.error(f"Fail-Stop 触发,测试终止:{self.name} - {e}")
+            self.logger.error(f"Fail-Stop triggered, test terminated: {self.name} - {e}")
             run_result = {
                 'name': self.name,
                 'status': 'FAIL',
@@ -348,7 +369,7 @@ class TestCase:
         except TestAborted:
             self.end_time = datetime.now()
             duration = (self.end_time - self.start_time).total_seconds()
-            self.logger.warning(f"测试被中断:{self.name} ({duration:.2f}s)")
+            self.logger.warning(f"Test interrupted: {self.name} ({duration:.2f}s)")
             return {
                 'name': self.name,
                 'status': 'ABORT',
@@ -360,7 +381,7 @@ class TestCase:
         except KeyboardInterrupt:
             self.end_time = datetime.now()
             duration = (self.end_time - self.start_time).total_seconds()
-            self.logger.warning(f"测试被中断:{self.name} ({duration:.2f}s)")
+            self.logger.warning(f"Test interrupted: {self.name} ({duration:.2f}s)")
             return {
                 'name': self.name,
                 'status': 'ABORT',
@@ -372,7 +393,7 @@ class TestCase:
         except subprocess.TimeoutExpired as e:
             self.end_time = datetime.now()
             duration = (self.end_time - self.start_time).total_seconds()
-            self.logger.error(f"测试超时:{self.name} ({duration:.2f}s)")
+            self.logger.error(f"Test timeout: {self.name} ({duration:.2f}s)")
             return {
                 'name': self.name,
                 'status': 'ABORT',
@@ -384,7 +405,7 @@ class TestCase:
         except Exception as e:
             self.end_time = datetime.now()
             duration = (self.end_time - self.start_time).total_seconds()
-            self.logger.error(f"测试执行失败 {self.name}: {e}", exc_info=True)
+            self.logger.error(f"Test execution failed {self.name}: {e}", exc_info=True)
             return {
                 'name': self.name,
                 'status': 'ERROR',
@@ -398,40 +419,40 @@ class TestCase:
 
 
 class TestRunner:
-    """测试执行引擎"""
+    """Test execution engine"""
 
     def __init__(self, device: str = None, test_dir: str = None, verbose: bool = False, dry_run: bool = False,
                  ci_mode: bool = False, quick_factor: float = 1.0):
-        self.device_override = device  # 用户手动指定
-        self.test_dir_override = test_dir  # 用户手动指定
+        self.device_override = device  # User manually specified
+        self.test_dir_override = test_dir  # User manually specified
         self.verbose = verbose
         self.dry_run = dry_run
-        self.ci_mode = ci_mode  # CI/CD 环境模式
-        self.quick_factor = quick_factor  # 快速模式因子 (0.5 = 时间减半)
+        self.ci_mode = ci_mode  # CI/CD environment mode
+        self.quick_factor = quick_factor  # Quick mode factor (0.5 = time halved)
         self.suites_dir = Path(__file__).parent.parent / 'suites'
         self.config_dir = Path(__file__).parent.parent / 'config'
-        self.test_dir = None  # 最终确定的测试目录
-        self.device = None  # 最终确定的设备路径
+        self.test_dir = None  # Final determined test directory
+        self.device = None  # Final determined device path
 
-        # === Dry-run 模式：使用临时参数验证框架 ===
+        # === Dry-run mode: Use temporary parameters to validate framework ===
         if self.dry_run:
-            logger.info("🧪 [DRY-RUN] 使用临时参数验证框架")
-            self.device = '/dev/null'  # 避免真实设备
+            logger.info("[DRY-RUN] Validating framework with temporary parameters")
+            self.device = '/dev/sda'  # Use standard device path (validation requires valid format)
             self.test_dir = Path('/tmp/systest_dryrun')
             self.test_dir.mkdir(parents=True, exist_ok=True)
-            logger.info(f"  设备路径: {self.device} (临时)")
-            logger.info(f"  测试目录: {self.test_dir} (临时)")
-            # 跳过 CI 环境验证（dry-run 不需要真实配置）
+            logger.info(f"  Device path: {self.device} (temporary)")
+            logger.info(f"  Test directory: {self.test_dir} (temporary)")
+            # Skip CI environment validation (dry-run doesn't need real config)
             self.suites = self._load_suites()
             return
 
-        # === 生产模式：使用真实参数 ===
-        # 加载运行时配置
+        # === Production mode: Use real parameters ===
+        # Load runtime configuration
         self.runtime_config = self._load_runtime_config()
 
-        # 每次运行都自动做一次环境检测，确保配置是最新的
-        # 如果检测结果变化，自动更新 runtime.json
-        # 延迟导入，避免循环依赖
+        # Auto-detect environment every run to ensure config is up-to-date
+        # If results change, automatically update runtime.json
+        # Delayed import to avoid circular dependency
         import importlib.util
         spec = importlib.util.spec_from_file_location("check_env", str(Path(__file__).parent.parent / 'bin' / 'check_env.py'))
         check_env_module = importlib.util.module_from_spec(spec)
@@ -440,108 +461,108 @@ class TestRunner:
         checker = EnvironmentChecker(mode='deploy', verbose=False, config_dir=self.config_dir)
         checker.collect_storage()
         checker.collect_test_directory()
-        
-        # 更新 runtime_config 用最新检测结果
+
+        # Update runtime_config with latest detection results
         if checker.runtime_config.get('device'):
             self.runtime_config['device'] = checker.runtime_config['device']
         if checker.runtime_config.get('test_dir'):
             self.runtime_config['test_dir'] = checker.runtime_config['test_dir']
-        
-        # 检测完成后自动保存更新配置
+
+        # Auto-save updated configuration after detection
         try:
             config_path = self.config_dir / 'runtime.json'
-            # 保留原有其他字段（system、toolchain 等），只更新设备和目录
+            # Preserve other fields (system, toolchain, etc.), only update device and directory
             merged = {**self.runtime_config, **checker.runtime_config}
             merged['env_checked_at'] = checker.runtime_config.get('env_checked_at')
             with open(config_path, 'w', encoding='utf-8') as f:
                 json.dump(merged, f, indent=2, ensure_ascii=False)
-            logger.info(f"✅ 配置已自动更新: {config_path} (最新环境检测结果)")
+            logger.info(f"Configuration auto-updated: {config_path} (latest environment detection)")
             self.runtime_config = merged
         except Exception as e:
-            logger.warning(f"⚠️  自动保存配置失败: {e} (继续使用当前检测结果)")
+            logger.warning(f"Auto-save configuration failed: {e} (continuing with current detection)")
 
-        # 确定设备路径：用户指定 > 最新自动检测结果
+        # Determine device path: User specified > Latest auto-detection
         if self.device_override:
             self.device = self.device_override
-            logger.info(f"✅ 设备路径: {self.device} (手动指定)")
+            logger.info(f"Device path: {self.device} (manually specified)")
         elif self.runtime_config.get('device'):
             self.device = self.runtime_config['device']
-            logger.info(f"✅ 设备路径: {self.device} (自动检测)")
+            logger.info(f"Device path: {self.device} (auto-detected)")
         else:
             self.device = '/dev/sda'
-            logger.warning(f"⚠️  自动检测失败，使用默认值: {self.device} (开发板通用)")
+            logger.warning(f"Auto-detection failed, using default: {self.device} (generic for dev board)")
 
-        # 确定测试目录
+        # Determine test directory
         self._resolve_test_dir()
 
-        # CI 环境验证（仅在 CI 模式下执行）
+        # CI environment validation (only in CI mode)
         if self.ci_mode:
             self._validate_ci_environment()
 
-        # 加载测试套件
+        # Load test suites
         self.suites = self._load_suites()
 
     def _load_runtime_config(self) -> Dict[str, Any]:
-        """加载 runtime.json 配置文件"""
+        """Load runtime.json configuration file"""
         config_path = self.config_dir / 'runtime.json'
         if config_path.exists():
             try:
                 with open(config_path, 'r', encoding='utf-8') as f:
                     config = json.load(f)
-                checked_at = config.get('env_checked_at', '未知时间')
-                logger.info(f"📄 已加载配置: {config_path} (环境检查时间: {checked_at})")
+                checked_at = config.get('env_checked_at', 'Unknown')
+                logger.info(f"Loaded configuration: {config_path} (Environment checked at: {checked_at})")
                 return config
             except Exception as e:
-                logger.warning(f"⚠️  配置文件读取失败: {e}")
+                logger.warning(f"Configuration file read failed: {e}")
                 return {}
         else:
-            logger.info(f"ℹ️  配置文件不存在: {config_path} (建议运行 check-env --save-config)")
+            logger.info(f"Configuration file does not exist: {config_path} (recommend running check-env --save-config)")
             return {}
 
     def _resolve_test_dir(self):
-        """确定测试目录：用户指定 > 自动检测 > 回退默认"""
-        # 允许的测试目录前缀（安全白名单）
+        """Determine test directory: User specified > Auto-detected > Fallback default"""
+        # Allowed test directory prefixes (safety whitelist)
         allowed_prefixes = ['/tmp', '/mapdata']
 
-        # 1) 用户手动指定（最高优先级）
+        # 1) User manually specified (highest priority)
         if self.test_dir_override:
             test_dir = Path(self.test_dir_override).absolute()
-            # 验证路径是否在允许的目录内（解析真实路径，防止符号链接攻击）
+            # Verify path is within allowed directories (resolve real path, prevent symlink attacks)
             try:
                 real_path = test_dir.resolve()
-                # 再次验证 resolve 后的真实路径也在允许目录内
+                # Verify resolved path is also within allowed directories
                 if not any(str(real_path).startswith(p) for p in allowed_prefixes):
-                    logger.error(f"❌ 测试目录不在允许的范围内：{test_dir} (真实路径：{real_path})")
-                    logger.error(f"💡 允许的目录前缀：{allowed_prefixes}")
-                    raise RuntimeError(f"测试目录必须在以下目录之一：{allowed_prefixes}")
+                    logger.error(f"Test directory not within allowed paths: {test_dir} (real path: {real_path})")
+                    logger.error(f"Allowed directory prefixes: {allowed_prefixes}")
+                    raise RuntimeError(f"Test directory must be within: {allowed_prefixes}")
             except FileNotFoundError:
-                # 目录不存在，resolve 会失败，先创建目录再验证
+                # Directory doesn't exist, resolve fails, create first then verify
                 try:
                     test_dir.mkdir(parents=True, exist_ok=True)
                     real_path = test_dir.resolve()
                     if not any(str(real_path).startswith(p) for p in allowed_prefixes):
-                        logger.error(f"❌ 测试目录不在允许的范围内：{test_dir} (真实路径：{real_path})")
-                        logger.error(f"💡 允许的目录前缀：{allowed_prefixes}")
-                        raise RuntimeError(f"测试目录必须在以下目录之一：{allowed_prefixes}")
+                        logger.error(f"Test directory not within allowed paths: {test_dir} (real path: {real_path})")
+                        logger.error(f"Allowed directory prefixes: {allowed_prefixes}")
+                        raise RuntimeError(f"Test directory must be within: {allowed_prefixes}")
                 except Exception as e:
-                    logger.error(f"❌ 测试目录验证失败：{e}")
+                    logger.error(f"Test directory verification failed: {e}")
                     raise
             except Exception as e:
-                logger.error(f"❌ 测试目录验证失败：{e}")
+                logger.error(f"Test directory verification failed: {e}")
                 raise
             self.test_dir = test_dir
             self.test_dir.mkdir(parents=True, exist_ok=True)
-            logger.info(f"✅ 测试目录：{self.test_dir} (手动指定)")
+            logger.info(f"Test directory: {self.test_dir} (manually specified)")
             return
 
-        # 2) 从自动检测结果读取
+        # 2) From auto-detection result
         if self.runtime_config.get("test_dir"):
             self.test_dir = Path(self.runtime_config["test_dir"]).absolute()
             self.test_dir.mkdir(parents=True, exist_ok=True)
-            logger.info(f"✅ 测试目录：{self.test_dir} (自动检测)")
+            logger.info(f"Test directory: {self.test_dir} (auto-detected)")
             return
 
-        # 3) 回退策略（顺序尝试，确保至少一个成功）
+        # 3) Fallback strategy (try in order, ensure at least one succeeds)
         fallback_dirs = [
             Path('/mapdata/ufs_test').absolute(),
             Path('/tmp/ufs_test').absolute(),
@@ -550,88 +571,89 @@ class TestRunner:
             try:
                 fallback.mkdir(parents=True, exist_ok=True)
                 self.test_dir = fallback
-                logger.warning(f"⚠️  回退到默认目录：{self.test_dir}")
+                logger.warning(f"Falling back to default directory: {self.test_dir}")
                 return
             except Exception:
                 continue
-        
-        # 所有回退都失败（极罕见）
+
+        # All fallbacks failed (extremely rare)
         try:
             self.test_dir = Path('/tmp/ufs_test').absolute()
             self.test_dir.mkdir(parents=True, exist_ok=True)
-            logger.error(f"❌ 所有回退目录创建失败，强制使用：{self.test_dir}")
+            logger.error(f"All fallback directories failed, forcing: {self.test_dir}")
         except Exception as e:
-            logger.critical(f"❌ 测试目录创建完全失败：{e}")
-            logger.critical(f"💡 可能原因：磁盘空间已满、/tmp 目录不可写、或权限不足")
-            logger.critical(f"💡 请检查：df -h /tmp && ls -ld /tmp")
-            raise RuntimeError(f"无法创建任何测试目录：{e}")
-        
-        # 检查可用空间
+            logger.critical(f"Test directory creation completely failed: {e}")
+            logger.critical(f"Possible causes: Disk full, /tmp not writable, or insufficient permissions")
+            logger.critical(f"Check: df -h /tmp && ls -ld /tmp")
+            raise RuntimeError(f"Cannot create any test directory: {e}")
+
+        # Check available space
         try:
             import shutil
             stat = shutil.disk_usage(self.test_dir)
             free_gb = stat.free / (1024 ** 3)
             if free_gb < 2:
-                logger.warning(f"⚠️  测试目录可用空间不足：{free_gb:.1f} GB (推荐≥2GB)")
-                logger.warning(f"💡 请清理空间或指定 --test-dir 到其他目录")
-                logger.warning(f"💡 查看磁盘使用：df -h {self.test_dir}")
+                logger.warning(f"Insufficient space in test directory: {free_gb:.1f} GB (recommended >= 2GB)")
+                logger.warning(f"Please free up space or specify --test-dir to another directory")
+                logger.warning(f"Check disk usage: df -h {self.test_dir}")
             else:
-                logger.debug(f"✅ 测试目录可用空间：{free_gb:.1f} GB")
+                logger.debug(f"Test directory available space: {free_gb:.1f} GB")
         except Exception as e:
-            logger.warning(f"⚠️  无法检查磁盘空间：{e}")
-    def _validate_ci_environment(self):
-        """CI/CD 环境验证 - 检测常见低级配置错误
+            logger.warning(f"Unable to check disk space: {e}")
 
-        检查项:
-        1. 测试目录是否回退到 /tmp (CI 应手动指定)
-        2. 设备路径是否为默认值 (CI 应手动指定 --device 或运行 check-env --save-config)
-        3. runtime.json 是否存在 (CI 应有配置文件)
+    def _validate_ci_environment(self):
+        """CI/CD environment validation - Detect common configuration errors.
+
+        Checks:
+        1. Whether test directory falls back to /tmp (CI should manually specify)
+        2. Whether device path is default (CI should manually specify --device or run check-env --save-config)
+        3. Whether runtime.json exists (CI should have config file)
 
         Returns:
-            bool: True = 环境合规, False = 存在问题
+            bool: True = compliant, False = issues exist
         """
         errors = []
         warnings = []
 
-        # 1. 检查测试目录回退
+        # 1. Check test directory fallback
         if self.test_dir == Path('/tmp/ufs_test').absolute():
-            errors.append("测试目录回退到 /tmp (CI 环境应手动指定 --test-dir)")
+            errors.append("Test directory falls back to /tmp (CI should manually specify --test-dir)")
 
-        # 2. 检查设备路径是否为默认值
-        if self.device == '/dev/sda' and not self.device_override and not self.runtime_config.get('device'): 
-            errors.append("设备路径为默认值 /dev/sda (CI 环境应手动指定 --device 或运行 check-env --save-config)")
+        # 2. Check if device path is default
+        if self.device == '/dev/sda' and not self.device_override and not self.runtime_config.get('device'):
+            errors.append("Device path is default /dev/sda (CI should manually specify --device or run check-env --save-config)")
 
-        # 3. 检查 runtime.json 是否存在
+        # 3. Check if runtime.json exists
         config_path = self.config_dir / 'runtime.json'
         if not config_path.exists():
-            warnings.append("runtime.json 配置文件不存在 (建议运行 check-env --save-config)")
+            warnings.append("runtime.json configuration file missing (recommend running check-env --save-config)")
 
-        # 输出结果
+        # Output results
         if errors:
             logger.error("=" * 60)
-            logger.error("CI 环境验证失败")
+            logger.error("CI Environment Validation Failed")
             logger.error("=" * 60)
             for i, err in enumerate(errors, 1):
                 logger.error(f"  {i}. {err}")
             logger.error("")
-            logger.error("建议修复方案:")
-            logger.error("  1. 在 GitHub Actions 中添加 check-env --save-config 步骤")
-            logger.error("  2. 或手动指定参数: --test-dir=/path --device=/dev/xxx")
+            logger.error("Recommended fixes:")
+            logger.error("  1. Add check-env --save-config step in GitHub Actions")
+            logger.error("  2. Or manually specify parameters: --test-dir=/path --device=/dev/xxx")
             logger.error("=" * 60)
 
-            # CI 模式下抛异常（阻止继续执行）
-            raise RuntimeError("CI 环境验证失败，请检查上述错误并修复")
+            # CI mode raises exception (prevent further execution)
+            raise RuntimeError("CI environment validation failed, please check and fix above errors")
 
         if warnings:
             logger.warning("=" * 60)
-            logger.warning("CI 环境验证警告")
+            logger.warning("CI Environment Validation Warnings")
             logger.warning("=" * 60)
             for i, warn in enumerate(warnings, 1):
                 logger.warning(f"  {i}. {warn}")
             logger.warning("=" * 60)
 
         if not errors and not warnings:
-            logger.info("✅ CI 环境验证通过")
+            logger.info("CI Environment Validation Passed")
 
         return len(errors) == 0
 
@@ -646,17 +668,17 @@ class TestRunner:
             return -2, '', str(e)
 
     def _load_suites(self) -> Dict[str, List[str]]:
-        """加载可用测试套件"""
+        """Load available test suites"""
         suites = {}
 
         if not self.suites_dir.exists():
-            logger.warning(f"测试套件目录不存在:{self.suites_dir}")
+            logger.warning(f"Test suite directory does not exist: {self.suites_dir}")
             return suites
 
         for suite_dir in self.suites_dir.iterdir():
             if suite_dir.is_dir() and not suite_dir.name.startswith('_'):
                 suite_name = suite_dir.name
-                # 支持 test_*.py 和 t_*_*.py 两种命名
+                # Support both test_*.py and t_*_*.py naming
                 test_files = list(suite_dir.glob('*.py'))
                 tests = []
                 for f in test_files:
@@ -664,31 +686,31 @@ class TestRunner:
                     if name.startswith('test_'):
                         tests.append(name.replace('test_', ''))
                     elif name.startswith('t_') and name.count('_') >= 2:
-                        # t_perf_SeqReadBurst_001.py → seq_read_burst_001
+                        # t_perf_SeqReadBurst_001.py -> seq_read_burst_001
                         tests.append(name)
                 suites[suite_name] = tests
 
         return suites
 
     def list_suites(self) -> Dict[str, List[str]]:
-        """列出所有可用测试套件"""
+        """List all available test suites"""
         return self.suites
 
     def run_suite(self, suite_name: str) -> List[Dict[str, Any]]:
-        """执行测试套件"""
+        """Execute test suite"""
         if suite_name not in self.suites:
-            raise ValueError(f"未知测试套件:{suite_name}")
+            raise ValueError(f"Unknown test suite: {suite_name}")
 
-        logger.info(f"执行测试套件:{suite_name}")
+        logger.info(f"Executing test suite: {suite_name}")
 
         results = []
         tests = self.suites[suite_name]
         stopped = False
 
         for i, test_name in enumerate(tests, 1):
-            # 如果之前有 Fail-Stop,后续 case 全部 SKIP
+            # If previous Fail-Stop, SKIP all subsequent cases
             if stopped:
-                logger.warning(f"[{i}/{len(tests)}] 跳过测试(前序 Fail-Stop):{test_name}")
+                logger.warning(f"[{i}/{len(tests)}] Skipping test (previous Fail-Stop): {test_name}")
                 results.append({
                     'name': test_name,
                     'status': 'SKIP',
@@ -697,25 +719,25 @@ class TestRunner:
                 })
                 continue
 
-            logger.info(f"[{i}/{len(tests)}] 执行测试:{test_name}")
+            logger.info(f"[{i}/{len(tests)}] Executing test: {test_name}")
 
             if self.dry_run:
-                # Dry-run 模式：验证测试用例能正确导入和解析参数
-                # 验证内容包括：文件存在、语法正确、类存在、参数解析
+                # Dry-run mode: Validate test case can be properly imported and parsed
+                # Validation includes: file exists, syntax correct, class exists, parameters parse
                 try:
                     import sys
                     suites_dir = Path(__file__).parent.parent / 'suites'
                     if str(suites_dir) not in sys.path:
                         sys.path.insert(0, str(suites_dir))
 
-                    # 导入测试模块（验证文件存在）
+                    # Import test module (verify file exists)
                     if test_name.startswith('t_'):
                         module_path = suites_dir / suite_name / f'{test_name}.py'
                     else:
                         module_path = suites_dir / suite_name / f'test_{test_name}.py'
 
                     if not module_path.exists():
-                        logger.error(f"  ❌ 测试文件不存在: {module_path}")
+                        logger.error(f"  Test file does not exist: {module_path}")
                         results.append({
                             'name': test_name,
                             'status': 'ERROR',
@@ -724,26 +746,29 @@ class TestRunner:
                         })
                         continue
 
-                    # 动态导入（验证语法正确）
+                    # Dynamic import (verify syntax correct)
                     import importlib.util
                     spec = importlib.util.spec_from_file_location(f'{suite_name}.{test_name}', module_path)
                     module = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(module)
 
-                    # 验证 TestCase 类存在
-                    if 'TestCase' not in dir(module):
-                        logger.error(f"  ❌ TestCase 类不存在: {test_name}")
+                    # Verify Test class exists (priority Test, then TestCase fallback)
+                    test_class = getattr(module, 'Test', None)
+                    if not test_class:
+                        test_class = getattr(module, 'TestCase', None)
+                    if not test_class:
+                        logger.error(f"  Test class does not exist: {test_name}")
                         results.append({
                             'name': test_name,
                             'status': 'ERROR',
-                            'reason': 'TestCase class not found',
+                            'reason': 'Test class not found (expected Test or TestCase)',
                             'duration': 0
                         })
                         continue
 
-                    # 创建实例（验证参数解析）
-                    test_instance = module.TestCase(device=self.device, test_dir=self.test_dir)
-                    logger.info(f"  ✅ [DRY-RUN] 测试用例验证通过: {test_instance.__class__.__name__}")
+                    # Create instance (verify parameter parsing)
+                    test_instance = test_class(device=self.device, test_dir=self.test_dir)
+                    logger.info(f"  [DRY-RUN] Test case validation passed: {test_instance.__class__.__name__}")
                     results.append({
                         'name': test_name,
                         'status': 'DRY-RUN-PASS',
@@ -751,7 +776,7 @@ class TestRunner:
                         'duration': 0
                     })
                 except SyntaxError as e:
-                    logger.error(f"  ❌ [DRY-RUN] 语法错误: {e}")
+                    logger.error(f"  [DRY-RUN] Syntax error: {e}")
                     results.append({
                         'name': test_name,
                         'status': 'ERROR',
@@ -759,7 +784,7 @@ class TestRunner:
                         'duration': 0
                     })
                 except Exception as e:
-                    logger.error(f"  ❌ [DRY-RUN] 导入失败: {e}")
+                    logger.error(f"  [DRY-RUN] Import failed: {e}")
                     results.append({
                         'name': test_name,
                         'status': 'ERROR',
@@ -768,14 +793,14 @@ class TestRunner:
                     })
                 continue
 
-            # 动态导入测试用例
+            # Dynamic import test case
             try:
                 import sys
                 suites_dir = Path(__file__).parent.parent / 'suites'
                 if str(suites_dir) not in sys.path:
                     sys.path.insert(0, str(suites_dir))
 
-                # 导入测试模块(支持 test_*.py 和 t_*_*.py)
+                # Import test module (support test_*.py and t_*_*.py)
                 if test_name.startswith('t_'):
                     module_path = suites_dir / suite_name / f'{test_name}.py'
                 else:
@@ -785,42 +810,42 @@ class TestRunner:
                 module = importlib.util.module_from_spec(spec)
                 sys.modules[f'{suite_name}.{test_name}'] = module
                 spec.loader.exec_module(module)
-                # 查找测试类(优先 Test,其次驼峰命名)
+                # Find test class (priority Test, then camelCase naming)
                 test_class = getattr(module, 'Test', None)
                 if not test_class:
                     class_name = ''.join(part.capitalize() for part in test_name.split('_'))
                     test_class = getattr(module, class_name, None)
                 if not test_class:
-                    raise ImportError(f"未找到测试类(Test 或 {class_name})")
+                    raise ImportError(f"Test class not found (Test or {class_name})")
                 test_instance = test_class(
                     device=self.device,
                     test_dir=self.test_dir,
                     verbose=self.verbose,
                     logger=logger
                 )
-                
-                # 快速模式：调整 runtime 参数
+
+                # Quick mode: Adjust runtime parameter
                 if self.quick_factor != 1.0 and hasattr(test_instance, 'runtime'):
                     test_instance.runtime = int(test_instance.runtime * self.quick_factor)
-                    test_instance.logger.info(f"⚡ 快速模式：runtime 调整为 {test_instance.runtime}s")
+                    test_instance.logger.info(f"Quick mode: runtime adjusted to {test_instance.runtime}s")
 
                 result = test_instance.run()
                 results.append(result)
 
-                # 检查是否 Fail-Stop
+                # Check if Fail-Stop
                 if result.get('fail_mode') == 'stop':
-                    logger.error(f"  🛑 Fail-Stop 触发,后续测试将被跳过")
+                    logger.error(f"  Fail-Stop triggered, subsequent tests will be skipped")
                     stopped = True
 
                 status_icons = {
-                    'PASS': '✅', 'FAIL': '❌', 'ERROR': '💥',
-                    'SKIP': '⏭️', 'ABORT': '⏹️'
+                    'PASS': '[PASS]', 'FAIL': '[FAIL]', 'ERROR': '[ERROR]',
+                    'SKIP': '[SKIP]', 'ABORT': '[ABORT]'
                 }
-                icon = status_icons.get(result['status'], '❓')
-                logger.info(f"  {icon} {result['status']} ({result['duration']:.2f}s)")
+                icon = status_icons.get(result['status'], '[UNKNOWN]')
+                logger.info(f"  {result['status']} ({result['duration']:.2f}s)")
 
             except ImportError as e:
-                logger.error(f"无法导入测试用例 {test_name}: {e}")
+                logger.error(f"Unable to import test case {test_name}: {e}")
                 results.append({
                     'name': test_name,
                     'status': 'ERROR',
@@ -828,7 +853,7 @@ class TestRunner:
                     'duration': 0
                 })
             except Exception as e:
-                logger.error(f"测试执行失败 {test_name}: {e}")
+                logger.error(f"Test execution failed {test_name}: {e}")
                 results.append({
                     'name': test_name,
                     'status': 'ERROR',
@@ -836,57 +861,57 @@ class TestRunner:
                     'duration': 0
                 })
 
-        # 套件执行总结
+        # Suite execution summary
         total = len(results)
         passed = sum(1 for r in results if r['status'] == 'PASS' or r['status'] == 'DRY-RUN-PASS')
         failed = sum(1 for r in results if r['status'] == 'FAIL')
         errors = sum(1 for r in results if r['status'] == 'ERROR')
         skipped = sum(1 for r in results if r['status'] == 'SKIP')
         aborted = sum(1 for r in results if r['status'] == 'ABORT')
-        
+
         logger.info("=" * 60)
-        logger.info(f"📊 测试套件执行总结：{suite_name}")
+        logger.info(f"Test Suite Execution Summary: {suite_name}")
         logger.info("=" * 60)
-        logger.info(f"  总计：{total} 个测试用例")
-        logger.info(f"  ✅ PASS:  {passed}")
-        logger.info(f"  ❌ FAIL:  {failed}")
-        logger.info(f"  💥 ERROR: {errors}")
-        logger.info(f"  ⏭️  SKIP:  {skipped}")
-        logger.info(f"  ⏹️  ABORT: {aborted}")
+        logger.info(f"  Total: {total} test cases")
+        logger.info(f"  [PASS]:  {passed}")
+        logger.info(f"  [FAIL]:  {failed}")
+        logger.info(f"  [ERROR]: {errors}")
+        logger.info(f"  [SKIP]:  {skipped}")
+        logger.info(f"  [ABORT]: {aborted}")
         logger.info("-" * 60)
-        
-        # 显示每个测试用例的执行时间
-        logger.info("📋 测试用例执行时间:")
+
+        # Show execution time for each test case
+        logger.info("Test case execution times:")
         for r in results:
             duration = r.get('duration', 0)
             status = r.get('status', 'UNKNOWN')
             name = r.get('name', 'unknown')
             logger.info(f"  {name}: {duration:.2f}s [{status}]")
-        
-        # 判断套件整体是否通过
+
+        # Determine if suite overall passed
         if failed > 0 or errors > 0:
-            suite_status = '❌ FAIL'
-            logger.info(f"📋 套件状态：{suite_status} ({failed + errors} 个测试失败)")
+            suite_status = '[FAIL]'
+            logger.info(f"Suite status: {suite_status} ({failed + errors} tests failed)")
         elif passed > 0:
-            suite_status = '✅ PASS'
-            logger.info(f"📋 套件状态：{suite_status} (所有测试通过)")
+            suite_status = '[PASS]'
+            logger.info(f"Suite status: {suite_status} (All tests passed)")
         else:
-            suite_status = '⚠️  SKIP'
-            logger.info(f"📋 套件状态：{suite_status} (所有测试跳过)")
-        
+            suite_status = '[SKIP]'
+            logger.info(f"Suite status: {suite_status} (All tests skipped)")
+
         logger.info("=" * 60)
-        
+
         return results
 
     def run_test(self, test_name: str) -> Dict[str, Any]:
-        """执行单个测试"""
-        # 查找测试用例
+        """Execute single test"""
+        # Find test case
         for suite_name, tests in self.suites.items():
             if test_name in tests:
-                logger.info(f"执行测试:{test_name} (Suite: {suite_name})")
+                logger.info(f"Executing test: {test_name} (Suite: {suite_name})")
                 results = self.run_suite(suite_name)
                 for result in results:
                     if result['name'] == test_name:
                         return result
 
-        raise ValueError(f"未知测试用例:{test_name}")
+        raise ValueError(f"Unknown test case: {test_name}")

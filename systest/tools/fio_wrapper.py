@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-FIO 工具封装层 - FIO Wrapper
+FIO Tool Wrapper - FIO Wrapper
 
-生产级 FIO 测试工具封装，提供：
-- 统一的 FIO 命令构建
-- 结果解析与验证
-- 错误处理与重试
-- 性能指标标准化输出
+Production-grade FIO test tool wrapper providing:
+- Unified FIO command construction
+- Result parsing and validation
+- Error handling and retry
+- Standardized performance metrics output
 
 Usage:
     from tools.fio_wrapper import FIO
-    
+
     fio = FIO()
     result = fio.run_seq_read(
         filename='/dev/ufs0',
@@ -19,7 +19,7 @@ Usage:
         runtime=60,
         bs='128k'
     )
-    print(f"带宽：{result['bandwidth']['value']} {result['bandwidth']['unit']}")
+    print(f"Bandwidth: {result['bandwidth']['value']} {result['bandwidth']['unit']}")
 """
 
 import subprocess
@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 
 class FIOEngine(Enum):
-    """FIO IO 引擎"""
+    """FIO IO engine"""
     SYNC = 'sync'
     LIBAIO = 'libaio'
     IO_URING = 'io_uring'
@@ -43,7 +43,7 @@ class FIOEngine(Enum):
 
 
 class FIORWType(Enum):
-    """FIO 读写模式"""
+    """FIO read/write mode"""
     READ = 'read'
     WRITE = 'write'
     RANDREAD = 'randread'
@@ -55,8 +55,8 @@ class FIORWType(Enum):
 
 @dataclass
 class FIOConfig:
-    """FIO 配置参数"""
-    # 基本参数
+    """FIO configuration parameters"""
+    # Basic parameters
     name: str = 'fio_test'
     filename: str = '/dev/ufs0'
     rw: str = 'read'
@@ -68,143 +68,143 @@ class FIOConfig:
     numjobs: int = 1
     iodepth: int = 1
     group_reporting: bool = True
-    
-    # 高级参数
+
+    # Advanced parameters
     rate_iops: Optional[int] = None
     rate: Optional[int] = None  # MB/s
     thinktime: Optional[int] = None
     ramp_time: Optional[int] = None
     time_based: bool = False
     verify: Optional[str] = None
-    
-    # 混合读写比例（仅当 rw=readwrite 或 randrw 时有效）
+
+    # Mixed read/write ratio (only valid when rw=readwrite or randrw)
     rwmixread: Optional[int] = None
-    
-    # 输出格式
+
+    # Output format
     output_format: str = 'json'
-    
+
     def to_args(self) -> List[str]:
-        """转换为 FIO 命令行参数"""
+        """Convert to FIO command line arguments"""
         args = ['fio', f'--name={self.name}']
-        
-        # 基本参数
+
+        # Basic parameters
         args.append(f'--filename={self.filename}')
         args.append(f'--rw={self.rw}')
         args.append(f'--bs={self.bs}')
-        
+
         if self.size:
             args.append(f'--size={self.size}')
-        
+
         if self.runtime:
             args.append(f'--runtime={self.runtime}')
-        
+
         if self.time_based:
             args.append('--time_based')
-        
+
         args.append(f'--ioengine={self.ioengine}')
-        
+
         if self.direct:
             args.append('--direct=1')
-        
+
         args.append(f'--numjobs={self.numjobs}')
         args.append(f'--iodepth={self.iodepth}')
-        
+
         if self.group_reporting:
             args.append('--group_reporting')
-        
-        # 高级参数
+
+        # Advanced parameters
         if self.rate_iops:
             args.append(f'--rate_iops={self.rate_iops}')
-        
+
         if self.rate:
             args.append(f'--rate={self.rate}')
-        
+
         if self.thinktime:
             args.append(f'--thinktime={self.thinktime}')
-        
+
         if self.ramp_time:
             args.append(f'--ramp_time={self.ramp_time}')
-        
+
         if self.verify:
             args.append(f'--verify={self.verify}')
-        
-        # 混合读写比例
+
+        # Mixed read/write ratio
         if self.rwmixread is not None:
             args.append(f'--rwmixread={self.rwmixread}')
-        
-        # 输出格式
+
+        # Output format
         args.append(f'--output-format={self.output_format}')
-        
+
         return args
 
 
 @dataclass
 class FIOMetrics:
-    """FIO 性能指标（标准化输出）"""
-    # 带宽
+    """FIO performance metrics (standardized output)"""
+    # Bandwidth
     bandwidth: Dict[str, Any]
     # IOPS
     iops: Dict[str, Any]
-    # 延迟（纳秒）
+    # Latency (nanoseconds)
     latency_ns: Dict[str, Any]
-    # CPU 使用率
+    # CPU usage
     cpu: Dict[str, Any]
-    # 原始数据（用于深度分析）
+    # Raw data (for deep analysis)
     raw: Dict[str, Any]
-    
+
     @classmethod
     def from_fio_output(cls, fio_output: Dict[str, Any], rw_type: str) -> 'FIOMetrics':
-        """从 FIO JSON 输出创建指标对象"""
+        """Create metrics object from FIO JSON output"""
         import logging
         logger = logging.getLogger(__name__)
-        
-        # 调试信息：打印 FIO 输出结构
-        logger.debug(f"FIO 输出键：{list(fio_output.keys())}")
+
+        # Debug info: print FIO output structure
+        logger.debug(f"FIO output keys: {list(fio_output.keys())}")
         job = fio_output['jobs'][0]
-        logger.debug(f"作业数据键：{list(job.keys())}")
-        
+        logger.debug(f"Job data keys: {list(job.keys())}")
+
         if 'read' in job:
-            logger.debug(f"read 数据键：{list(job['read'].keys())}")
+            logger.debug(f"Read data keys: {list(job['read'].keys())}")
         if 'write' in job:
-            logger.debug(f"write 数据键：{list(job['write'].keys())}")
-        
-        # 根据读写类型选择数据源
+            logger.debug(f"Write data keys: {list(job['write'].keys())}")
+
+        # Select data source based on read/write type
         if 'read' in rw_type.lower():
             io_stats = job.get('read', {})
         elif 'write' in rw_type.lower():
             io_stats = job.get('write', {})
         else:
-            # 混合模式，合并读写
+            # Mixed mode, merge read and write
             read_stats = job.get('read', {})
             write_stats = job.get('write', {})
-            # 带宽和 IOPS 合并
+            # Merge bandwidth and IOPS
             read_bw = read_stats.get('bw_bytes', 0)
             write_bw = write_stats.get('bw_bytes', 0)
             read_iops = read_stats.get('iops', 0)
             write_iops = write_stats.get('iops', 0)
-            # 延迟：分开统计读和写，不合并（合并会丢失信息）
+            # Latency: separate statistics for read and write (merging would lose info)
             io_stats = {
                 'bw_bytes': read_bw + write_bw,
                 'iops': read_iops + write_iops,
                 'lat_ns_read': read_stats.get('lat_ns', {}),
                 'lat_ns_write': write_stats.get('lat_ns', {})
             }
-        
-        # 带宽 (MB/s)
+
+        # Bandwidth (MB/s)
         bandwidth = {
             'value': io_stats.get('bw_bytes', 0) / (1024 * 1024),
             'unit': 'MB/s'
         }
-        
+
         # IOPS
         iops = {
             'value': io_stats.get('iops', 0),
             'unit': 'IOPS'
         }
-        
-        # 延迟统计：混合读写模式分开统计读和写
+
+        # Latency statistics: separate for mixed read/write mode
         if 'lat_ns_read' in io_stats and 'lat_ns_write' in io_stats:
-            # 混合模式：分别记录读和写的延迟
+            # Mixed mode: record read and write latency separately
             lat_read = io_stats['lat_ns_read']
             lat_write = io_stats['lat_ns_write']
             latency = {
@@ -224,7 +224,7 @@ class FIOMetrics:
                 }
             }
         else:
-            # 纯读或纯写模式
+            # Pure read or pure write mode
             lat_ns = io_stats.get('lat_ns', {})
             latency = {
                 'min': lat_ns.get('min', 0),
@@ -233,8 +233,8 @@ class FIOMetrics:
                 'stddev': lat_ns.get('stddev', 0),
                 'percentile': lat_ns.get('percentile', {})
             }
-        
-        # CPU 使用率
+
+        # CPU usage
         usr_cpu = job.get('usr_cpu', 0)
         sys_cpu = job.get('sys_cpu', 0)
         cpu = {
@@ -242,7 +242,7 @@ class FIOMetrics:
             'sys': sys_cpu,
             'total': usr_cpu + sys_cpu
         }
-        
+
         return cls(
             bandwidth=bandwidth,
             iops=iops,
@@ -253,7 +253,7 @@ class FIOMetrics:
 
 
 class FIOError(Exception):
-    """FIO 执行错误"""
+    """FIO execution error"""
     def __init__(self, message: str, returncode: int = -1, stderr: str = ''):
         super().__init__(message)
         self.returncode = returncode
@@ -261,54 +261,54 @@ class FIOError(Exception):
 
 
 class FIO:
-    """FIO 工具封装类"""
-    
+    """FIO tool wrapper class"""
+
     def __init__(self, timeout: int = 300, retries: int = 1, logger=None):
         """
-        初始化 FIO 工具
-        
+        Initialize FIO tool
+
         Args:
-            timeout: FIO 执行超时时间（秒）
-            retries: 失败重试次数
-            logger: 日志记录器
+            timeout: FIO execution timeout (seconds)
+            retries: Number of retry attempts on failure
+            logger: Logger instance
         """
         self.timeout = timeout
         self.retries = retries
         self.logger = logger or logging.getLogger(__name__)
-    
+
     def run(self, config: FIOConfig, dry_run: bool = False, allowed_prefixes: list = None) -> FIOMetrics:
         """
-        执行 FIO 测试
-        
+        Execute FIO test
+
         Args:
-            config: FIO 配置
-            dry_run: 是否仅打印命令不执行
-            allowed_prefixes: 允许的文件路径前缀列表（如 ['/tmp', '/mapdata']）
-        
+            config: FIO configuration
+            dry_run: Whether to only print command without executing
+            allowed_prefixes: List of allowed file path prefixes (e.g., ['/tmp', '/mapdata'])
+
         Returns:
-            FIOMetrics: 性能指标
-        
+            FIOMetrics: Performance metrics
+
         Raises:
-            FIOError: FIO 执行失败
+            FIOError: FIO execution failure
         """
-        # 验证 filename 路径
+        # Validate filename path
         filename = Path(config.filename)
         if allowed_prefixes and not str(filename).startswith("/dev/"):
-            # 检查是否在允许的目录内
+            # Check if within allowed directories
             if not any(str(filename).startswith(p) for p in allowed_prefixes):
-                # 也允许设备路径（/dev/ 开头）
+                # Also allow device paths (/dev/ prefix)
                 if not str(filename).startswith('/dev/'):
-                    raise FIOError(f"非法的 filename 路径：{config.filename} (必须在允许的目录内或设备路径)")
+                    raise FIOError(f"Invalid filename path: {config.filename} (must be within allowed directories or device path)")
         cmd = config.to_args()
-        
-        self.logger.info(f"执行 FIO 测试：{config.name}")
-        self.logger.debug(f"FIO 命令：{' '.join(cmd)}")
-        
+
+        self.logger.info(f"Executing FIO test: {config.name}")
+        self.logger.debug(f"FIO command: {' '.join(cmd)}")
+
         if dry_run:
-            self.logger.info("[DRY-RUN] 模拟执行")
+            self.logger.info("[DRY-RUN] Simulated execution")
             return self._create_mock_metrics(config.rw)
-        
-        # 执行 FIO（带重试）
+
+        # Execute FIO (with retry)
         last_error = None
         for attempt in range(1, self.retries + 1):
             try:
@@ -316,121 +316,121 @@ class FIO:
                     cmd,
                     capture_output=True,
                     text=True,
-                    timeout=self.timeout + 30  # 额外 30 秒用于启动和清理
+                    timeout=self.timeout + 30  # Extra 30 seconds for startup and cleanup
                 )
-                
+
                 if result.returncode != 0:
-                    # 打印完整的 FIO 命令和错误信息便于调试
-                    self.logger.error("❌ FIO 执行失败:")
-                    self.logger.error(f"  命令：{' '.join(cmd[:10])}...")
-                    self.logger.error(f"  返回码：{result.returncode}")
-                    stderr_preview = result.stderr[:500] if result.stderr else '无'
+                    # Print full FIO command and error info for debugging
+                    self.logger.error("FIO execution failed:")
+                    self.logger.error(f"  Command: {' '.join(cmd[:10])}...")
+                    self.logger.error(f"  Return code: {result.returncode}")
+                    stderr_preview = result.stderr[:500] if result.stderr else 'None'
                     self.logger.error(f"  stderr: {stderr_preview}")
                     if len(result.stderr or '') > 500:
-                        self.logger.debug(f"  stderr 完整内容：{result.stderr}")
-                    
+                        self.logger.debug(f"  stderr full content: {result.stderr}")
+
                     raise FIOError(
-                        f"FIO 执行失败：{result.stderr}",
+                        f"FIO execution failed: {result.stderr}",
                         returncode=result.returncode,
                         stderr=result.stderr
                     )
-                
-                # 解析 JSON 输出
-                # 检查 stdout 是否为空
+
+                # Parse JSON output
+                # Check if stdout is empty
                 if not result.stdout or not result.stdout.strip():
-                    stderr_msg = result.stderr.strip() if result.stderr else '无错误输出'
-                    raise FIOError(f"FIO 未输出任何数据。可能原因：1) 设备路径错误 2) 权限不足 3) FIO 安装问题。stderr: {stderr_msg}")
-                
-                # 过滤 FIO 警告信息，提取 JSON 部分
-                # FIO 可能在 JSON 前输出警告信息（如 iodepth 警告）
+                    stderr_msg = result.stderr.strip() if result.stderr else 'No error output'
+                    raise FIOError(f"FIO produced no output. Possible causes: 1) Wrong device path 2) Insufficient permissions 3) FIO installation issue. stderr: {stderr_msg}")
+
+                # Filter FIO warnings, extract JSON part
+                # FIO may output warnings before JSON (e.g., iodepth warnings)
                 import re
-                
-                # 抓取策略说明
-                self.logger.debug(f"FIO 原始输出长度：stdout={len(result.stdout)} chars, stderr={len(result.stderr)} chars")
-                self.logger.debug(f"FIO 抓取策略：使用正则表达式提取 JSON 部分")
-                
-                # 使用更精确的正则：匹配从 { 开始到最后一个 } 结束
+
+                # Capture strategy description
+                self.logger.debug(f"FIO raw output length: stdout={len(result.stdout)} chars, stderr={len(result.stderr)} chars")
+                self.logger.debug(f"FIO capture strategy: Use regex to extract JSON part")
+
+                # Use more precise regex: match from { start to last } end
                 json_match = re.search(r'\{[\s\S]*\}', result.stdout)
                 if json_match:
                     json_str = json_match.group(0)
-                    self.logger.debug(f"✅ 成功提取 JSON，长度：{len(json_str)} chars")
+                    self.logger.debug(f"Successfully extracted JSON, length: {len(json_str)} chars")
                 else:
                     json_str = result.stdout
-                    self.logger.warning(f"⚠️  未找到 JSON 部分，使用完整输出")
-                
-                # 检查输出是否是 JSON 格式
+                    self.logger.warning(f"JSON part not found, using full output")
+
+                # Check if output is JSON format
                 if not json_str.strip().startswith('{'):
-                    # 打印原始输出便于诊断
-                    self.logger.error(f"FIO 输出格式错误，原始输出预览:")
+                    # Print raw output for diagnosis
+                    self.logger.error(f"FIO output format error, raw output preview:")
                     self.logger.error(f"  stdout[:500]: {result.stdout[:500]}...")
-                    self.logger.error(f"  stderr[:500]: {result.stderr[:500] if result.stderr else '无'}...")
-                    raise FIOError(f"FIO 输出格式错误（非 JSON）。stdout={len(result.stdout)} chars, stderr={len(result.stderr)} chars. 预览：{json_str[:200]}...")
-                
+                    self.logger.error(f"  stderr[:500]: {result.stderr[:500] if result.stderr else 'None'}...")
+                    raise FIOError(f"FIO output format error (non-JSON). stdout={len(result.stdout)} chars, stderr={len(result.stderr)} chars. Preview: {json_str[:200]}...")
+
                 try:
                     fio_output = json.loads(json_str)
                 except json.JSONDecodeError as e:
-                    # 保存完整输出到临时文件供调试
+                    # Save full output to temp file for debugging
                     import tempfile
                     debug_file = Path(tempfile.mktemp(suffix='_fio_debug.json'))
                     try:
                         with open(debug_file, 'w', encoding='utf-8') as f:
                             f.write(result.stdout)
-                        self.logger.error(f"FIO 输出解析失败：{e}")
-                        self.logger.error(f"  调试文件已保存：{debug_file}")
-                        self.logger.error(f"  stdout 长度：{len(result.stdout)} chars")
-                        self.logger.error(f"  stderr 长度：{len(result.stderr)} chars")
-                        raise FIOError(f"FIO 输出解析失败：{e}. 调试文件：{debug_file}")
+                        self.logger.error(f"FIO output parsing failed: {e}")
+                        self.logger.error(f"  Debug file saved: {debug_file}")
+                        self.logger.error(f"  stdout length: {len(result.stdout)} chars")
+                        self.logger.error(f"  stderr length: {len(result.stderr)} chars")
+                        raise FIOError(f"FIO output parsing failed: {e}. Debug file: {debug_file}")
                     finally:
-                        # 清理临时调试文件，防止磁盘泄漏
+                        # Clean up temp debug file to prevent disk leak
                         if debug_file.exists():
                             try:
                                 debug_file.unlink()
                             except Exception:
-                                pass  # 忽略清理失败
-                
-                # 转换为标准化指标
+                                pass  # Ignore cleanup failure
+
+                # Convert to standardized metrics
                 metrics = FIOMetrics.from_fio_output(fio_output, config.rw)
-                
-                self.logger.info(f"FIO 测试完成：{config.name}")
-                self.logger.info(f"  带宽：{metrics.bandwidth['value']:.2f} {metrics.bandwidth['unit']}")
+
+                self.logger.info(f"FIO test completed: {config.name}")
+                self.logger.info(f"  Bandwidth: {metrics.bandwidth['value']:.2f} {metrics.bandwidth['unit']}")
                 self.logger.info(f"  IOPS: {metrics.iops['value']:.0f} {metrics.iops['unit']}")
-                self.logger.info(f"  平均延迟：{metrics.latency_ns['mean']/1000:.2f} μs")
-                
+                self.logger.info(f"  Average latency: {metrics.latency_ns['mean']/1000:.2f} μs")
+
                 return metrics
-                
+
             except subprocess.TimeoutExpired as e:
-                # 显式杀死进程组（包括孙进程），防止资源泄漏
+                # Explicitly kill process group (including grandchildren) to prevent resource leak
                 import signal
                 import os
                 try:
                     if e.pid is not None:
                         os.killpg(os.getpgid(e.pid), signal.SIGKILL)
-                        self.logger.debug(f"已杀死超时进程组：{e.pid}")
+                        self.logger.debug(f"Killed timed out process group: {e.pid}")
                 except (ProcessLookupError, ValueError):
-                    pass  # 进程已不存在或 pid 无效
-                last_error = FIOError(f"FIO 执行超时（{self.timeout}s）")
-                self.logger.warning(f"尝试 {attempt}/{self.retries}: {last_error}")
-                
+                    pass  # Process no longer exists or pid invalid
+                last_error = FIOError(f"FIO execution timeout ({self.timeout}s)")
+                self.logger.warning(f"Attempt {attempt}/{self.retries}: {last_error}")
+
             except json.JSONDecodeError as e:
-                last_error = FIOError(f"FIO 输出解析失败：{e}")
-                self.logger.error(f"尝试 {attempt}/{self.retries}: {last_error}")
-                break  # JSON 解析错误不重试
-                
+                last_error = FIOError(f"FIO output parsing failed: {e}")
+                self.logger.error(f"Attempt {attempt}/{self.retries}: {last_error}")
+                break  # JSON parsing error does not retry
+
             except FIOError as e:
                 last_error = e
-                self.logger.warning(f"尝试 {attempt}/{self.retries}: {e}")
-                
+                self.logger.warning(f"Attempt {attempt}/{self.retries}: {e}")
+
                 if attempt < self.retries:
                     import time
-                    wait_time = 2 ** (attempt - 1)  # 指数退避
-                    self.logger.info(f"等待 {wait_time}s 后重试...")
+                    wait_time = 2 ** (attempt - 1)  # Exponential backoff
+                    self.logger.info(f"Waiting {wait_time}s before retry...")
                     time.sleep(wait_time)
-        
-        # 所有重试失败
-        raise last_error or FIOError("FIO 执行失败（未知错误）")
-    
+
+        # All retries failed
+        raise last_error or FIOError("FIO execution failed (unknown error)")
+
     def _create_mock_metrics(self, rw_type: str) -> FIOMetrics:
-        """创建模拟指标（用于 dry-run）"""
+        """Create mock metrics (for dry-run)"""
         return FIOMetrics(
             bandwidth={'value': 0, 'unit': 'MB/s'},
             iops={'value': 0, 'unit': 'IOPS'},
@@ -438,9 +438,9 @@ class FIO:
             cpu={'usr': 0, 'sys': 0, 'total': 0},
             raw={}
         )
-    
-    # ========== 便捷方法：常用测试场景 ==========
-    
+
+    # ========== Convenience methods: Common test scenarios ==========
+
     def run_seq_read(
         self,
         filename: str = '/dev/ufs0',
@@ -450,7 +450,7 @@ class FIO:
         ioengine: str = 'sync',
         **kwargs
     ) -> FIOMetrics:
-        """顺序读测试（Burst 模式）"""
+        """Sequential read test (Burst mode)"""
         config = FIOConfig(
             name='seq_read',
             filename=filename,
@@ -463,7 +463,7 @@ class FIO:
             **kwargs
         )
         return self.run(config)
-    
+
     def run_seq_write(
         self,
         filename: str = '/dev/ufs0',
@@ -473,7 +473,7 @@ class FIO:
         ioengine: str = 'sync',
         **kwargs
     ) -> FIOMetrics:
-        """顺序写测试（Burst 模式）"""
+        """Sequential write test (Burst mode)"""
         config = FIOConfig(
             name='seq_write',
             filename=filename,
@@ -486,7 +486,7 @@ class FIO:
             **kwargs
         )
         return self.run(config)
-    
+
     def run_rand_read(
         self,
         filename: str = '/dev/ufs0',
@@ -497,7 +497,7 @@ class FIO:
         ioengine: str = 'sync',
         **kwargs
     ) -> FIOMetrics:
-        """随机读测试（IOPS 模式）"""
+        """Random read test (IOPS mode)"""
         config = FIOConfig(
             name='rand_read',
             filename=filename,
@@ -511,7 +511,7 @@ class FIO:
             **kwargs
         )
         return self.run(config)
-    
+
     def run_rand_write(
         self,
         filename: str = '/dev/ufs0',
@@ -522,7 +522,7 @@ class FIO:
         ioengine: str = 'sync',
         **kwargs
     ) -> FIOMetrics:
-        """随机写测试（IOPS 模式）"""
+        """Random write test (IOPS mode)"""
         config = FIOConfig(
             name='rand_write',
             filename=filename,
@@ -536,7 +536,7 @@ class FIO:
             **kwargs
         )
         return self.run(config)
-    
+
     def run_mixed_rw(
         self,
         filename: str = '/dev/ufs0',
@@ -549,10 +549,10 @@ class FIO:
         **kwargs
     ) -> FIOMetrics:
         """
-        混合读写测试
-        
+        Mixed read/write test
+
         Args:
-            read_ratio: 读操作百分比（0-100）
+            read_ratio: Read operation percentage (0-100)
         """
         config = FIOConfig(
             name='mixed_rw',
@@ -568,22 +568,22 @@ class FIO:
             **kwargs
         )
         return self.run(config)
-    
+
     def run_latency_test(
         self,
         filename: str = '/dev/ufs0',
         size: str = '512M',
         runtime: int = 120,
         bs: str = '4k',
-        iodepth: int = 1,  # QD=1 测延迟
+        iodepth: int = 1,  # QD=1 for latency
         ioengine: str = 'sync',
         ramp_time: int = 0,
         **kwargs
     ) -> FIOMetrics:
-        """延迟测试（QD=1，小 block）
-        
+        """Latency test (QD=1, small block)
+
         Args:
-            ramp_time: 预热时间（秒），用于稳定状态
+            ramp_time: Warm-up time (seconds), used for steady state
         """
         config = FIOConfig(
             name='latency',
@@ -601,28 +601,28 @@ class FIO:
         return self.run(config)
 
 
-# ========== 模块级便捷函数 ==========
+# ========== Module-level convenience functions ==========
 
 def seq_read(**kwargs) -> FIOMetrics:
-    """顺序读测试（便捷函数）"""
+    """Sequential read test (convenience function)"""
     return FIO().run_seq_read(**kwargs)
 
 
 def seq_write(**kwargs) -> FIOMetrics:
-    """顺序写测试（便捷函数）"""
+    """Sequential write test (convenience function)"""
     return FIO().run_seq_write(**kwargs)
 
 
 def rand_read(**kwargs) -> FIOMetrics:
-    """随机读测试（便捷函数）"""
+    """Random read test (convenience function)"""
     return FIO().run_rand_read(**kwargs)
 
 
 def rand_write(**kwargs) -> FIOMetrics:
-    """随机写测试（便捷函数）"""
+    """Random write test (convenience function)"""
     return FIO().run_rand_write(**kwargs)
 
 
 def mixed_rw(**kwargs) -> FIOMetrics:
-    """混合读写测试（便捷函数）"""
+    """Mixed read/write test (convenience function)"""
     return FIO().run_mixed_rw(**kwargs)

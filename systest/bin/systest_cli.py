@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-SysTest - UFS 系统测试框架主入口
-统一测试入口、参数化执行、自动报告、失效分析
+SysTest - UFS System Test Framework Main Entry
+Unified test entry, parameterized execution, automatic reporting, failure analysis
 
 Usage:
     SysTest run --suite=performance --device=/dev/ufs0
@@ -18,7 +18,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-# 添加项目根目录到 Python 路径
+# Add project root to Python path
 script_dir = Path(__file__).parent.absolute()
 project_root = script_dir.parent
 sys.path.insert(0, str(project_root))
@@ -30,11 +30,11 @@ from core.logger import get_logger, close_all_loggers
 
 
 def cmd_run(args):
-    """执行测试"""
+    """Execute tests"""
     import time
     from datetime import datetime
-    
-    # 生成测试 ID(脚本名称 + 套件/测试名 + 时间后缀)
+
+    # Generate test ID (script name + suite/test name + timestamp suffix)
     script_name = Path(__file__).stem  # SysTest
     name_suffix = ""
     if args.suite:
@@ -42,16 +42,16 @@ def cmd_run(args):
     elif args.test:
         name_suffix = f"_{args.test}"
     test_id = f"{script_name}{name_suffix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    
-    # 初始化日志 (按测试 ID 分离)
+
+    # Initialize logging (separated by test ID)
     logger = get_logger(
         test_id=test_id,
         log_dir='logs',
         console_level=logging.DEBUG if args.verbose else logging.INFO,
         file_level=logging.DEBUG
     )
-    
-    # 加载预设配置（如果有）
+
+    # Load preset configuration (if any)
     if hasattr(args, 'config') and args.config:
         config_path = Path(args.config)
         if config_path.exists():
@@ -59,79 +59,79 @@ def cmd_run(args):
                 with open(config_path, 'r', encoding='utf-8') as f:
                     preset_config = json.load(f)
             except json.JSONDecodeError as e:
-                logger.error(f"❌ 预设配置文件格式错误：{config_path}: {e}")
+                logger.error(f"Invalid preset configuration file: {config_path}: {e}")
                 return 2
-            # 应用预设配置
+            # Apply preset configuration
             if preset_config.get('device') and not args.device:
                 args.device = preset_config['device']
             if preset_config.get('test_dir') and not args.test_dir:
                 args.test_dir = preset_config['test_dir']
-            logger.info(f"📄 已加载预设配置：{args.config}")
+            logger.info(f"Loaded preset configuration: {args.config}")
 
-    # 自动加载默认 runtime 配置
+    # Auto-load default runtime configuration
     default_config_path = project_root / 'config' / 'runtime.json'
     if default_config_path.exists():
         try:
             with open(default_config_path, 'r', encoding='utf-8') as f:
                 default_config = json.load(f)
         except json.JSONDecodeError as e:
-            logger.warning(f"⚠️  默认配置文件格式错误：{default_config_path}: {e} (继续使用空配置)")
+            logger.warning(f"Invalid default configuration file: {default_config_path}: {e} (continuing with empty config)")
             default_config = {}
-        # 应用默认配置：只有用户没指定的时候才覆盖
+        # Apply default configuration: only override if user hasn't specified
         if default_config.get('device') and not args.device:
             args.device = default_config['device']
-            logger.info(f"📄 已加载默认配置设备路径：{args.device} (from config/runtime.json)")
+            logger.info(f"Loaded default device path: {args.device} (from config/runtime.json)")
         if default_config.get('test_dir') and not args.test_dir:
             args.test_dir = default_config['test_dir']
-            logger.info(f"📄 已加载默认配置测试目录：{args.test_dir} (from config/runtime.json)")
-    
-    logger.info(f"开始执行测试")
+            logger.info(f"Loaded default test directory: {args.test_dir} (from config/runtime.json)")
+
+    logger.info("Starting test execution")
     if args.all:
-        logger.info("模式：运行所有测试套件")
+        logger.info("Mode: Run all test suites")
     elif args.suite:
-        logger.info(f"套件：{args.suite}")
+        logger.info(f"Suite: {args.suite}")
     elif args.test:
-        logger.info(f"测试：{args.test}")
+        logger.info(f"Test: {args.test}")
     if args.device:
-        logger.info(f"设备：{args.device} (指定)")
+        logger.info(f"Device: {args.device} (specified)")
     else:
-        logger.warning("⚠️  未指定设备路径，将使用默认值 /dev/sda")
-        logger.warning("    建议先运行: python3 bin/SysTest check-env --save-config")
+        logger.warning("Device path not specified, will use default /dev/sda")
+        logger.warning("  Recommend running: python3 bin/SysTest check-env --save-config")
         args.device = '/dev/sda'
     if args.test_dir:
-        logger.info(f"测试目录：{args.test_dir} (指定)")
+        logger.info(f"Test directory: {args.test_dir} (specified)")
     else:
-        logger.warning("⚠️  未指定测试目录，将使用默认值 /mapdata/ufs_test")
-        logger.warning("    建议先运行: python3 bin/SysTest check-env --save-config")
+        logger.warning("Test directory not specified, will use default /mapdata/ufs_test")
+        logger.warning("  Recommend running: python3 bin/SysTest check-env --save-config")
         args.test_dir = '/mapdata/ufs_test'
     if args.quick:
-        logger.info("模式：快速模式 (测试时间缩短 50%)")
+        logger.info("Mode: Quick mode (test time reduced by 50%)")
     if args.batch > 1:
-        logger.info(f"批量测试：{args.batch} 次，间隔{args.interval}s")
-    logger.info(f"测试 ID: {test_id}")
-    logger.debug(f"日志文件:{logger.get_log_file()}")
+        logger.info(f"Batch test: {args.batch} runs, {args.interval}s interval")
+    logger.info(f"Test ID: {test_id}")
+    logger.debug(f"Log file: {logger.get_log_file()}")
 
-    # 快速模式：调整测试参数（缩短时间）
+    # Quick mode: adjust test parameters (shorten time)
     quick_factor = 0.5 if args.quick else 1.0
     if args.quick:
-        logger.info(f"快速模式：测试时间缩短为 {quick_factor*100:.0f}%")
+        logger.info(f"Quick mode: test time reduced to {quick_factor*100:.0f}%")
 
-    # 批量测试
+    # Batch test
     batch_results = []
     for i in range(args.batch):
         if args.batch > 1:
             logger.info(f"\n{'='*60}")
-            logger.info(f"批量测试 {i+1}/{args.batch}")
+            logger.info(f"Batch test {i+1}/{args.batch}")
             logger.info(f"{'='*60}")
 
-        # 确定要运行的套件
+        # Determine suites to run
         suites_to_run = []
         if args.all:
             suites_to_run = ['performance', 'qos']
         elif args.suite:
             suites_to_run = [args.suite]
         elif args.test:
-            # 单个测试，找到所属套件
+            # Single test, find所属 suite
             runner_tmp = TestRunner(dry_run=True)
             for suite_name, tests in runner_tmp.list_suites().items():
                 if args.test in tests:
@@ -139,12 +139,12 @@ def cmd_run(args):
                     break
 
         if not suites_to_run:
-            logger.error("未指定测试套件或测试项")
+            logger.error("No test suite or test item specified")
             return 2
 
-        # 执行每个套件
+        # Execute each suite
         for suite_name in suites_to_run:
-            # 初始化组件（传递 quick_factor 用于调整 runtime）
+            # Initialize components (pass quick_factor for runtime adjustment)
             runner = TestRunner(
                 device=args.device,
                 test_dir=args.test_dir,
@@ -155,113 +155,113 @@ def cmd_run(args):
             )
             collector = ResultCollector(output_dir=args.output)
             reporter = ReportGenerator(template='default')
-            
-            # 执行测试
+
+            # Execute test
             try:
                 results = runner.run_suite(suite_name)
-                
-                # 收集结果
+
+                # Collect results
                 report_data = collector.collect(results, test_id=test_id, suite_name=suite_name, device=args.device)
-                
-                # 生成报告
+
+                # Generate report
                 report_formats = args.format.split(',') if hasattr(args, 'format') and args.format else ['html', 'json']
-                
-                # CSV 导出
+
+                # CSV export
                 if hasattr(args, 'export_csv') and args.export_csv:
                     report_formats.append('csv')
-                
+
                 report_path = reporter.generate(report_data, output_dir=args.output, formats=report_formats)
-                
-                logger.info(f"测试完成 - 通过率:{report_data['summary']['pass_rate']:.1f}%")
-                logger.info(f"报告已生成:{report_path}")
-                logger.info(f"日志文件:{logger.get_log_file()}")
-                
+
+                logger.info(f"Test completed - Pass rate: {report_data['summary']['pass_rate']:.1f}%")
+                logger.info(f"Report generated: {report_path}")
+                logger.info(f"Log file: {logger.get_log_file()}")
+
                 batch_results.append(report_data)
-                
+
             except Exception as e:
-                logger.critical(f"测试执行失败:{e}", exc_info=True)
-                logger.error(f"错误日志:{logger.get_error_file()}")
+                logger.critical(f"Test execution failed: {e}", exc_info=True)
+                logger.error(f"Error log: {logger.get_error_file()}")
                 if args.batch == 1:
-                    # 关闭日志
+                    # Close log
                     close_all_loggers()
                     return 2
-        
-        # 批量测试间隔
+
+        # Batch test interval
         if args.batch > 1 and i < args.batch - 1:
-            logger.info(f"\n等待 {args.interval}s 后进行下一轮测试...")
+            logger.info(f"\nWaiting {args.interval}s before next round...")
             time.sleep(args.interval)
-    
-    # 批量测试结果汇总
+
+    # Batch test summary
     if args.batch > 1:
         logger.info("\n" + "=" * 60)
-        logger.info(f"📊 批量测试结果汇总（共 {args.batch} 轮）")
+        logger.info(f"Batch Test Results Summary ({args.batch} rounds)")
         logger.info("=" * 60)
         for i, result in enumerate(batch_results, 1):
             summary = result['summary']
-            logger.info(f"  第 {i} 轮：{summary['passed']}/{summary['total']} 通过 ({summary['pass_rate']:.1f}%)")
-        
-        # 计算总体通过率
+            logger.info(f"  Round {i}: {summary['passed']}/{summary['total']} passed ({summary['pass_rate']:.1f}%)")
+
+        # Calculate overall pass rate
         total_tests = sum(r['summary']['total'] for r in batch_results)
         total_passed = sum(r['summary']['passed'] for r in batch_results)
         overall_pass_rate = (total_passed / total_tests * 100) if total_tests > 0 else 0
         logger.info("-" * 60)
-        logger.info(f"  总计：{total_passed}/{total_tests} 通过 ({overall_pass_rate:.1f}%)")
+        logger.info(f"  Total: {total_passed}/{total_tests} passed ({overall_pass_rate:.1f}%)")
         logger.info("=" * 60)
-    
-    # 关闭日志
+
+    # Close log
     close_all_loggers()
-    
-    # 返回码：有失败则返回 1
+
+    # Return code: 1 if any failure
     has_failure = any(r['summary']['failed'] > 0 or r['summary']['errors'] > 0 for r in batch_results)
     return 1 if has_failure else 0
 
 
 def cmd_list(args):
-    """列出可用测试"""
+    """List available tests"""
     from core.runner import TestRunner
 
     runner = TestRunner(dry_run=True)
 
-    print("\n=== 可用测试套件 ===\n")
+    print("\n=== Available Test Suites ===\n")
     suites = runner.list_suites()
 
     for suite_name, tests in suites.items():
-        print(f"📦 {suite_name}")
+        print(f"Suite: {suite_name}")
         for test in tests:
-            print(f"   • {test}")
+            print(f"  - {test}")
         print()
 
-    print(f"共计 {sum(len(t) for t in suites.values())} 个测试项,{len(suites)} 个套件")
+    print(f"Total: {sum(len(t) for t in suites.values())} test items, {len(suites)} suites")
 
 
 def cmd_report(args):
-    """生成/查看报告"""
+    """Generate/view report"""
     from core.reporter import ReportGenerator
     from core.logger import get_logger
     from datetime import datetime
-    
+
     logger = get_logger(test_id='report', log_dir='logs', console_level=logging.INFO, file_level=logging.DEBUG)
     reporter = ReportGenerator()
-    
+
     if args.latest:
         report_path = reporter.get_latest_report()
     elif args.id:
         report_path = reporter.get_report(args.id)
     else:
-        print("❌ 请指定 --latest 或 --id")
+        print("Please specify --latest or --id")
         return 1
-    
+
     if report_path:
-        logger.info(f"报告路径:{report_path}")
-        print(f"\n📄 报告路径：{report_path}")
+        logger.info(f"Report path: {report_path}")
+        print(f"\nReport path: {report_path}")
         if args.open:
             import webbrowser
             webbrowser.open(f'file://{report_path}')
-        
-        # CSV 导出
+
+        # CSV export
         if hasattr(args, 'export_csv') and args.export_csv:
             csv_path = f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-            # 从 JSON 结果生成 CSV
+            # Generate CSV from JSON result
             json_path = Path(report_path).parent / 'results.json'
             if json_path.exists():
                 import json
@@ -282,23 +282,23 @@ def cmd_report(args):
                                 val = m_val
                                 unit = ''
                             f.write(f"{name},{status},{duration:.2f},{m_name},{val},{unit}\n")
-                print(f"✅ CSV 已导出：{csv_path}")
-        
+                print(f"CSV exported: {csv_path}")
+
         return 0
     else:
-        logger.error("未找到报告")
-        print("❌ 未找到报告")
+        logger.error("Report not found")
+        print("Report not found")
         return 1
 
 
 def cmd_config(args):
-    """查看/管理配置"""
+    """View/manage configuration"""
     import json
     from pathlib import Path
-    
+
     config_path = Path(__file__).parent.parent / 'config' / 'runtime.json'
-    
-    # 重置配置
+
+    # Reset configuration
     if hasattr(args, 'reset') and args.reset:
         default_config = {
             "device": None,
@@ -307,15 +307,15 @@ def cmd_config(args):
             "env_checked_at": None,
             "system": {},
             "toolchain": {},
-            "_comment": "配置已重置，请运行 check-env --save-config 重新生成"
+            "_comment": "Configuration reset, please run check-env --save-config to regenerate"
         }
         config_path.parent.mkdir(parents=True, exist_ok=True)
         with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(default_config, f, indent=2, ensure_ascii=False)
-        print(f"✅ 配置已重置：{config_path}")
+        print(f"Configuration reset: {config_path}")
         return 0
-    
-    # 设置设备路径
+
+    # Set device path
     if hasattr(args, 'device') and args.device:
         if not config_path.exists():
             config = {}
@@ -326,9 +326,9 @@ def cmd_config(args):
         config['env_checked_at'] = datetime.now().isoformat()
         with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=2, ensure_ascii=False)
-        print(f"✅ 设备路径已设置：{args.device}")
-    
-    # 设置测试目录
+        print(f"Device path set: {args.device}")
+
+    # Set test directory
     if hasattr(args, 'test_dir') and args.test_dir:
         if not config_path.exists():
             config = {}
@@ -339,32 +339,32 @@ def cmd_config(args):
         config['env_checked_at'] = datetime.now().isoformat()
         with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=2, ensure_ascii=False)
-        print(f"✅ 测试目录已设置：{args.test_dir}")
-    
-    # 显示配置
+        print(f"Test directory set: {args.test_dir}")
+
+    # Show configuration
     if hasattr(args, 'show') and args.show:
         if config_path.exists():
-            print(f"\n=== 配置文件：{config_path} ===\n")
+            print(f"\n=== Configuration File: {config_path} ===\n")
             with open(config_path, 'r', encoding='utf-8') as f:
                 print(f.read())
         else:
-            print(f"⚠️  配置文件不存在：{config_path}")
-            print("   运行 'SysTest check-env --save-config' 自动生成配置")
-    
+            print(f"Configuration file does not exist: {config_path}")
+            print("Run 'SysTest check-env --save-config' to auto-generate configuration")
+
     return 0
 
 
 def cmd_check_env(args):
-    """环境检查"""
+    """Environment check"""
     import subprocess
 
     check_script = script_dir / 'check_env.py'
 
     if not check_script.exists():
-        print(f"❌ 环境检查脚本不存在：{check_script}")
+        print(f"Environment check script does not exist: {check_script}")
         return 1
 
-    # 构建命令
+    # Build command
     cmd = [sys.executable, str(check_script)]
     if args.report:
         cmd.extend(['--report', '--output', args.output])
@@ -373,22 +373,22 @@ def cmd_check_env(args):
     if args.verbose:
         cmd.append('-v')
 
-    # 执行检查
+    # Execute check
     result = subprocess.run(cmd)
     return result.returncode
 
 
 def cmd_compare_baseline(args):
-    """性能基线对比"""
+    """Performance baseline comparison"""
     import subprocess
-    
+
     compare_script = script_dir / 'compare_baseline.py'
-    
+
     if not compare_script.exists():
-        print(f"❌ 对比脚本不存在:{compare_script}")
+        print(f"Comparison script does not exist: {compare_script}")
         return 1
-    
-    # 构建命令
+
+    # Build command
     cmd = [sys.executable, str(compare_script)]
     if args.dev:
         cmd.extend(['--dev', args.dev])
@@ -402,280 +402,280 @@ def cmd_compare_baseline(args):
         cmd.extend(['--threshold', str(args.threshold)])
     if args.output:
         cmd.extend(['--output', args.output])
-    
-    # 执行对比
+
+    # Execute comparison
     result = subprocess.run(cmd)
-    
-    # CSV 导出（如果有）
+
+    # CSV export (if any)
     if hasattr(args, 'export_csv') and args.export_csv:
-        print("\n📄 CSV 导出功能将在对比脚本中实现")
-    
+        print("\nCSV export functionality will be implemented in the comparison script")
+
     return result.returncode
 
 
 def main():
-    """主函数 - 统一入口"""
+    """Main function - Unified entry"""
     parser = argparse.ArgumentParser(
-        description='UFS 系统测试框架 - SysTest',
+        description='UFS System Test Framework - SysTest',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 ================================================================================
-快速开始:
-  SysTest check-env --save-config              # 首次使用：检查环境并保存配置
-  SysTest run --suite=performance              # 运行性能测试
-  SysTest report --latest                      # 查看最新报告
+Quick Start:
+  SysTest check-env --save-config              # First use: check environment and save config
+  SysTest run --suite=performance              # Run performance tests
+  SysTest report --latest                      # View latest report
 
-执行测试:
-  SysTest run --suite=performance              # 性能测试套件
-  SysTest run --suite=performance --quick      # 快速模式 (时间减半)
-  SysTest run --test=t_perf_SeqReadBurst_001   # 单个测试
-  SysTest run --test=t_perf_SeqReadBurst_001 -v  # 单个测试 (详细输出)
-  SysTest run --suite=performance --batch=3 --interval=60  # 批量 3 次，间隔 60 秒
+Execute Tests:
+  SysTest run --suite=performance              # Performance test suite
+  SysTest run --suite=performance --quick      # Quick mode (time halved)
+  SysTest run --test=t_perf_SeqReadBurst_001   # Single test
+  SysTest run --test=t_perf_SeqReadBurst_001 -v  # Single test (verbose)
+  SysTest run --suite=performance --batch=3 --interval=60  # Batch 3 times, 60s interval
   SysTest run --suite=performance --device=/dev/sda --test-dir=/mapdata/ufs_test
   SysTest run --suite=performance --config=configs/ufs31_128GB.json
-  SysTest run --suite=performance --ci         # CI/CD 模式
-  SysTest run --suite=performance --dry-run    # 模拟执行
-  SysTest run --all                            # 运行所有套件
+  SysTest run --suite=performance --ci         # CI/CD mode
+  SysTest run --suite=performance --dry-run    # Dry run
+  SysTest run --all                            # Run all suites
 
-查看信息:
-  SysTest list                                 # 列出所有测试
-  SysTest list --detail                        # 详细信息
-  SysTest report --latest                      # 查看最新报告
+View Information:
+  SysTest list                                 # List all tests
+  SysTest list --detail                        # Detailed information
+  SysTest report --latest                      # View latest report
   SysTest report --id=SysTest_performance_20260407_103000
-  SysTest report --latest --export-csv         # 导出 CSV
+  SysTest report --latest --export-csv         # Export CSV
 
-环境管理:
-  SysTest check-env                            # 检查环境
-  SysTest check-env --save-config              # 保存配置
-  SysTest config --show                        # 显示配置
-  SysTest config --device=/dev/sda             # 设置设备路径
-  SysTest config --test-dir=/mapdata/ufs_test  # 设置测试目录
-  SysTest config --reset                       # 重置配置
+Environment Management:
+  SysTest check-env                            # Check environment
+  SysTest check-env --save-config              # Save configuration
+  SysTest config --show                        # Show configuration
+  SysTest config --device=/dev/sda             # Set device path
+  SysTest config --test-dir=/mapdata/ufs_test  # Set test directory
+  SysTest config --reset                       # Reset configuration
 
 
-完整工作流:
-  # 车规级 UFS 3.1 测试流程
-  SysTest check-env --save-config              # 1. 环境检测
-  SysTest run --suite=performance --quick      # 2. 性能测试 (快速)
-  SysTest run --suite=qos                      # 3. QoS 测试
-  SysTest report --latest                      # 4. 查看报告
-  SysTest compare-baseline --baseline1 results/gold/ --baseline2 results/current/  # 5. 对比基线
+Complete Workflow:
+  # Automotive-grade UFS 3.1 test flow
+  SysTest check-env --save-config              # 1. Environment detection
+  SysTest run --suite=performance --quick      # 2. Performance test (quick)
+  SysTest run --suite=qos                      # 3. QoS test
+  SysTest report --latest                      # 4. View report
+  SysTest compare-baseline --baseline1 results/gold/ --baseline2 results/current/  # 5. Compare baseline
 ================================================================================
         """
     )
 
-    subparsers = parser.add_subparsers(dest='command', help='可用命令')
+    subparsers = parser.add_subparsers(dest='command', help='Available commands')
 
-    # run 命令
-    run_parser = subparsers.add_parser('run', 
-        help='执行测试',
-        description='执行 UFS 性能/可靠性测试',
-        epilog='''示例:
-  [基础用法]
-  # 运行完整性能测试套件
+    # run command
+    run_parser = subparsers.add_parser('run',
+        help='Execute tests',
+        description='Execute UFS performance/reliability tests',
+        epilog="""Examples:
+  [Basic Usage]
+  # Run full performance test suite
   python3 bin/SysTest run --suite=performance
-  
-  # 运行 QoS 测试套件（车规级延迟测试）
+
+  # Run QoS test suite (automotive-grade latency test)
   python3 bin/SysTest run --suite=qos
-  
-  # 运行可靠性测试套件
+
+  # Run reliability test suite
   python3 bin/SysTest run --suite=reliability
-  
-  # 运行所有测试套件
+
+  # Run all test suites
   python3 bin/SysTest run --all
-  
-  [快速模式]
-  # 快速性能验证（缩短测试时间 50%）
+
+  [Quick Mode]
+  # Quick performance validation (reduce test time by 50%)
   python3 bin/SysTest run --suite=performance --quick
-  
-  # 快速模式 + 批量测试
+
+  # Quick mode + batch test
   python3 bin/SysTest run --suite=performance --quick --batch=3
-  
-  [单个测试]
-  # 运行单个测试项
+
+  [Single Test]
+  # Run single test item
   python3 bin/SysTest run --test=t_perf_SeqReadBurst_001
-  
-  # 运行单个测试项（详细输出）
+
+  # Run single test item (verbose output)
   python3 bin/SysTest run --test=t_perf_SeqReadBurst_001 -v
-  
-  [批量测试]
-  # 批量测试 3 次，间隔 60 秒
+
+  [Batch Test]
+  # Batch test 3 times, 60s interval
   python3 bin/SysTest run --suite=performance --batch=3 --interval=60
-  
-  # 批量测试 5 次，间隔 30 秒（快速验证稳定性）
+
+  # Batch test 5 times, 30s interval (quick stability validation)
   python3 bin/SysTest run --suite=performance --batch=5 --interval=30 --quick
-  
-  [指定设备和目录]
-  # 指定设备路径
+
+  [Specify Device and Directory]
+  # Specify device path
   python3 bin/SysTest run --suite=performance --device=/dev/sda
-  
-  # 指定测试目录
+
+  # Specify test directory
   python3 bin/SysTest run --suite=performance --test-dir=/mapdata/ufs_test
-  
-  # 同时指定设备和测试目录
+
+  # Specify both device and test directory
   python3 bin/SysTest run --suite=performance --device=/dev/sda --test-dir=/mapdata/ufs_test
-  
-  [使用预设配置]
-  # 使用预设配置（如 configs/ufs31_128GB.json）
+
+  [Using Preset Configuration]
+  # Use preset configuration (e.g., configs/ufs31_128GB.json)
   python3 bin/SysTest run --suite=performance --config=configs/ufs31_128GB.json
-  
-  # 使用车规级配置
+
+  # Use automotive-grade configuration
   python3 bin/SysTest run --suite=performance --config=configs/automotive_grade.json
-  
-  [CI/CD 集成]
-  # CI/CD 环境模式（启用环境验证）
+
+  [CI/CD Integration]
+  # CI/CD environment mode (enable environment validation)
   python3 bin/SysTest run --suite=performance --ci
-  
-  # CI/CD + 批量测试
+
+  # CI/CD + batch test
   python3 bin/SysTest run --suite=performance --ci --batch=3
-  
-  [调试和验证]
-  # 模拟执行（不实际运行测试，验证框架）
+
+  [Debugging and Validation]
+  # Dry run (do not actually run tests, validate framework)
   python3 bin/SysTest run --suite=performance --dry-run
-  
-  # 模拟执行 + 详细输出
+
+  # Dry run + verbose output
   python3 bin/SysTest run --suite=performance --dry-run -v
-  
-  [完整示例]
-  # 车规级性能验证：快速模式 + 批量 3 次 + 指定设备
+
+  [Complete Examples]
+  # Automotive-grade performance validation: quick mode + batch 3 times + specify device
   python3 bin/SysTest run --suite=performance --quick --batch=3 --device=/dev/sda
-  
-  # 完整可靠性测试：所有套件 + 详细输出
+
+  # Full reliability test: all suites + verbose output
   python3 bin/SysTest run --all -v
-  
-  # 生产环境测试：使用预设配置 + CI 模式
+
+  # Production environment test: use preset configuration + CI mode
   python3 bin/SysTest run --config=configs/ufs31_128GB.json --ci
-''')
-    run_parser.add_argument('--suite', '-s', help='测试套件名称 (performance/qos)')
-    run_parser.add_argument('--test', '-t', help='单个测试项名称')
-    run_parser.add_argument('--all', '-a', action='store_true', help='运行所有测试套件')
-    run_parser.add_argument('--device', '-d', default=None, help='测试设备路径 (默认从 runtime.json 读取)')
-    run_parser.add_argument('--test-dir', '-tdir', default=None, help='测试文件目录 (默认自动选择)')
-    run_parser.add_argument('--output', '-o', default='./results', help='输出目录')
-    run_parser.add_argument('--format', '-f', default='html,json,txt', help='报告格式 (html/json/txt/csv)')
-    run_parser.add_argument('--verbose', '-v', action='store_true', help='详细输出')
-    run_parser.add_argument('--dry-run', '-n', action='store_true', help='模拟执行 (不实际运行测试)')
-    run_parser.add_argument('--quick', '-q', action='store_true', help='快速模式 (缩短测试时间 50%%)')
-    run_parser.add_argument('--batch', '-b', type=int, default=1, help='批量测试次数 (默认 1)')
-    run_parser.add_argument('--interval', '-i', type=int, default=60, help='批量测试间隔秒数 (默认 60s)')
-    run_parser.add_argument('--config', '-c', default=None, help='加载预设配置 (如 configs/ufs31_128GB.json)')
-    run_parser.add_argument('--export-csv', action='store_true', help='导出 CSV 格式结果')
-    run_parser.add_argument('--ci', action='store_true', help='CI/CD 环境模式 (启用环境验证)')
+""")
+    run_parser.add_argument('--suite', '-s', help='Test suite name (performance/qos)')
+    run_parser.add_argument('--test', '-t', help='Single test item name')
+    run_parser.add_argument('--all', '-a', action='store_true', help='Run all test suites')
+    run_parser.add_argument('--device', '-d', default=None, help='Test device path (default from runtime.json)')
+    run_parser.add_argument('--test-dir', '-tdir', default=None, help='Test file directory (default auto-select)')
+    run_parser.add_argument('--output', '-o', default='./results', help='Output directory')
+    run_parser.add_argument('--format', '-f', default='html,json,txt', help='Report format (html/json/txt/csv)')
+    run_parser.add_argument('--verbose', '-v', action='store_true', help='Verbose output')
+    run_parser.add_argument('--dry-run', '-n', action='store_true', help='Dry run (do not actually run tests)')
+    run_parser.add_argument('--quick', '-q', action='store_true', help='Quick mode (reduce test time by 50%)')
+    run_parser.add_argument('--batch', '-b', type=int, default=1, help='Batch test count (default 1)')
+    run_parser.add_argument('--interval', '-i', type=int, default=60, help='Batch test interval in seconds (default 60s)')
+    run_parser.add_argument('--config', '-c', default=None, help='Load preset configuration (e.g., configs/ufs31_128GB.json)')
+    run_parser.add_argument('--export-csv', action='store_true', help='Export CSV format results')
+    run_parser.add_argument('--ci', action='store_true', help='CI/CD environment mode (enable environment validation)')
     run_parser.set_defaults(func=cmd_run)
 
-    # list 命令
-    list_parser = subparsers.add_parser('list', 
-        help='列出可用测试',
-        description='列出所有可用的测试套件和测试项',
-        epilog='''示例:
-  # 列出所有测试套件
+    # list command
+    list_parser = subparsers.add_parser('list',
+        help='List available tests',
+        description='List all available test suites and test items',
+        epilog="""Examples:
+  # List all test suites
   python3 bin/SysTest list
-  
-  # 显示详细信息（包含测试项描述）
+
+  # Show detailed information (including test item descriptions)
   python3 bin/SysTest list --detail
-''')
-    list_parser.add_argument('--detail', action='store_true', help='显示详细信息')
+""")
+    list_parser.add_argument('--detail', action='store_true', help='Show detailed information')
     list_parser.set_defaults(func=cmd_list)
 
-    # report 命令
-    report_parser = subparsers.add_parser('report', 
-        help='生成/查看报告',
-        description='生成或查看测试报告',
-        epilog='''示例:
-  # 查看最新测试报告
+    # report command
+    report_parser = subparsers.add_parser('report',
+        help='Generate/view report',
+        description='Generate or view test report',
+        epilog="""Examples:
+  # View latest test report
   python3 bin/SysTest report --latest
-  
-  # 查看指定 ID 的报告
+
+  # View report by ID
   python3 bin/SysTest report --id=SysTest_performance_20260407_103000
-  
-  # 导出 CSV 格式结果
+
+  # Export CSV format results
   python3 bin/SysTest report --latest --export-csv
-''')
-    report_parser.add_argument('--latest', action='store_true', help='查看最新报告')
-    report_parser.add_argument('--id', help='指定报告 ID')
-    report_parser.add_argument('--open', action='store_true', help='在浏览器中打开')
-    report_parser.add_argument('--export-csv', action='store_true', help='导出 CSV 格式')
+""")
+    report_parser.add_argument('--latest', action='store_true', help='View latest report')
+    report_parser.add_argument('--id', help='Specify report ID')
+    report_parser.add_argument('--open', action='store_true', help='Open in browser')
+    report_parser.add_argument('--export-csv', action='store_true', help='Export CSV format')
     report_parser.set_defaults(func=cmd_report)
 
-    # config 命令
-    config_parser = subparsers.add_parser('config', 
-        help='查看/管理配置',
-        description='查看或修改运行时配置',
-        epilog='''示例:
-  # 显示当前配置内容
+    # config command
+    config_parser = subparsers.add_parser('config',
+        help='View/manage configuration',
+        description='View or modify runtime configuration',
+        epilog="""Examples:
+  # Show current configuration content
   python3 bin/SysTest config --show
-  
-  # 设置设备路径
+
+  # Set device path
   python3 bin/SysTest config --device=/dev/sda
-  
-  # 设置测试目录
+
+  # Set test directory
   python3 bin/SysTest config --test-dir=/mapdata/ufs_test
-  
-  # 重置配置为默认值
+
+  # Reset configuration to default
   python3 bin/SysTest config --reset
-''')
-    config_parser.add_argument('--show', action='store_true', help='显示配置内容')
-    config_parser.add_argument('--reset', action='store_true', help='重置配置为默认值')
-    config_parser.add_argument('--device', help='设置设备路径')
-    config_parser.add_argument('--test-dir', help='设置测试目录')
+""")
+    config_parser.add_argument('--show', action='store_true', help='Show configuration content')
+    config_parser.add_argument('--reset', action='store_true', help='Reset configuration to default')
+    config_parser.add_argument('--device', help='Set device path')
+    config_parser.add_argument('--test-dir', help='Set test directory')
     config_parser.set_defaults(func=cmd_config)
 
-    # check-env 命令
-    check_env_parser = subparsers.add_parser('check-env', 
-        help='检查环境并生成配置',
-        description='检测 UFS 设备和测试目录，自动生成 runtime.json 配置',
-        epilog='''示例:
-  # 检查环境并自动保存配置（默认行为）
+    # check-env command
+    check_env_parser = subparsers.add_parser('check-env',
+        help='Check environment and generate configuration',
+        description='Detect UFS device and test directory, auto-generate runtime.json configuration',
+        epilog="""Examples:
+  # Check environment and auto-save configuration (default behavior)
   python3 bin/SysTest check-env
-  
-  # 生成 JSON 报告
+
+  # Generate JSON report
   python3 bin/SysTest check-env --report
-  
-  # 详细输出模式
+
+  # Verbose output mode
   python3 bin/SysTest check-env -v
-  
-  # 只检测不保存配置
+
+  # Only detect, do not save configuration
   python3 bin/SysTest check-env --no-save
-''')
-    check_env_parser.add_argument('--report', action='store_true', help='生成 JSON 报告')
-    check_env_parser.add_argument('--output', default='env_check_report.json', help='报告输出路径')
-    check_env_parser.add_argument('--no-save', action='store_true', help='不保存配置文件 (默认会自动保存 runtime.json)')
-    check_env_parser.add_argument('--verbose', '-v', action='store_true', help='详细输出')
+""")
+    check_env_parser.add_argument('--report', action='store_true', help='Generate JSON report')
+    check_env_parser.add_argument('--output', default='env_check_report.json', help='Report output path')
+    check_env_parser.add_argument('--no-save', action='store_true', help='Do not save configuration file (default will auto-save runtime.json)')
+    check_env_parser.add_argument('--verbose', '-v', action='store_true', help='Verbose output')
     check_env_parser.set_defaults(func=cmd_check_env)
 
-    # compare-baseline 命令
-    compare_parser = subparsers.add_parser('compare-baseline', 
-        help='对比性能基线',
-        description='对比两组测试结果的性能差异',
-        epilog='''示例:
-  # 对比开发板和 CI/CD 的测试结果
+    # compare-baseline command
+    compare_parser = subparsers.add_parser('compare-baseline',
+        help='Compare performance baselines',
+        description='Compare performance differences between two sets of test results',
+        epilog="""Examples:
+  # Compare development board and CI/CD test results
   python3 bin/SysTest compare-baseline --dev=results/SysTest_perf_dev --ci=results/SysTest_perf_ci
-  
-  # 对比两个基线目录
+
+  # Compare two baseline directories
   python3 bin/SysTest compare-baseline --baseline1=baseline_v1 --baseline2=baseline_v2
-  
-  # 设置允许差异阈值为 15%
+
+  # Set allowed difference threshold to 15%
   python3 bin/SysTest compare-baseline --baseline1=baseline_v1 --baseline2=baseline_v2 --threshold=0.15
-  
-  # 输出报告到指定路径
+
+  # Output report to specified path
   python3 bin/SysTest compare-baseline --baseline1=baseline_v1 --baseline2=baseline_v2 --output=comparison_report.json
-''')
-    compare_parser.add_argument('--dev', help='开发板测试结果目录')
-    compare_parser.add_argument('--ci', help='CI/CD 测试结果目录')
-    compare_parser.add_argument('--baseline1', help='第一个基线目录')
-    compare_parser.add_argument('--baseline2', help='第二个基线目录')
-    compare_parser.add_argument('--threshold', type=float, default=0.10, help='允许差异比例 (默认 0.10)')
-    compare_parser.add_argument('--output', help='报告输出路径')
+""")
+    compare_parser.add_argument('--dev', help='Development board test result directory')
+    compare_parser.add_argument('--ci', help='CI/CD test result directory')
+    compare_parser.add_argument('--baseline1', help='First baseline directory')
+    compare_parser.add_argument('--baseline2', help='Second baseline directory')
+    compare_parser.add_argument('--threshold', type=float, default=0.10, help='Allowed difference ratio (default 0.10)')
+    compare_parser.add_argument('--output', help='Report output path')
     compare_parser.set_defaults(func=cmd_compare_baseline)
 
-    # 解析参数
+    # Parse arguments
     args = parser.parse_args()
 
     if not args.command:
         parser.print_help()
         return 1
 
-    # 执行命令
+    # Execute command
     return args.func(args)
 
 

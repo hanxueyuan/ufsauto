@@ -1,137 +1,137 @@
-# UFS SysTest - UFS 系统测试框架
+# UFS SysTest - UFS System Test Framework
 
-生产级 UFS 存储设备系统测试框架，支持性能测试、QoS 测试、可靠性测试。
+Production-grade UFS storage device system test framework supporting performance tests, QoS tests, and reliability tests.
 
-## 🚀 快速开始
+## Quick Start
 
-### 安装依赖
+### Install Dependencies
 
 ```bash
-# 安装 FIO（Flexible I/O Tester）
+# Install FIO (Flexible I/O Tester)
 apt-get install fio  # Debian/Ubuntu
 yum install fio      # CentOS/RHEL
 
-# 验证安装
+# Verify installation
 fio --version
 ```
 
-### systemd 服务部署（推荐）
+### systemd Service Deployment (Recommended)
 
 ```bash
-# 安装 systemd 服务
+# Install systemd service
 cd /path/to/ufsauto/deploy
 sudo bash install-service.sh
 ```
 
-服务会自动：
-- 安装项目到 `/opt/ufsauto`
-- 创建测试目录 `/mapdata/ufs_test`
-- 配置每天凌晨 2 点自动运行
-- 启用日志记录到 journal
+The service will automatically:
+- Install the project to `/opt/ufsauto`
+- Create test directory `/mapdata/ufs_test`
+- Configure automatic runs at 2 AM daily
+- Enable logging to journal
 
-**常用命令**:
+**Common Commands**:
 ```bash
-# 查看服务状态
+# Check service status
 systemctl status ufs-systest.timer
 
-# 手动运行测试
+# Run test manually
 systemctl start ufs-systest.service
 
-# 查看日志
+# View logs
 journalctl -u ufs-systest.service -f
 
-# 禁用定时任务
+# Disable scheduled task
 systemctl disable ufs-systest.timer
 ```
 
-### 手动运行
+### Manual Execution
 
-### 环境检查
+#### Environment Check
 
 ```bash
 cd /path/to/ufsauto
 python3 -m systest.bin.systest check-env
 ```
 
-或：
+Or:
 ```bash
 python3 systest/bin/systest check-env
 ```
 
-### 运行测试
+### Run Tests
 
 ```bash
-# 运行性能测试套件
+# Run performance test suite
 python3 -m systest.bin.systest run --suite performance
 
-# 运行单个测试
+# Run single test
 python3 -m systest.bin.systest run --test seq_read_burst
 
-# Dry-run 模式（不执行真实测试）
+# Dry-run mode (do not execute real tests)
 python3 -m systest.bin.systest run --suite performance --dry-run
 ```
 
-## 📋 系统要求
+## System Requirements
 
-| 组件 | 版本要求 | 说明 |
-|------|----------|------|
-| Python | 3.8+ | 核心运行环境 |
-| FIO | 3.20+ | I/O 性能测试工具 |
-| Linux | 4.0+ | 支持 UFS 设备的内核 |
-| 存储设备 | UFS 2.1/3.1 | 车规级 UFS 存储 |
+| Component | Version | Description |
+|-----------|---------|-------------|
+| Python | 3.8+ | Core runtime environment |
+| FIO | 3.20+ | I/O performance testing tool |
+| Linux | 4.0+ | Kernel with UFS device support |
+| Storage Device | UFS 2.1/3.1 | Automotive-grade UFS storage |
 
-## 🏗️ 项目结构
+## Project Structure
 
 ```
 ufsauto/
 ├── systest/
-│   ├── bin/              # 命令行工具
-│   │   ├── systest       # 主入口
-│   │   ├── check-env     # 环境检查
-│   │   ├── systest_cli.py    # 主程序
-│   │   └── check_env.py      # 环境检查实现
-│   ├── core/             # 核心框架
-│   │   ├── runner.py     # 测试执行引擎
-│   │   ├── collector.py  # 结果收集器
-│   │   ├── reporter.py   # 报告生成器
-│   │   └── logger.py     # 日志管理
-│   ├── tools/            # 工具库
-│   │   ├── fio_wrapper.py    # FIO 封装
-│   │   ├── ufs_utils.py      # UFS 设备管理
-│   │   └── qos_chart_generator.py  # QoS 图表
-│   ├── suites/           # 测试套件
-│   │   ├── performance/  # 性能测试
-│   │   └── qos/          # QoS 测试
-│   └── config/           # 配置文件
-│       └── runtime.json  # 运行时配置
-├── docs/                 # 文档
-├── results/              # 测试结果
-└── README.md             # 本文件
+│   ├── bin/              # Command line tools
+│   │   ├── systest       # Main entry
+│   │   ├── check-env     # Environment check
+│   │   ├── systest_cli.py    # Main program
+│   │   └── check_env.py      # Environment check implementation
+│   ├── core/             # Core framework
+│   │   ├── runner.py     # Test execution engine
+│   │   ├── collector.py  # Result collector
+│   │   ├── reporter.py   # Report generator
+│   │   └── logger.py     # Log management
+│   ├── tools/            # Utility libraries
+│   │   ├── fio_wrapper.py    # FIO wrapper
+│   │   ├── ufs_utils.py      # UFS device management
+│   │   └── qos_chart_generator.py  # QoS charts
+│   ├── suites/           # Test suites
+│   │   ├── performance/  # Performance tests
+│   │   └── qos/          # QoS tests
+│   └── config/           # Configuration files
+│       └── runtime.json  # Runtime configuration
+├── docs/                 # Documentation
+├── results/              # Test results
+└── README.md             # This file
 ```
 
-## 🧪 测试套件
+## Test Suites
 
-### 性能测试 (performance)
+### Performance Tests (performance)
 
-| 测试用例 | 说明 | 预期指标 |
-|----------|------|----------|
-| `seq_read_burst` | 顺序读 Burst 性能 | ≥2100 MB/s |
-| `seq_write_burst` | 顺序写 Burst 性能 | ≥1800 MB/s |
-| `rand_read_burst` | 随机读 IOPS | ≥150K IOPS |
-| `rand_write_burst` | 随机写 IOPS | ≥120K IOPS |
-| `mixed_rw` | 混合读写 (70/30) | ≥150K IOPS |
+| Test Case | Description | Expected Metrics |
+|-----------|-------------|------------------|
+| `seq_read_burst` | Sequential Read Burst | >= 2100 MB/s |
+| `seq_write_burst` | Sequential Write Burst | >= 1800 MB/s |
+| `rand_read_burst` | Random Read IOPS | >= 150K IOPS |
+| `rand_write_burst` | Random Write IOPS | >= 120K IOPS |
+| `mixed_rw` | Mixed Read/Write (70/30) | >= 150K IOPS |
 
-### QoS 测试 (qos)
+### QoS Tests (qos)
 
-| 测试用例 | 说明 | 预期指标 |
-|----------|------|----------|
-| `qos_latency_percentile` | 延迟百分位 | p99.99 < 500μs |
+| Test Case | Description | Expected Metrics |
+|-----------|-------------|------------------|
+| `qos_latency_percentile` | Latency Percentiles | p99.99 < 500us |
 
-## 🔧 配置
+## Configuration
 
-### 环境配置
+### Environment Configuration
 
-编辑 `systest/config/runtime.json`：
+Edit `systest/config/runtime.json`:
 
 ```json
 {
@@ -156,91 +156,91 @@ ufsauto/
 }
 ```
 
-### 运行环境变量
+### Runtime Environment Variables
 
 ```bash
-# 设置运行环境
+# Set runtime environment
 export SYSTEST_ENV=development  # development/testing/production
 
-# 运行测试
+# Run tests
 python3 -m systest.bin.systest run --suite performance
 ```
 
-## 📊 测试结果
+## Test Results
 
-测试结果保存在 `results/` 目录：
+Test results are saved in the `results/` directory:
 
 ```
 results/
 └── SysTest_20260408_120000/
-    ├── report.html       # HTML 报告
-    ├── results.json      # JSON 原始数据
-    └── summary.txt       # 文本摘要
+    ├── report.html       # HTML Report
+    ├── results.json      # JSON Raw Data
+    └── summary.txt       # Text Summary
 ```
 
-### 查看报告
+### View Report
 
 ```bash
-# 打开 HTML 报告
+# Open HTML report
 firefox results/SysTest_20260408_120000/report.html
 ```
 
-## 🛠️ 开发指南
+## Developer Guide
 
-### 添加新测试用例
+### Add New Test Case
 
-1. 在 `systest/suites/` 下创建测试文件
-2. 继承 `PerformanceTestCase` 或 `TestCase`
-3. 实现 `execute()` 和 `validate()` 方法
+1. Create test file under `systest/suites/`
+2. Inherit from `PerformanceTestCase` or `TestCase`
+3. Implement `execute()` and `validate()` methods
 
-示例：
+Example:
 ```python
 from performance_base import PerformanceTestCase
 
 class TestMyNewTest(PerformanceTestCase):
     name = "my_new_test"
-    description = "我的新测试"
-    
-    # 定义性能目标
+    description = "My new test"
+
+    # Define performance targets
     target_bandwidth_mbps = 2000
-    
-    # 定义 FIO 配置
+
+    # Define FIO configuration
     fio_rw = 'read'
     fio_bs = '128k'
 ```
 
-### 运行测试
+### Run Test
 
 ```bash
 python3 -m systest.bin.systest run --test my_new_test
 ```
 
-## 📈 代码质量
+## Code Quality
 
-| 指标 | 状态 |
-|------|------|
-| Critical Bug | ✅ 0 |
-| High 问题 | ✅ 0 |
-| Medium 问题 | ✅ 0 |
-| 代码质量 | ✅ 98/100 |
-| 生产就绪度 | ✅ 99% |
+| Metric | Status |
+|--------|--------|
+| Critical Bugs | 0 |
+| High Issues | 0 |
+| Medium Issues | 0 |
+| Code Quality | 98/100 |
+| Production Readiness | 99% |
 
-## 🔒 安全性
+## Security
 
-- ✅ 路径遍历防护
-- ✅ 进程资源管理
-- ✅ 异常处理完善
-- ✅ 配置环境隔离
+- Path traversal protection
+- Process resource management
+- Complete exception handling
+- Configuration environment isolation
 
-## 🤝 贡献
+## Contributing
 
-欢迎提交 Issue 和 Pull Request！
+Issues and Pull Requests are welcome!
 
-## 📄 许可证
+## License
 
 MIT License
 
 ---
 
-**维护者**: UFS 测试团队  
-**最后更新**: 2026-04-08
+**Maintained by**: UFS Test Team  
+**Last Updated**: 2026-04-08

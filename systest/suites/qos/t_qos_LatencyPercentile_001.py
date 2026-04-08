@@ -224,19 +224,18 @@ class Test(TestCase):
         # 验证 p99.99
         if lat_p9999 > self.p9999_latency_us:
             self.record_failure(
-                "p99.99 延迟",
-                f"< {self.p9999_latency_us} μs",
-                f"{lat_p9999:.1f} μs",
-                "p99.99 延迟超出限制"
+                "p99.99 latency",
+                f"< {self.p9999_latency_us} us",
+                f"{lat_p9999:.1f} us",
+                "p99.99 latency exceeds limit"
             )
         else:
-            self.logger.info(f"  ✅ p99.99 延迟：{lat_p9999:.1f} μs (< {self.p9999_latency_us} μs)")
-        
+            self.logger.info(f"  p99.99 latency: {lat_p9999:.1f} us (< {self.p9999_latency_us} us)")
+
+        # Postcondition check (hardware health)
+        self._check_postcondition()
+
         return True
-        # Postcondition 检查
-        self._check_postcondition()
-        # Postcondition 检查
-        self._check_postcondition()
     
     def teardown(self) -> bool:
         """测试后清理"""

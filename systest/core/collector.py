@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-结果收集器 - Result Collector
-负责收集测试结果、生成标准数据格式、保存原始数据
+Result Collector - Result Collector
+Responsible for collecting test results, generating standard data formats, and saving raw data
 """
 
 import json
@@ -16,13 +16,13 @@ logger = logging.getLogger(__name__)
 
 
 class ResultCollector:
-    """测试结果收集器"""
-    
+    """Test result collector"""
+
     def __init__(self, output_dir: str = './results'):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        logger.info(f"结果输出目录：{self.output_dir.absolute()}")
-    
+        logger.info(f"Result output directory: {self.output_dir.absolute()}")
+
     def collect(
         self,
         results: List[Dict[str, Any]],
@@ -32,33 +32,33 @@ class ResultCollector:
         metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        收集测试结果
-        
+        Collect test results
+
         Args:
-            results: 测试结果列表
-            test_id: 测试 ID（默认使用时间戳）
-            suite_name: 测试套件名称
-            device: 测试设备
-            metadata: 额外元数据
-        
+            results: Test results list
+            test_id: Test ID (uses timestamp by default)
+            suite_name: Test suite name
+            device: Test device
+            metadata: Additional metadata
+
         Returns:
-            完整的报告数据结构
+            Complete report data structure
         """
         if test_id is None:
             test_id = f"SysTest_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        
-        # 创建测试输出目录
+
+        # Create test output directory
         test_dir = self.output_dir / test_id
         test_dir.mkdir(parents=True, exist_ok=True)
-        
-        # 计算汇总统计
+
+        # Calculate summary statistics
         total = len(results)
         passed = sum(1 for r in results if r.get('status') in ['PASS', 'DRY-RUN-PASS'])
         failed = sum(1 for r in results if r.get('status') == 'FAIL')
         errors = sum(1 for r in results if r.get('status') == 'ERROR')
         pass_rate = (passed / total * 100) if total > 0 else 0
-        
-        # 构建报告数据
+
+        # Build report data
         report_data = {
             'test_id': test_id,
             'timestamp': datetime.now().isoformat(),
@@ -74,19 +74,19 @@ class ResultCollector:
             },
             'metadata': metadata or {}
         }
-        
-        # 保存 JSON 结果
+
+        # Save JSON results
         json_path = test_dir / 'results.json'
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(report_data, f, indent=2, ensure_ascii=False)
-        logger.debug(f"结果已保存：{json_path}")
-        
-        # 保存每个测试用例的详细日志
+        logger.debug(f"Results saved: {json_path}")
+
+        # Save detailed log for each test case
         for result in results:
             if 'log_file' in result:
                 log_src = Path(result['log_file'])
                 log_size = 0
-                # 提前获取文件大小，供异常处理使用
+                # Get file size in advance for error handling
                 if log_src.exists():
                     try:
                         log_size = log_src.stat().st_size
@@ -97,108 +97,108 @@ class ResultCollector:
                     if log_src.exists():
                         log_dst = test_dir / f"{result['name']}.log"
 
-                        # 大文件复制进度提示
+                        # Large file copy progress notification
                         if log_size > 100 * 1024 * 1024:  # > 100MB
-                            logger.info(f"📄 开始复制大日志文件：{result['name']} ({log_size / 1024 / 1024:.1f} MB)")
-                            logger.info(f"   目标：{log_dst}")
+                            logger.info(f"Copying large log file: {result['name']} ({log_size / 1024 / 1024:.1f} MB)")
+                            logger.info(f"   Target: {log_dst}")
 
                         shutil.copy2(log_src, log_dst)
-                        logger.debug(f"📄 日志已复制：{result['name']} ({log_size / 1024 / 1024:.1f} MB)")
+                        logger.debug(f"Log copied: {result['name']} ({log_size / 1024 / 1024:.1f} MB)")
                 except Exception as e:
-                    # 异常处理中不再次获取文件大小，直接使用之前获取的值
+                    # Don't get file size again in error handling, use previously obtained value
                     if log_size > 500 * 1024 * 1024:  # > 500MB
-                        logger.warning(f"⚠️  大日志文件复制失败 {result['name']} ({log_size / 1024 / 1024:.1f} MB): {e}")
-                        logger.warning(f"💡 文件较大，复制可能需要更多空间或时间")
-                        logger.warning(f"💡 可手动清理：rm {log_dst}")
+                        logger.warning(f"Large log file copy failed {result['name']} ({log_size / 1024 / 1024:.1f} MB): {e}")
+                        logger.warning(f"File is large, copy may need more space or time")
+                        logger.warning(f"Manual cleanup: rm {log_dst}")
                     else:
-                        logger.warning(f"⚠️  日志文件复制失败 {result['name']} ({log_size / 1024 / 1024:.1f} MB): {e}")
-                    logger.warning(f"💡  建议：手动复制或删除大日志文件以释放空间")
-                    # 清理可能部分创建的文件
+                        logger.warning(f"Log file copy failed {result['name']} ({log_size / 1024 / 1024:.1f} MB): {e}")
+                    logger.warning(f"Recommendation: Manually copy or delete large log files to free space")
+                    # Clean up partially created files
                     if 'log_dst' in locals() and log_dst.exists():
                         try:
                             log_dst.unlink()
                         except Exception:
                             pass
-                # 继续处理其他结果，不中断整个流程
-        
-        # 保存汇总信息
+                # Continue processing other results, don't interrupt entire flow
+
+        # Save summary information
         summary_path = test_dir / 'summary.txt'
         self._save_summary(summary_path, report_data)
-        
-        logger.info(f"测试 {test_id} 结果汇总：{passed}/{total} 通过 ({pass_rate:.1f}%)")
-        
+
+        logger.info(f"Test {test_id} results summary: {passed}/{total} passed ({pass_rate:.1f}%)")
+
         return report_data
-    
+
     def _save_summary(self, path: Path, report_data: Dict[str, Any]):
-        """保存文本格式汇总"""
+        """Save text format summary"""
         lines = [
             "=" * 60,
-            "UFS 系统测试报告",
+            "UFS System Test Report",
             "=" * 60,
             "",
-            f"测试 ID: {report_data['test_id']}",
-            f"时间：{report_data['timestamp']}",
-            f"套件：{report_data['suite']}",
-            f"设备：{report_data['device']}",
+            f"Test ID: {report_data['test_id']}",
+            f"Time: {report_data['timestamp']}",
+            f"Suite: {report_data['suite']}",
+            f"Device: {report_data['device']}",
             "",
             "-" * 60,
-            "汇总统计",
+            "Summary Statistics",
             "-" * 60,
-            f"总计：{report_data['summary']['total']} 项",
-            f"通过：{report_data['summary']['passed']} 项",
-            f"失败：{report_data['summary']['failed']} 项",
-            f"错误：{report_data['summary']['errors']} 项",
-            f"通过率：{report_data['summary']['pass_rate']:.1f}%",
+            f"Total: {report_data['summary']['total']} items",
+            f"Passed: {report_data['summary']['passed']} items",
+            f"Failed: {report_data['summary']['failed']} items",
+            f"Errors: {report_data['summary']['errors']} items",
+            f"Pass Rate: {report_data['summary']['pass_rate']:.1f}%",
             "",
             "-" * 60,
-            "测试结果",
+            "Test Results",
             "-" * 60,
         ]
-        
+
         for result in report_data['test_cases']:
-            status_icon = '✅' if result['status'] == 'PASS' else '❌' if result['status'] == 'FAIL' else '⚠️'
+            status_icon = '[PASS]' if result['status'] == 'PASS' else '[FAIL]' if result['status'] == 'FAIL' else '[ERROR]'
             lines.append(f"{status_icon} {result['name']}: {result['status']} ({result.get('duration', 0):.2f}s)")
-        
+
         lines.append("")
         lines.append("=" * 60)
-        
+
         with open(path, 'w', encoding='utf-8') as f:
             f.write('\n'.join(lines))
-        
-        logger.debug(f"汇总已保存：{path}")
-    
+
+        logger.debug(f"Summary saved: {path}")
+
     def get_latest_test_id(self) -> Optional[str]:
-        """获取最新测试 ID"""
+        """Get latest test ID"""
         test_dirs = [d for d in self.output_dir.iterdir() if d.is_dir()]
         if not test_dirs:
             return None
-        
+
         latest = max(test_dirs, key=lambda d: d.stat().st_mtime)
         return latest.name
-    
+
     def load_results(self, test_id: str) -> Optional[Dict[str, Any]]:
-        """加载指定测试的结果"""
+        """Load results for specified test"""
         json_path = self.output_dir / test_id / 'results.json'
-        
+
         if not json_path.exists():
-            logger.warning(f"结果文件不存在：{json_path}")
+            logger.warning(f"Results file does not exist: {json_path}")
             return None
-        
+
         with open(json_path, 'r', encoding='utf-8') as f:
             return json.load(f)
-    
+
     def list_tests(self) -> List[Dict[str, Any]]:
-        """列出所有测试结果"""
+        """List all test results"""
         tests = []
-        
+
         for test_dir in sorted(self.output_dir.iterdir(), key=lambda d: d.stat().st_mtime, reverse=True):
             if not test_dir.is_dir():
                 continue
-            
+
             json_path = test_dir / 'results.json'
             if not json_path.exists():
                 continue
-            
+
             try:
                 with open(json_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
@@ -211,6 +211,6 @@ class ResultCollector:
                         'passed': data['summary']['passed']
                     })
             except Exception as e:
-                logger.warning(f"加载测试结果失败 {test_dir.name}: {e}")
-        
+                logger.warning(f"Failed to load test results {test_dir.name}: {e}")
+
         return tests
