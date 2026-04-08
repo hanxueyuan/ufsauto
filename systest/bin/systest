@@ -6,6 +6,14 @@ from pathlib import Path
 # 添加父目录到路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# 导入并执行 SysTest
-from bin.SysTest import main
+# 导入并执行 SysTest（兼容有/无.py 扩展名）
+try:
+    from bin.SysTest import main
+except ImportError:
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("SysTest", Path(__file__).parent / "SysTest")
+    SysTest = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(SysTest)
+    main = SysTest.main
+
 sys.exit(main())
