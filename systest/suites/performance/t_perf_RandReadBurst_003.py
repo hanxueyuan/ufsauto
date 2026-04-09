@@ -24,6 +24,7 @@ Test Duration: Approximately 70 seconds (including ramp)
 import os
 import sys
 import subprocess
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any
 
@@ -46,7 +47,7 @@ class Test(TestCase):
 
     def __init__(
         self,
-        device: str = '/dev/ufs0',
+        device: str = '/dev/sda',
         test_dir: Path = None,
         verbose: bool = False,
         logger=None,
@@ -145,6 +146,7 @@ class Test(TestCase):
 
     def execute(self) -> Dict[str, Any]:
         """Execute FIO random read test"""
+        self.start_time = datetime.now()
         self.logger.info("Starting random read performance test...")
 
         try:

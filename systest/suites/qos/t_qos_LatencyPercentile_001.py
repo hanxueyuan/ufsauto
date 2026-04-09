@@ -23,6 +23,7 @@ Test Duration: Approximately 60 seconds
 
 import sys
 import json
+from datetime import datetime
 from pathlib import Path
 
 # Add core and tools module paths
@@ -45,7 +46,7 @@ class Test(TestCase):
 
     def __init__(
         self,
-        device: str = '/dev/ufs0',
+        device: str = '/dev/sda',
         test_dir: Path = None,
         verbose: bool = False,
         logger=None,
@@ -121,6 +122,7 @@ class Test(TestCase):
 
     def execute(self) -> Dict[str, Any]:
         """Execute QoS latency percentile test"""
+        self.start_time = datetime.now()
         self.logger.info("Starting QoS latency percentile test...")
         self.logger.info(f"  bs={self.bs}, size={self.size}, runtime={self.runtime}s, iodepth={self.iodepth}")
 

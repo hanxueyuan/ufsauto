@@ -1,9 +1,29 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+Sequential Write Performance Test
+Test UFS device sequential write bandwidth (Burst mode)
+
+Test Case ID: t_perf_SeqWriteBurst_002
+Test Objective: Verify UFS device sequential write Burst performance meets targets
+Prerequisites:
+    1. UFS device is mounted
+    2. Sufficient available space (>= 2GB)
+    3. FIO tool is installed
+Test Steps:
+    1. Execute FIO sequential write test (128K block, 60s, including 10s ramp)
+    2. Validate bandwidth, IOPS, latency meet targets
+Expected Results:
+    - Bandwidth >= 1650 MB/s
+    - Average latency < 300 us
+    - p99.999 tail latency < 8000 us (8ms)
+Test Duration: Approximately 70 seconds (including ramp)
+"""
 
 import os
 import sys
 import subprocess
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any
 
@@ -18,12 +38,14 @@ from ufs_utils import UFSDevice
 
 
 class Test(TestCase):
+    """Sequential write performance test"""
+
     name = "seq_write_burst"
     description = "Sequential write performance test (Burst mode)"
 
     def __init__(
         self,
-        device: str = '/dev/ufs0',
+        device: str = '/dev/sda',
         test_dir: Path = None,
         verbose: bool = False,
         logger=None,
@@ -89,21 +111,8 @@ class Test(TestCase):
         self.logger.info("Prerequisites check passed")
         return True
 
-    def _parse_size_mb(self, size_str: str) -> int:
-        size_str = size_str.lower()
-        if size_str.endswith('g'):
-            return int(size_str[:-1]) * 1024
-        elif size_str.endswith('m'):
-            return int(size_str[:-1])
-        elif size_str.endswith('k'):
-            return max(1, int(size_str[:-1]) // 1024)
-        else:
-            try:
-                return int(size_str) // 1024 // 1024
-            except ValueError:
-                return 1024
-
     def execute(self) -> Dict[str, Any]:
+        self.start_time = datetime.now()
         self.logger.info("Starting sequential write performance test...")
 
         try:
