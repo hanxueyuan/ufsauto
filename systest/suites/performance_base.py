@@ -209,7 +209,7 @@ class PerformanceTestCase(TestCase):
                 'iops': iops,
                 'avg_latency_us': avg_latency_us,
                 'p99999_latency_us': p99999_latency_us,
-                'metrics_obj': metrics_obj,
+                # Don't include metrics_obj (not JSON serializable)
             }
 
         except FIOError as e:
