@@ -23,9 +23,6 @@ python3 systest/bin/systest_cli.py run --suite performance
 
 # Run QoS tests
 python3 systest/bin/systest_cli.py run --suite qos
-
-# Quick mode (50% test time)
-python3 systest/bin/systest_cli.py run --suite performance --quick
 ```
 
 ## 📋 Features
@@ -161,22 +158,6 @@ Edit `systest/config/runtime.json`:
 }
 ```
 
-### Development Mode Configuration
-
-Edit `systest/config/runtime.json`:
-
-```json
-{
-  "test_mode": {
-    "mode": "development",
-    "quick_test": true,
-    "runtime_seconds": 5,
-    "test_size": "64M",
-    "skip_prefill": true
-  }
-}
-```
-
 ## 💻 Common Commands
 
 ### Environment Setup
@@ -203,9 +184,6 @@ python3 systest/bin/systest_cli.py run --suite performance
 
 # Production mode - QoS suite
 python3 systest/bin/systest_cli.py run --suite qos
-
-# Quick mode (50% test time)
-python3 systest/bin/systest_cli.py run --suite performance --quick
 
 # Single test
 python3 systest/bin/systest_cli.py run --test t_perf_SeqReadBurst_001

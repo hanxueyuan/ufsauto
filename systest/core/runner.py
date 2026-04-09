@@ -421,13 +421,10 @@ class TestCase:
 class TestRunner:
     """Test execution engine"""
 
-    def __init__(self, device: str = None, test_dir: str = None, verbose: bool = False,
-                 ci_mode: bool = False, quick_factor: float = 1.0):
+    def __init__(self, device: str = None, test_dir: str = None, verbose: bool = False):
         self.device_override = device  # User manually specified
         self.test_dir_override = test_dir  # User manually specified
         self.verbose = verbose
-        self.ci_mode = ci_mode  # CI/CD environment mode
-        self.quick_factor = quick_factor  # Quick mode factor (0.5 = time halved)
         self.suites_dir = Path(__file__).parent.parent / 'suites'
         self.config_dir = Path(__file__).parent.parent / 'config'
         self.test_dir = None  # Final determined test directory
@@ -481,10 +478,6 @@ class TestRunner:
 
         # Determine test directory
         self._resolve_test_dir()
-
-        # CI environment validation (only in CI mode)
-        if self.ci_mode:
-            self._validate_ci_environment()
 
         # Load test suites
         self.suites = self._load_suites()
@@ -588,62 +581,6 @@ class TestRunner:
         except Exception as e:
             logger.warning(f"Unable to check disk space: {e}")
 
-    def _validate_ci_environment(self):
-        """CI/CD environment validation - Detect common configuration errors.
-
-        Checks:
-        1. Whether test directory falls back to /tmp (CI should manually specify)
-        2. Whether device path is default (CI should manually specify --device or run check-env --save-config)
-        3. Whether runtime.json exists (CI should have config file)
-
-        Returns:
-            bool: True = compliant, False = issues exist
-        """
-        errors = []
-        warnings = []
-
-        # 1. Check test directory fallback
-        if self.test_dir == Path('/tmp/ufs_test').absolute():
-            errors.append("Test directory falls back to /tmp (CI should manually specify --test-dir)")
-
-        # 2. Check if device path is default
-        if self.device == '/dev/sda' and not self.device_override and not self.runtime_config.get('device'):
-            errors.append("Device path is default /dev/sda (CI should manually specify --device or run check-env --save-config)")
-
-        # 3. Check if runtime.json exists
-        config_path = self.config_dir / 'runtime.json'
-        if not config_path.exists():
-            warnings.append("runtime.json configuration file missing (recommend running check-env --save-config)")
-
-        # Output results
-        if errors:
-            logger.error("=" * 60)
-            logger.error("CI Environment Validation Failed")
-            logger.error("=" * 60)
-            for i, err in enumerate(errors, 1):
-                logger.error(f"  {i}. {err}")
-            logger.error("")
-            logger.error("Recommended fixes:")
-            logger.error("  1. Add check-env --save-config step in GitHub Actions")
-            logger.error("  2. Or manually specify parameters: --test-dir=/path --device=/dev/xxx")
-            logger.error("=" * 60)
-
-            # CI mode raises exception (prevent further execution)
-            raise RuntimeError("CI environment validation failed, please check and fix above errors")
-
-        if warnings:
-            logger.warning("=" * 60)
-            logger.warning("CI Environment Validation Warnings")
-            logger.warning("=" * 60)
-            for i, warn in enumerate(warnings, 1):
-                logger.warning(f"  {i}. {warn}")
-            logger.warning("=" * 60)
-
-        if not errors and not warnings:
-            logger.info("CI Environment Validation Passed")
-
-        return len(errors) == 0
-
     @staticmethod
     def _run(cmd, timeout=10):
         try:
@@ -738,11 +675,6 @@ class TestRunner:
                     verbose=self.verbose,
                     logger=logger
                 )
-
-                # Quick mode: Adjust runtime parameter
-                if self.quick_factor != 1.0 and hasattr(test_instance, 'runtime'):
-                    test_instance.runtime = int(test_instance.runtime * self.quick_factor)
-                    test_instance.logger.info(f"Quick mode: runtime adjusted to {test_instance.runtime}s")
 
                 result = test_instance.run()
                 results.append(result)

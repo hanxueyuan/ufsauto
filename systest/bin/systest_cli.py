@@ -104,17 +104,10 @@ def cmd_run(args):
         logger.warning("Test directory not specified, will use default /mapdata/ufs_test")
         logger.warning("  Recommend running: python3 bin/SysTest check-env --save-config")
         args.test_dir = '/mapdata/ufs_test'
-    if args.quick:
-        logger.info("Mode: Quick mode (test time reduced by 50%)")
     if args.batch > 1:
         logger.info(f"Batch test: {args.batch} runs, {args.interval}s interval")
     logger.info(f"Test ID: {test_id}")
     logger.debug(f"Log file: {logger.get_log_file()}")
-
-    # Quick mode: adjust test parameters (shorten time)
-    quick_factor = 0.5 if args.quick else 1.0
-    if args.quick:
-        logger.info(f"Quick mode: test time reduced to {quick_factor*100:.0f}%")
 
     # Batch test
     batch_results = []
@@ -144,13 +137,11 @@ def cmd_run(args):
 
         # Execute each suite
         for suite_name in suites_to_run:
-            # Initialize components (pass quick_factor for runtime adjustment)
+            # Initialize components
             runner = TestRunner(
                 device=args.device,
                 test_dir=args.test_dir,
-                verbose=args.verbose,
-                ci_mode=args.ci if hasattr(args, 'ci') else False,
-                quick_factor=quick_factor
+                verbose=args.verbose
             )
             collector = ResultCollector(output_dir=args.output)
             reporter = ReportGenerator(template='default')
@@ -426,13 +417,11 @@ Quick Start:
 
 Execute Tests:
   SysTest run --suite=performance              # Performance test suite
-  SysTest run --suite=performance --quick      # Quick mode (time halved)
   SysTest run --test=t_perf_SeqReadBurst_001   # Single test
   SysTest run --test=t_perf_SeqReadBurst_001 -v  # Single test (verbose)
   SysTest run --suite=performance --batch=3 --interval=60  # Batch 3 times, 60s interval
   SysTest run --suite=performance --device=/dev/sda --test-dir=/mapdata/ufs_test
   SysTest run --suite=performance --config=configs/ufs31_128GB.json
-  SysTest run --suite=performance --ci         # CI/CD mode
   SysTest run --all                            # Run all suites
 
 View Information:
@@ -454,7 +443,7 @@ Environment Management:
 Complete Workflow:
   # Automotive-grade UFS 3.1 test flow
   SysTest check-env --save-config              # 1. Environment detection
-  SysTest run --suite=performance --quick      # 2. Performance test (quick)
+  SysTest run --suite=performance              # 2. Performance test
   SysTest run --suite=qos                      # 3. QoS test
   SysTest report --latest                      # 4. View report
   SysTest compare-baseline --baseline1 results/gold/ --baseline2 results/current/  # 5. Compare baseline
@@ -482,13 +471,6 @@ Complete Workflow:
   # Run all test suites
   python3 bin/SysTest run --all
 
-  [Quick Mode]
-  # Quick performance validation (reduce test time by 50%)
-  python3 bin/SysTest run --suite=performance --quick
-
-  # Quick mode + batch test
-  python3 bin/SysTest run --suite=performance --quick --batch=3
-
   [Single Test]
   # Run single test item
   python3 bin/SysTest run --test=t_perf_SeqReadBurst_001
@@ -499,9 +481,6 @@ Complete Workflow:
   [Batch Test]
   # Batch test 3 times, 60s interval
   python3 bin/SysTest run --suite=performance --batch=3 --interval=60
-
-  # Batch test 5 times, 30s interval (quick stability validation)
-  python3 bin/SysTest run --suite=performance --batch=5 --interval=30 --quick
 
   [Specify Device and Directory]
   # Specify device path
@@ -520,22 +499,15 @@ Complete Workflow:
   # Use automotive-grade configuration
   python3 bin/SysTest run --suite=performance --config=configs/automotive_grade.json
 
-  [CI/CD Integration]
-  # CI/CD environment mode (enable environment validation)
-  python3 bin/SysTest run --suite=performance --ci
-
-  # CI/CD + batch test
-  python3 bin/SysTest run --suite=performance --ci --batch=3
-
   [Complete Examples]
-  # Automotive-grade performance validation: quick mode + batch 3 times + specify device
-  python3 bin/SysTest run --suite=performance --quick --batch=3 --device=/dev/sda
+  # Automotive-grade performance validation: batch 3 times + specify device
+  python3 bin/SysTest run --suite=performance --batch=3 --device=/dev/sda
 
   # Full reliability test: all suites + verbose output
   python3 bin/SysTest run --all -v
 
-  # Production environment test: use preset configuration + CI mode
-  python3 bin/SysTest run --config=configs/ufs31_128GB.json --ci
+  # Production environment test: use preset configuration
+  python3 bin/SysTest run --config=configs/ufs31_128GB.json
 """)
     run_parser.add_argument('--suite', '-s', help='Test suite name (performance/qos)')
     run_parser.add_argument('--test', '-t', help='Single test item name')
@@ -545,12 +517,10 @@ Complete Workflow:
     run_parser.add_argument('--output', '-o', default='./results', help='Output directory')
     run_parser.add_argument('--format', '-f', default='html,json,txt', help='Report format (html/json/txt/csv)')
     run_parser.add_argument('--verbose', '-v', action='store_true', help='Verbose output')
-    run_parser.add_argument('--quick', '-q', action='store_true', help='Quick mode (reduce test time by 50%)')
     run_parser.add_argument('--batch', '-b', type=int, default=1, help='Batch test count (default 1)')
     run_parser.add_argument('--interval', '-i', type=int, default=60, help='Batch test interval in seconds (default 60s)')
     run_parser.add_argument('--config', '-c', default=None, help='Load preset configuration (e.g., configs/ufs31_128GB.json)')
     run_parser.add_argument('--export-csv', action='store_true', help='Export CSV format results')
-    run_parser.add_argument('--ci', action='store_true', help='CI/CD environment mode (enable environment validation)')
     run_parser.set_defaults(func=cmd_run)
 
     # list command
