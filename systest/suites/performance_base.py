@@ -52,6 +52,7 @@ class PerformanceTestCase(TestCase):
     fio_iodepth: int = 1
     fio_ramp_time: int = 0
     fio_ioengine: str = 'sync'
+    fio_rwmixread: int = 70  # 混合读写时的读百分比（仅当 fio_rw='randrw' 时使用）
 
     def __init__(self, device: str = '/dev/sda', test_dir: Path = None, verbose: bool = False, logger=None):
         super().__init__(device, test_dir, verbose, logger)
@@ -143,6 +144,10 @@ class PerformanceTestCase(TestCase):
         if self.fio_ramp_time > 0:
             fio_config_dict['ramp_time'] = self.fio_ramp_time
 
+        # 添加 rwmixread（仅当 fio_rw='randrw' 时）
+        if self.fio_rw == 'randrw' and self.fio_rwmixread:
+            fio_config_dict['rwmixread'] = self.fio_rwmixread
+
         # 合并额外配置
         if extra_config:
             fio_config_dict.update(extra_config)
@@ -153,18 +158,51 @@ class PerformanceTestCase(TestCase):
 
             # 转换为标准格式
             job_data = metrics_obj.raw.get('jobs', [{}])[0]
-            io_type = 'read' if 'read' in self.fio_rw.lower() else 'write'
-            io_stats = job_data.get(io_type, {})
 
-            # 带宽和 IOPS
-            bandwidth_mbps = io_stats.get('bw_bytes', 0) / (1024 * 1024)
-            iops = io_stats.get('iops', 0)
+            # 处理混合读写模式
+            if self.fio_rw == 'randrw':
+                # 混合读写：需要合并 read 和 write 的指标
+                read_stats = job_data.get('read', {})
+                write_stats = job_data.get('write', {})
 
-            # 延迟
-            lat_ns = io_stats.get('lat_ns', {})
-            avg_latency_us = lat_ns.get('mean', 0) / 1000
-            percentiles = lat_ns.get('percentile', {})
-            p99999_latency_us = percentiles.get('99.999', 0) / 1000
+                # 总 IOPS = read IOPS + write IOPS
+                read_iops = read_stats.get('iops', 0)
+                write_iops = write_stats.get('iops', 0)
+                iops = read_iops + write_iops
+
+                # 总带宽
+                read_bw = read_stats.get('bw_bytes', 0)
+                write_bw = write_stats.get('bw_bytes', 0)
+                bandwidth_mbps = (read_bw + write_bw) / (1024 * 1024)
+
+                # 加权平均延迟
+                read_lat_ns = read_stats.get('lat_ns', {})
+                write_lat_ns = write_stats.get('lat_ns', {})
+                avg_read_lat_us = read_lat_ns.get('mean', 0) / 1000
+                avg_write_lat_us = write_lat_ns.get('mean', 0) / 1000
+                if iops > 0:
+                    avg_latency_us = (avg_read_lat_us * read_iops + avg_write_lat_us * write_iops) / iops
+                else:
+                    avg_latency_us = (avg_read_lat_us + avg_write_lat_us) / 2
+
+                # 尾部延迟取两者最大值
+                read_percentiles = read_lat_ns.get('percentile', {})
+                write_percentiles = write_lat_ns.get('percentile', {})
+                p99999_read = read_percentiles.get('99.999', 0) / 1000
+                p99999_write = write_percentiles.get('99.999', 0) / 1000
+                p99999_latency_us = max(p99999_read, p99999_write)
+            else:
+                # 单一 IO 模式
+                io_type = 'read' if 'read' in self.fio_rw.lower() else 'write'
+                io_stats = job_data.get(io_type, {})
+
+                bandwidth_mbps = io_stats.get('bw_bytes', 0) / (1024 * 1024)
+                iops = io_stats.get('iops', 0)
+
+                lat_ns = io_stats.get('lat_ns', {})
+                avg_latency_us = lat_ns.get('mean', 0) / 1000
+                percentiles = lat_ns.get('percentile', {})
+                p99999_latency_us = percentiles.get('99.999', 0) / 1000
 
             return {
                 'bandwidth_mbps': bandwidth_mbps,

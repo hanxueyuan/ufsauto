@@ -219,7 +219,7 @@ def cmd_list(args):
     """List available tests"""
     from core.runner import TestRunner
 
-    runner = TestRunner(dry_run=True)
+    runner = TestRunner()
 
     print("\n=== Available Test Suites ===\n")
     suites = runner.list_suites()
