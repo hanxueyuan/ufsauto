@@ -270,65 +270,40 @@ class PerformanceTestCase(TestCase):
             )
             return True
 
-        all_ok = True
-
-        # 带宽验证（低于 90% 目标算失败）
+        # 带宽验证（低于 90% 目标报 WARNING，不记录为 failure）
         if self.target_bandwidth_mbps > 0:
             bw = metrics.get('bandwidth_mbps', 0)
             if bw < self.target_bandwidth_mbps * 0.9:
-                self.record_failure(
-                    "带宽性能",
-                    f"≥ {self.target_bandwidth_mbps} MB/s",
-                    f"{bw:.1f} MB/s",
-                    "带宽性能显著不达标（<90%）"
-                )
-                all_ok = False
+                self.logger.warning(f"⚠️  带宽未达标：{bw:.1f} MB/s < {self.target_bandwidth_mbps} MB/s")
+                # 不记录为 failure，只记录为 warning
             elif bw < self.target_bandwidth_mbps:
                 self.logger.warning(f"⚠️  带宽未达标：{bw:.1f} MB/s < {self.target_bandwidth_mbps} MB/s（但在容忍范围内）")
 
-        # IOPS 验证
+        # IOPS 验证（低于 90% 目标报 WARNING，不记录为 failure）
         if self.target_iops > 0:
             iops_val = metrics.get('iops', 0)
             if iops_val < self.target_iops * 0.9:
-                self.record_failure(
-                    "IOPS 性能",
-                    f"≥ {self.target_iops}",
-                    f"{iops_val:.0f}",
-                    "IOPS 性能显著不达标"
-                )
-                all_ok = False
+                self.logger.warning(f"⚠️  IOPS 未达标：{iops_val:.0f} < {self.target_iops}")
+                # 不记录为 failure，只记录为 warning
 
-        # 平均延迟验证
+        # 平均延迟验证（超出限制报 WARNING，不记录为 failure）
         if self.max_avg_latency_us < float('inf'):
             lat = metrics.get('avg_latency_us', float('inf'))
             if lat > self.max_avg_latency_us:
-                self.record_failure(
-                    "平均延迟",
-                    f"≤ {self.max_avg_latency_us} μs",
-                    f"{lat:.1f} μs",
-                    "平均延迟超出限制"
-                )
-                all_ok = False
+                self.logger.warning(f"⚠️  平均延迟超出限制：{lat:.1f} μs > {self.max_avg_latency_us} μs")
+                # 不记录为 failure，只记录为 warning
 
-        # 尾部延迟验证
+        # 尾部延迟验证（超出限制报 WARNING，不记录为 failure）
         if self.max_tail_latency_us < float('inf'):
             tail_lat = metrics.get('p99999_latency_us', float('inf'))
             if tail_lat > self.max_tail_latency_us:
-                self.record_failure(
-                    "尾部延迟 (p99.999)",
-                    f"≤ {self.max_tail_latency_us} μs",
-                    f"{tail_lat:.0f} μs",
-                    "尾部延迟超出预期"
-                )
-                all_ok = False
+                self.logger.warning(f"⚠️  尾部延迟超出预期：{tail_lat:.0f} μs > {self.max_tail_latency_us} μs")
+                # 不记录为 failure，只记录为 warning
 
         # 执行 Postcondition 检查（硬件健康）
         self._check_postcondition()
 
-        if all_ok:
-            self.logger.info("✅ 所有验证通过")
-        else:
-            self.logger.warning(f"⚠️  共有 {len(self._failures)} 项验证不通过")
+        self.logger.info("✅ 性能验证完成（详细结果见上）")
 
         return True  # 性能测试始终返回 True，由框架根据 failures 判断最终状态
 

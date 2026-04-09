@@ -1,0 +1,52 @@
+{
+  "timestamp": "2026-04-09T11:42:46.254201",
+  "history_count": 5,
+  "current_results": [
+    {
+      "name": "seq_read_burst",
+      "bandwidth_mbps": 49515.02199554443,
+      "iops": 396120.175965,
+      "avg_latency_us": 2.3462363529999997,
+      "status": "PASS"
+    },
+    {
+      "name": "seq_write_burst",
+      "bandwidth_mbps": 195.08598232269287,
+      "iops": 1560.687862,
+      "avg_latency_us": 640.238772325,
+      "status": "PASS"
+    },
+    {
+      "name": "rand_read_burst",
+      "bandwidth_mbps": 4870.339213371277,
+      "iops": 1246806.838632,
+      "avg_latency_us": 0.513405238,
+      "status": "PASS"
+    },
+    {
+      "name": "rand_write_burst",
+      "bandwidth_mbps": 15.725760459899902,
+      "iops": 4025.794841,
+      "avg_latency_us": 247.760129787,
+      "status": "PASS"
+    },
+    {
+      "name": "mixed_rw",
+      "bandwidth_mbps": 12.338156700134277,
+      "iops": 3158.568286,
+      "avg_latency_us": 56.878620727000005,
+      "status": "PASS"
+    },
+    {
+      "name": "qos_latency",
+      "bandwidth_mbps": 4774.530249595642,
+      "iops": 1222279.744051,
+      "avg_latency_us": 0.5285086,
+      "status": "PASS"
+    }
+  ],
+  "trends": {},
+  "summary": {
+    "message": "无对比数据"
+  }
+}

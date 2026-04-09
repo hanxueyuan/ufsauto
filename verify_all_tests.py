@@ -32,6 +32,19 @@ from logger import get_logger
 from report_generator import ReportGenerator
 import subprocess
 
+# 导入新增的模块（如果可用）
+try:
+    from history_comparison import HistoryComparator
+    HAS_HISTORY_COMPARISON = True
+except ImportError:
+    HAS_HISTORY_COMPARISON = False
+
+try:
+    from chart_generator import ChartGenerator
+    HAS_CHART_GENERATOR = True
+except ImportError:
+    HAS_CHART_GENERATOR = False
+
 
 class TestVerifier:
     """测试验证器 - 批量验证所有测试用例"""
@@ -45,6 +58,10 @@ class TestVerifier:
         # 确保日志目录存在
         log_dir = Path(__file__).parent / 'logs'
         log_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 创建结果目录（用于保存 FIO 原始输出）
+        self.results_dir = Path(__file__).parent / 'results' / self.test_id
+        self.results_dir.mkdir(parents=True, exist_ok=True)
         
         self.logger = get_logger(
             test_id=self.test_id,
@@ -167,6 +184,15 @@ class TestVerifier:
             }
             self.fio_outputs[test_name] = fio_output_data
             
+            # 保存 FIO 输出到 results/<test_id>/ 目录
+            fio_file = self.results_dir / f"fio_output_{test_name}.json"
+            try:
+                with open(fio_file, 'w', encoding='utf-8') as f:
+                    json.dump(fio_output_data, f, indent=2, ensure_ascii=False)
+                self.logger.info(f"✓ FIO 输出已保存：{fio_file}")
+            except Exception as e:
+                self.logger.error(f"保存 FIO 输出失败：{e}")
+            
             # 合并输出（FIO 可能输出到任一位置）
             combined_output = result.stdout + result.stderr
             
@@ -174,16 +200,6 @@ class TestVerifier:
                 error_msg = f"FIO execution failed (exit code={result.returncode})"
                 self.logger.error(f"✗ {test_name} 失败：{error_msg}")
                 self.logger.error(f"标准错误：{result.stderr}")
-                
-                # 保存 FIO 输出到文件
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                fio_file = Path('logs') / f"fio_output_{test_name}_{timestamp}.json"
-                try:
-                    with open(fio_file, 'w', encoding='utf-8') as f:
-                        json.dump(fio_output_data, f, indent=2, ensure_ascii=False)
-                    self.logger.info(f"✓ FIO 输出已保存：{fio_file}")
-                except Exception as e:
-                    self.logger.error(f"保存 FIO 输出失败：{e}")
                 
                 return {
                     'name': test_name,
@@ -213,15 +229,7 @@ class TestVerifier:
                 stack_trace = traceback.format_exc()
                 self.logger.error(f"堆栈跟踪:\n{stack_trace}")
                 
-                # 保存 FIO 输出到文件
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                fio_file = Path('logs') / f"fio_output_{test_name}_{timestamp}.json"
-                try:
-                    with open(fio_file, 'w', encoding='utf-8') as f:
-                        json.dump(fio_output_data, f, indent=2, ensure_ascii=False)
-                    self.logger.info(f"✓ FIO 输出已保存：{fio_file}")
-                except Exception as save_err:
-                    self.logger.error(f"保存 FIO 输出失败：{save_err}")
+                # FIO 输出已在上面保存
                 
                 return {
                     'name': test_name,
@@ -276,17 +284,7 @@ class TestVerifier:
             stack_trace = traceback.format_exc()
             self.logger.error(f"堆栈跟踪:\n{stack_trace}")
             
-            # 保存 FIO 输出到文件
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            fio_file = Path('logs') / f"fio_output_{test_name}_{timestamp}.json"
-            try:
-                fio_output_data['error'] = error_msg
-                fio_output_data['stack_trace'] = stack_trace
-                with open(fio_file, 'w', encoding='utf-8') as f:
-                    json.dump(fio_output_data, f, indent=2, ensure_ascii=False)
-                self.logger.info(f"✓ FIO 输出已保存：{fio_file}")
-            except Exception as save_err:
-                self.logger.error(f"保存 FIO 输出失败：{save_err}")
+            # FIO 输出已在上面保存
             
             return {
                 'name': test_name,
@@ -306,18 +304,7 @@ class TestVerifier:
             stack_trace = traceback.format_exc()
             self.logger.error(f"堆栈跟踪:\n{stack_trace}")
             
-            # 保存 FIO 输出到文件
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            fio_file = Path('logs') / f"fio_output_{test_name}_{timestamp}.json"
-            try:
-                fio_output_data['error'] = error_msg
-                fio_output_data['stack_trace'] = stack_trace
-                fio_output_data['exception_type'] = type(e).__name__
-                with open(fio_file, 'w', encoding='utf-8') as f:
-                    json.dump(fio_output_data, f, indent=2, ensure_ascii=False)
-                self.logger.info(f"✓ FIO 输出已保存：{fio_file}")
-            except Exception as save_err:
-                self.logger.error(f"保存 FIO 输出失败：{save_err}")
+            # FIO 输出已在上面保存
             
             return {
                 'name': test_name,
@@ -499,6 +486,51 @@ def main():
         print(f"✓ 报告已生成：{report_path}")
     except Exception as e:
         print(f"⚠ 报告生成失败：{e}")
+    
+    # 生成历史对比数据（新模块）
+    if HAS_HISTORY_COMPARISON:
+        print("\n生成历史对比数据...")
+        try:
+            comparator = HistoryComparator()
+            comparator.load_history_reports(max_reports=10)
+            
+            # 转换结果格式以适配历史对比模块
+            current_for_comparison = []
+            for r in results:
+                current_for_comparison.append({
+                    'name': r['name'],
+                    'bandwidth_mbps': r.get('bandwidth_mbps', 0),
+                    'iops': r.get('iops', 0),
+                    'avg_latency_us': r.get('avg_latency_us', 0),
+                    'status': r['status']
+                })
+            
+            comparison = comparator.compare_with_current(current_for_comparison)
+            comparator.save_comparison()
+            comparator.print_summary()
+        except Exception as e:
+            print(f"⚠ 历史对比生成失败：{e}")
+    
+    # 生成图表（新模块）
+    if HAS_CHART_GENERATOR:
+        print("\n生成图表...")
+        try:
+            chart_gen = ChartGenerator()
+            
+            # 加载历史对比数据
+            history_comparison = None
+            if HAS_HISTORY_COMPARISON and comparator.comparison_result:
+                history_comparison = comparator.comparison_result
+            
+            # 生成所有图表
+            charts = chart_gen.generate_all_charts(
+                test_results=results,
+                history_comparison=history_comparison,
+                target_config={'target_bandwidth_mbps': 2100, 'target_iops': 15000}
+            )
+            chart_gen.print_generated_charts()
+        except Exception as e:
+            print(f"⚠ 图表生成失败：{e}")
     
     # 返回结果
     passed = sum(1 for r in results if r['status'] == 'PASS')

@@ -35,6 +35,19 @@ sys.path.insert(0, str(systest_dir / 'tools'))
 
 from logger import get_logger, close_all_loggers
 
+# 导入新增的模块（如果可用）
+try:
+    from history_comparison import HistoryComparator
+    HAS_HISTORY_COMPARISON = True
+except ImportError:
+    HAS_HISTORY_COMPARISON = False
+
+try:
+    from chart_generator import ChartGenerator
+    HAS_CHART_GENERATOR = True
+except ImportError:
+    HAS_CHART_GENERATOR = False
+
 
 def get_system_snapshot() -> Dict[str, Any]:
     """获取系统状态快照"""
@@ -111,6 +124,10 @@ class EnhancedTestVerifier:
         # 日志目录
         log_dir = Path(__file__).parent / 'logs' / 'enhanced'
         log_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 创建结果目录（用于保存 FIO 原始输出）
+        self.results_dir = Path(__file__).parent / 'results' / self.test_id
+        self.results_dir.mkdir(parents=True, exist_ok=True)
         
         self.logger = get_logger(
             test_id=self.test_id,
@@ -297,17 +314,19 @@ class EnhancedTestVerifier:
                 timeout=config['runtime'] + 30
             )
             
-            # 保存 FIO 原始输出（如果启用）
-            if self.save_fio_output:
-                self.fio_outputs[test_name] = {
-                    'stdout': result.stdout,
-                    'stderr': result.stderr,
-                    'returncode': result.returncode
-                }
-                fio_output_file = self.test_dir.parent / f'fio_output_{test_name}.json'
-                with open(fio_output_file, 'w') as f:
-                    json.dump(self.fio_outputs[test_name], f, indent=2)
-                self.logger.info(f"✓ FIO 原始输出已保存：{fio_output_file}")
+            # 保存 FIO 原始输出（始终保存）
+            fio_output_data = {
+                'stdout': result.stdout,
+                'stderr': result.stderr,
+                'returncode': result.returncode,
+                'command': ' '.join(fio_cmd),
+                'timestamp': datetime.now().isoformat()
+            }
+            self.fio_outputs[test_name] = fio_output_data
+            fio_output_file = self.results_dir / f'fio_output_{test_name}.json'
+            with open(fio_output_file, 'w', encoding='utf-8') as f:
+                json.dump(fio_output_data, f, indent=2, ensure_ascii=False)
+            self.logger.info(f"✓ FIO 原始输出已保存：{fio_output_file}")
             
             # 4. 检查执行结果
             combined_output = result.stdout + result.stderr
@@ -546,6 +565,51 @@ def main():
     
     # 打印摘要
     verifier.print_summary()
+    
+    # 生成历史对比数据（新模块）
+    if HAS_HISTORY_COMPARISON:
+        print("\n生成历史对比数据...")
+        try:
+            comparator = HistoryComparator()
+            comparator.load_history_reports(max_reports=10)
+            
+            # 转换结果格式以适配历史对比模块
+            current_for_comparison = []
+            for r in results:
+                current_for_comparison.append({
+                    'name': r['name'],
+                    'bandwidth_mbps': r.get('bandwidth_mbps', 0),
+                    'iops': r.get('iops', 0),
+                    'avg_latency_us': r.get('avg_latency_us', 0),
+                    'status': r['status']
+                })
+            
+            comparison = comparator.compare_with_current(current_for_comparison)
+            comparator.save_comparison()
+            comparator.print_summary()
+        except Exception as e:
+            print(f"⚠ 历史对比生成失败：{e}")
+    
+    # 生成图表（新模块）
+    if HAS_CHART_GENERATOR:
+        print("\n生成图表...")
+        try:
+            chart_gen = ChartGenerator()
+            
+            # 加载历史对比数据
+            history_comparison = None
+            if HAS_HISTORY_COMPARISON and comparator.comparison_result:
+                history_comparison = comparator.comparison_result
+            
+            # 生成所有图表
+            charts = chart_gen.generate_all_charts(
+                test_results=results,
+                history_comparison=history_comparison,
+                target_config={'target_bandwidth_mbps': 2100, 'target_iops': 15000}
+            )
+            chart_gen.print_generated_charts()
+        except Exception as e:
+            print(f"⚠ 图表生成失败：{e}")
     
     # 清理
     close_all_loggers()
