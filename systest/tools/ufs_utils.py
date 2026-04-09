@@ -344,13 +344,12 @@ class UFSDevice:
 
     def get_health_status(self) -> Dict[str, Any]:
         """
-        Get device health status
+        Get device health status (optional feature)
 
         Returns:
-            Dict: Health status information
+            Dict: Health status information (returns OK if not available)
         """
-        self.logger.info("Getting UFS device health status...")
-
+        # Default health status (assumes OK if health info not available)
         health = {
             'status': 'OK',
             'pre_eol_info': 'N/A',
@@ -359,7 +358,7 @@ class UFSDevice:
             'critical_warning': 0
         }
 
-        # Try to read from sysfs
+        # Try to read from sysfs (UFS health info is optional)
         health_dir = self._find_ufs_health_dir()
         if health_dir:
             try:
@@ -389,9 +388,11 @@ class UFSDevice:
                     health['status'] = 'PRE_EOL'
 
             except Exception as e:
-                self.logger.warning(f"Failed to read health status: {e}")
+                self.logger.debug(f"Failed to read health status: {e}")
 
-        self.logger.info(f"Health status: {health['status']}")
+        # Only log if health info is actually available
+        if health['status'] != 'OK' or health['pre_eol_info'] != 'N/A':
+            self.logger.debug(f"Health status: {health['status']}")
         return health
 
     def _find_ufs_health_dir(self) -> Optional[Path]:
@@ -442,7 +443,8 @@ class UFSDevice:
                     except Exception:
                         pass
 
-        self.logger.warning(f"UFS health directory not found")
+        # Health info is optional - don't warn if not available
+        # Many platforms don't expose UFS health info via sysfs
         return None
 
     def flush_cache(self) -> bool:
