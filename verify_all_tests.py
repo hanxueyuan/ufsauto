@@ -18,6 +18,7 @@ import os
 import json
 import logging
 import time
+import traceback
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Any
@@ -28,6 +29,7 @@ sys.path.insert(0, str(systest_dir / 'core'))
 sys.path.insert(0, str(systest_dir / 'tools'))
 
 from logger import get_logger
+from report_generator import ReportGenerator
 import subprocess
 
 
@@ -39,13 +41,19 @@ class TestVerifier:
         self.test_dir = test_dir
         self.verbose = verbose
         self.test_id = f"VerifyAll_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
+        # 确保日志目录存在
+        log_dir = Path(__file__).parent / 'logs'
+        log_dir.mkdir(parents=True, exist_ok=True)
+        
         self.logger = get_logger(
             test_id=self.test_id,
-            log_dir='logs',
+            log_dir=str(log_dir),
             console_level=logging.INFO,
             file_level=logging.DEBUG
         )
         self.results = []
+        self.fio_outputs = {}  # 保存 FIO 原始输出
         
         # 开发模式配置
         self.dev_config = {
@@ -107,15 +115,19 @@ class TestVerifier:
 
     def run_test(self, test_name: str, test_type: str, rw_mode: str, 
                  extra_args: Dict = None) -> Dict[str, Any]:
-        """运行单个测试"""
+        """运行单个测试（增强版 - 保存 FIO 输出和堆栈跟踪）"""
         self.logger.info(f"运行测试：{test_name} ({test_type})")
         
-        test_file = self.test_dir / f"ufs_test_{test_name}"
+        # 记录测试配置
         config = self.dev_config.copy()
         if extra_args:
             config.update(extra_args)
         
+        self.logger.info(f"测试配置：{json.dumps(config)}")
+        
+        test_file = self.test_dir / f"ufs_test_{test_name}"
         start_time = time.time()
+        fio_cmd = None
         
         try:
             # 创建测试文件
@@ -145,16 +157,42 @@ class TestVerifier:
             
             elapsed = time.time() - start_time
             
+            # 保存 FIO 原始输出（包含 stdout 和 stderr）
+            fio_output_data = {
+                'stdout': result.stdout,
+                'stderr': result.stderr,
+                'returncode': result.returncode,
+                'command': ' '.join(fio_cmd),
+                'timestamp': datetime.now().isoformat()
+            }
+            self.fio_outputs[test_name] = fio_output_data
+            
             # 合并输出（FIO 可能输出到任一位置）
             combined_output = result.stdout + result.stderr
             
             if result.returncode != 0 and not combined_output.strip().startswith('{'):
-                self.logger.error(f"✗ {test_name} 失败：{result.stderr}")
+                error_msg = f"FIO execution failed (exit code={result.returncode})"
+                self.logger.error(f"✗ {test_name} 失败：{error_msg}")
+                self.logger.error(f"标准错误：{result.stderr}")
+                
+                # 保存 FIO 输出到文件
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                fio_file = Path('logs') / f"fio_output_{test_name}_{timestamp}.json"
+                try:
+                    with open(fio_file, 'w', encoding='utf-8') as f:
+                        json.dump(fio_output_data, f, indent=2, ensure_ascii=False)
+                    self.logger.info(f"✓ FIO 输出已保存：{fio_file}")
+                except Exception as e:
+                    self.logger.error(f"保存 FIO 输出失败：{e}")
+                
                 return {
                     'name': test_name,
                     'type': test_type,
+                    'rw_mode': rw_mode,
                     'status': 'ERROR',
-                    'error': result.stderr,
+                    'error': error_msg,
+                    'fio_stderr': result.stderr,
+                    'fio_exit_code': result.returncode,
                     'elapsed': elapsed
                 }
             
@@ -169,13 +207,30 @@ class TestVerifier:
                 else:
                     fio_output = json.loads(combined_output)
             except json.JSONDecodeError as e:
-                self.logger.error(f"JSON 解析失败：{e}")
-                self.logger.debug(f"输出内容：{combined_output[:500]}")
+                error_msg = f'JSON parse error: {e}'
+                self.logger.error(f"✗ {test_name} JSON 解析失败：{error_msg}")
+                self.logger.error(f"输出内容：{combined_output[:500]}")
+                stack_trace = traceback.format_exc()
+                self.logger.error(f"堆栈跟踪:\n{stack_trace}")
+                
+                # 保存 FIO 输出到文件
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                fio_file = Path('logs') / f"fio_output_{test_name}_{timestamp}.json"
+                try:
+                    with open(fio_file, 'w', encoding='utf-8') as f:
+                        json.dump(fio_output_data, f, indent=2, ensure_ascii=False)
+                    self.logger.info(f"✓ FIO 输出已保存：{fio_file}")
+                except Exception as save_err:
+                    self.logger.error(f"保存 FIO 输出失败：{save_err}")
+                
                 return {
                     'name': test_name,
                     'type': test_type,
+                    'rw_mode': rw_mode,
                     'status': 'ERROR',
-                    'error': f'JSON parse error: {e}',
+                    'error': error_msg,
+                    'raw_output': combined_output[:2000],
+                    'stack_trace': stack_trace,
                     'elapsed': elapsed
                 }
             job = fio_output.get('jobs', [{}])[0]
@@ -205,6 +260,7 @@ class TestVerifier:
             return {
                 'name': test_name,
                 'type': test_type,
+                'rw_mode': rw_mode,
                 'status': 'PASS',
                 'bandwidth_mbps': bw_mbps,
                 'iops': iops,
@@ -214,21 +270,64 @@ class TestVerifier:
             
         except subprocess.TimeoutExpired:
             elapsed = time.time() - start_time
-            self.logger.error(f"✗ {test_name} 超时 ({elapsed:.1f}s)")
+            error_msg = f"Test timeout (>{config['runtime'] + 30}s)"
+            self.logger.error(f"✗ {test_name} 超时：{error_msg}")
+            self.logger.error(f"命令：{' '.join(fio_cmd) if fio_cmd else 'N/A'}")
+            stack_trace = traceback.format_exc()
+            self.logger.error(f"堆栈跟踪:\n{stack_trace}")
+            
+            # 保存 FIO 输出到文件
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            fio_file = Path('logs') / f"fio_output_{test_name}_{timestamp}.json"
+            try:
+                fio_output_data['error'] = error_msg
+                fio_output_data['stack_trace'] = stack_trace
+                with open(fio_file, 'w', encoding='utf-8') as f:
+                    json.dump(fio_output_data, f, indent=2, ensure_ascii=False)
+                self.logger.info(f"✓ FIO 输出已保存：{fio_file}")
+            except Exception as save_err:
+                self.logger.error(f"保存 FIO 输出失败：{save_err}")
+            
             return {
                 'name': test_name,
                 'type': test_type,
+                'rw_mode': rw_mode,
                 'status': 'TIMEOUT',
+                'error': error_msg,
+                'command': ' '.join(fio_cmd) if fio_cmd else 'N/A',
+                'stack_trace': stack_trace,
                 'elapsed': elapsed
             }
         except Exception as e:
             elapsed = time.time() - start_time
-            self.logger.error(f"✗ {test_name} 异常：{e}")
+            error_msg = f"Test exception: {type(e).__name__}: {e}"
+            self.logger.error(f"✗ {test_name} 异常：{error_msg}")
+            self.logger.error(f"命令：{' '.join(fio_cmd) if fio_cmd else 'N/A'}")
+            stack_trace = traceback.format_exc()
+            self.logger.error(f"堆栈跟踪:\n{stack_trace}")
+            
+            # 保存 FIO 输出到文件
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            fio_file = Path('logs') / f"fio_output_{test_name}_{timestamp}.json"
+            try:
+                fio_output_data['error'] = error_msg
+                fio_output_data['stack_trace'] = stack_trace
+                fio_output_data['exception_type'] = type(e).__name__
+                with open(fio_file, 'w', encoding='utf-8') as f:
+                    json.dump(fio_output_data, f, indent=2, ensure_ascii=False)
+                self.logger.info(f"✓ FIO 输出已保存：{fio_file}")
+            except Exception as save_err:
+                self.logger.error(f"保存 FIO 输出失败：{save_err}")
+            
             return {
                 'name': test_name,
                 'type': test_type,
+                'rw_mode': rw_mode,
                 'status': 'ERROR',
-                'error': str(e),
+                'error': error_msg,
+                'exception_type': type(e).__name__,
+                'command': ' '.join(fio_cmd) if fio_cmd else 'N/A',
+                'stack_trace': stack_trace,
                 'elapsed': elapsed
             }
 
@@ -272,6 +371,17 @@ class TestVerifier:
         self.logger.info("=" * 60)
         
         return self.results
+    
+    def get_report_data(self, total_duration: float) -> Dict[str, Any]:
+        """生成报告数据"""
+        return {
+            'test_id': self.test_id,
+            'test_mode': 'development',
+            'device': str(self.device),
+            'total_duration': total_duration,
+            'config': self.dev_config.copy(),
+            'test_cases': self.results
+        }
 
     def print_summary(self):
         """打印结果摘要"""
@@ -374,8 +484,21 @@ def main():
     # 运行所有测试
     results = verifier.verify_all_tests()
     
+    # 计算总耗时
+    total_duration = sum(r.get('elapsed', 0) for r in results)
+    
     # 打印摘要
     verifier.print_summary()
+    
+    # 自动生成报告
+    print("生成测试报告...")
+    try:
+        report_data = verifier.get_report_data(total_duration)
+        generator = ReportGenerator()
+        report_path = generator.generate_markdown(report_data)
+        print(f"✓ 报告已生成：{report_path}")
+    except Exception as e:
+        print(f"⚠ 报告生成失败：{e}")
     
     # 返回结果
     passed = sum(1 for r in results if r['status'] == 'PASS')

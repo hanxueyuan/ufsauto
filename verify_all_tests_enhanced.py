@@ -144,9 +144,9 @@ class EnhancedTestVerifier:
         self.logger.info(f"时间：{datetime.now().isoformat()}")
         self.logger.info(f"配置：{json.dumps(config, indent=2)}")
         
-        # 系统状态快照
-        snapshot = get_system_snapshot()
-        self.logger.info(f"系统状态：{json.dumps(snapshot, indent=2)}")
+        # 测试前系统状态快照
+        self.pre_snapshot = get_system_snapshot()
+        self.logger.info(f"测试前系统状态：{json.dumps(self.pre_snapshot, indent=2)}")
         
         if self.verbose:
             self.logger.debug(f"DEBUG: 测试 ID={self.test_id}")
@@ -154,7 +154,7 @@ class EnhancedTestVerifier:
             self.logger.debug(f"DEBUG: 测试目录={self.test_dir}")
 
     def log_test_complete(self, test_name: str, result: Dict, duration: float):
-        """记录测试完成"""
+        """记录测试完成（包含系统状态对比）"""
         status = result.get('status', 'UNKNOWN')
         self.logger.info(f"-" * 70)
         self.logger.info(f"测试完成：{test_name}")
@@ -170,19 +170,73 @@ class EnhancedTestVerifier:
             if 'stack_trace' in result:
                 self.logger.error(f"堆栈跟踪:\n{result['stack_trace']}")
         
-        # 完成后系统状态
-        snapshot = get_system_snapshot()
-        self.logger.info(f"完成后系统状态：{json.dumps(snapshot, indent=2)}")
+        # 测试后系统状态快照
+        post_snapshot = get_system_snapshot()
+        self.logger.info(f"测试后系统状态：{json.dumps(post_snapshot, indent=2)}")
+        
+        # 对比系统状态变化
+        if hasattr(self, 'pre_snapshot'):
+            self._log_system_comparison(self.pre_snapshot, post_snapshot, test_name)
+    
+    def _log_system_comparison(self, pre: Dict, post: Dict, test_name: str):
+        """记录系统状态对比"""
+        self.logger.info(f"系统状态变化对比:")
+        
+        # CPU 对比
+        if 'cpu' in pre and 'cpu' in post:
+            pre_idle = pre['cpu'].get('idle', 'N/A')
+            post_idle = post['cpu'].get('idle', 'N/A')
+            if pre_idle != 'N/A' and post_idle != 'N/A':
+                try:
+                    change = float(post_idle) - float(pre_idle)
+                    self.logger.info(f"  CPU Idle: {pre_idle}% → {post_idle}% (变化：{change:+.1f}%)")
+                except:
+                    pass
+        
+        # 内存对比
+        if 'memory' in pre and 'memory' in post:
+            pre_usage = pre['memory'].get('usage_percent', 'N/A')
+            post_usage = post['memory'].get('usage_percent', 'N/A')
+            if pre_usage != 'N/A' and post_usage != 'N/A':
+                change = float(post_usage) - float(pre_usage)
+                self.logger.info(f"  内存使用：{pre_usage}% → {post_usage}% (变化：{change:+.1f}%)")
+        
+        # 磁盘 IO 对比
+        if 'disk' in pre and 'disk' in post:
+            pre_util = pre['disk'].get('util_percent', 'N/A')
+            post_util = post['disk'].get('util_percent', 'N/A')
+            if pre_util != 'N/A' and post_util != 'N/A':
+                self.logger.info(f"  磁盘利用率：{pre_util}% → {post_util}%")
 
     def run_test(self, test_name: str, test_type: str, rw_mode: str,
                  extra_args: Dict = None) -> Dict[str, Any]:
         """运行单个测试（增强版 - 完整失效分析）"""
-        self.log_test_start(test_name, self.dev_config)
-        
-        test_file = self.test_dir / f"ufs_test_{test_name}"
+        # 准备完整测试配置
         config = self.dev_config.copy()
         if extra_args:
             config.update(extra_args)
+        
+        # 记录完整测试配置（JSON 格式）
+        test_config = {
+            'test_name': test_name,
+            'test_type': test_type,
+            'rw_mode': rw_mode,
+            'runtime': config.get('runtime'),
+            'size': config.get('size'),
+            'bs': config.get('bs'),
+            'iodepth': config.get('iodepth'),
+            'ioengine': config.get('ioengine'),
+            'ramp_time': config.get('ramp_time'),
+            'skip_prefill': config.get('skip_prefill'),
+            'device': str(self.device),
+            'test_dir': str(self.test_dir),
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        self.logger.info(f"测试配置详情：{json.dumps(test_config, indent=2)}")
+        self.log_test_start(test_name, config)
+        
+        test_file = self.test_dir / f"ufs_test_{test_name}"
         
         start_time = time.time()
         fio_cmd = None
@@ -347,7 +401,8 @@ class EnhancedTestVerifier:
                 'iops': iops,
                 'avg_latency_us': avg_lat_us,
                 'elapsed': elapsed,
-                'fio_json': fio_output  # 保存完整 JSON
+                'fio_json': fio_output,  # 保存完整 JSON
+                'test_config': test_config  # 保存测试配置
             }
             
         except subprocess.TimeoutExpired:
