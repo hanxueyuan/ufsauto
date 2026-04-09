@@ -31,7 +31,7 @@ sys.path.insert(0, str(core_dir))
 sys.path.insert(0, str(tools_dir))
 
 from runner import TestCase
-from performance_base import PerformanceTestCase
+from .base import PerformanceTestCase
 
 
 class Test(PerformanceTestCase):
