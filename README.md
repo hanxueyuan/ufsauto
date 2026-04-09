@@ -18,10 +18,10 @@ apt-get install fio
 python3 systest/bin/systest_cli.py check-env --save-config
 
 # 3. Run tests (Development mode - 31 seconds)
-python3 verify_all_tests.py
-
-# 4. Run tests (Production mode - 6 minutes)
 python3 systest/bin/systest_cli.py run --suite performance
+
+# 4. Run all tests (Production mode - 6 minutes)
+python3 systest/bin/systest_cli.py run --all
 ```
 
 ---
@@ -39,24 +39,27 @@ python3 systest/bin/systest_cli.py config --show
 
 # Set device path
 python3 systest/bin/systest_cli.py config --device=/dev/sda
+
+# Reset configuration
+python3 systest/bin/systest_cli.py config --reset
 ```
 
 ### Run Tests
 
 ```bash
-# Development mode (fast verification - 31s)
-python3 verify_all_tests.py
-
-# Production mode - Performance suite
+# Run performance test suite
 python3 systest/bin/systest_cli.py run --suite performance
 
-# Production mode - QoS suite
+# Run QoS test suite
 python3 systest/bin/systest_cli.py run --suite qos
 
-# Single test
+# Run all test suites
+python3 systest/bin/systest_cli.py run --all
+
+# Run single test
 python3 systest/bin/systest_cli.py run --test t_perf_SeqReadBurst_001
 
-# Verbose mode
+# Verbose mode (detailed output)
 python3 systest/bin/systest_cli.py run --suite performance -v
 
 # Batch testing (3 times, 60s interval)
@@ -65,8 +68,11 @@ python3 systest/bin/systest_cli.py run --suite performance --batch=3 --interval=
 # With custom device
 python3 systest/bin/systest_cli.py run --suite performance --device=/dev/sda
 
-# Run all suites
-python3 systest/bin/systest_cli.py run --all
+# With custom test directory
+python3 systest/bin/systest_cli.py run --suite performance --test-dir=/mapdata/ufs_test
+
+# Load preset configuration
+python3 systest/bin/systest_cli.py run --suite performance --config=configs/ufs31_128GB.json
 ```
 
 ### View Results
@@ -85,17 +91,11 @@ python3 systest/bin/systest_cli.py report --id=SysTest_performance_20260409_0907
 python3 systest/bin/systest_cli.py report --latest --export-csv
 ```
 
-### Enhanced Logging
+### Compare Baselines
 
 ```bash
-# Enhanced mode with system snapshots
-python3 verify_all_tests_enhanced.py
-
-# Verbose mode (DEBUG level)
-python3 verify_all_tests_enhanced.py --verbose
-
-# Save FIO raw output
-python3 verify_all_tests_enhanced.py --save-fio
+# Compare two test results
+python3 systest/bin/systest_cli.py compare-baseline --baseline1 results/gold/ --baseline2 results/current/
 ```
 
 ---
@@ -162,7 +162,7 @@ Edit `systest/config/runtime.json`:
 ```
 ufsauto/
 ├── systest/
-│   ├── bin/              # CLI tools
+│   ├── bin/              # CLI entry point (systest_cli.py)
 │   ├── core/             # Framework
 │   ├── tools/            # Utilities
 │   ├── suites/           # Test suites
@@ -170,7 +170,6 @@ ufsauto/
 ├── scripts/              # Helper scripts
 ├── results/              # Test reports
 ├── logs/                 # Log files
-├── verify_all_tests.py   # Development mode
 └── README.md             # This file
 ```
 
@@ -207,6 +206,30 @@ apt-get install -y fio
 
 # Verify
 fio --version
+```
+
+---
+
+## 📖 CLI Help
+
+```bash
+# View main help
+python3 systest/bin/systest_cli.py --help
+
+# View run command help
+python3 systest/bin/systest_cli.py run --help
+
+# View list command help
+python3 systest/bin/systest_cli.py list --help
+
+# View report command help
+python3 systest/bin/systest_cli.py report --help
+
+# View config command help
+python3 systest/bin/systest_cli.py config --help
+
+# View check-env command help
+python3 systest/bin/systest_cli.py check-env --help
 ```
 
 ---

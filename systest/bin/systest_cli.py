@@ -412,41 +412,46 @@ def main():
 ================================================================================
 Quick Start:
   SysTest check-env --save-config              # First use: check environment and save config
-  SysTest run --suite=performance              # Run performance tests
+  SysTest run --suite performance              # Run performance tests (development mode)
+  SysTest run --all                            # Run all test suites (production mode)
   SysTest report --latest                      # View latest report
 
 Execute Tests:
-  SysTest run --suite=performance              # Performance test suite
-  SysTest run --test=t_perf_SeqReadBurst_001   # Single test
-  SysTest run --test=t_perf_SeqReadBurst_001 -v  # Single test (verbose)
-  SysTest run --suite=performance --batch=3 --interval=60  # Batch 3 times, 60s interval
-  SysTest run --suite=performance --device=/dev/sda --test-dir=/mapdata/ufs_test
-  SysTest run --suite=performance --config=configs/ufs31_128GB.json
+  SysTest run --suite performance              # Performance test suite
+  SysTest run --suite qos                      # QoS test suite
+  SysTest run --test t_perf_SeqReadBurst_001   # Single test
+  SysTest run --test t_perf_SeqReadBurst_001 -v  # Single test (verbose)
+  SysTest run --suite performance --batch 3 --interval 60  # Batch 3 times, 60s interval
+  SysTest run --suite performance --device /dev/sda  # Custom device
+  SysTest run --suite performance --test-dir /mapdata/ufs_test  # Custom test directory
+  SysTest run --suite performance --config configs/ufs31_128GB.json  # Preset config
   SysTest run --all                            # Run all suites
 
 View Information:
   SysTest list                                 # List all tests
   SysTest list --detail                        # Detailed information
   SysTest report --latest                      # View latest report
-  SysTest report --id=SysTest_performance_20260407_103000
+  SysTest report --id SysTest_performance_20260409_090726  # Specific report
   SysTest report --latest --export-csv         # Export CSV
 
 Environment Management:
   SysTest check-env                            # Check environment
   SysTest check-env --save-config              # Save configuration
   SysTest config --show                        # Show configuration
-  SysTest config --device=/dev/sda             # Set device path
-  SysTest config --test-dir=/mapdata/ufs_test  # Set test directory
+  SysTest config --device /dev/sda             # Set device path
+  SysTest config --test-dir /mapdata/ufs_test  # Set test directory
   SysTest config --reset                       # Reset configuration
 
+Compare Baselines:
+  SysTest compare-baseline --baseline1 results/gold/ --baseline2 results/current/
 
 Complete Workflow:
   # Automotive-grade UFS 3.1 test flow
   SysTest check-env --save-config              # 1. Environment detection
-  SysTest run --suite=performance              # 2. Performance test
-  SysTest run --suite=qos                      # 3. QoS test
+  SysTest run --suite performance              # 2. Performance test
+  SysTest run --suite qos                      # 3. QoS test
   SysTest report --latest                      # 4. View report
-  SysTest compare-baseline --baseline1 results/gold/ --baseline2 results/current/  # 5. Compare baseline
+  SysTest compare-baseline --baseline1 results/gold/ --baseline2 results/current/  # 5. Compare
 ================================================================================
         """
     )
