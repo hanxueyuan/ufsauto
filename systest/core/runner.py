@@ -465,16 +465,21 @@ class TestRunner:
         except Exception as e:
             logger.warning(f"Auto-save configuration failed: {e} (continuing with current detection)")
 
-        # Determine device path: User specified > Latest auto-detection
+        # Determine device path: User specified > Latest auto-detection > Auto-detect available device
         if self.device_override:
             self.device = self.device_override
             logger.info(f"Device path: {self.device} (manually specified)")
         elif self.runtime_config.get('device'):
             self.device = self.runtime_config['device']
-            logger.info(f"Device path: {self.device} (auto-detected)")
+            logger.info(f"Device path: {self.device} (from config)")
         else:
-            self.device = '/dev/sda'
-            logger.warning(f"Auto-detection failed, using default: {self.device} (generic for dev board)")
+            # Auto-detect available block device
+            self.device = self._auto_detect_device()
+            if self.device:
+                logger.info(f"Device path: {self.device} (auto-detected)")
+            else:
+                self.device = '/dev/sda'
+                logger.warning(f"Auto-detection failed, using default: {self.device}")
 
         # Determine test directory
         self._resolve_test_dir()
@@ -498,6 +503,34 @@ class TestRunner:
         else:
             logger.info(f"Configuration file does not exist: {config_path} (recommend running check-env --save-config)")
             return {}
+
+    def _auto_detect_device(self) -> Optional[str]:
+        """Auto-detect available block device"""
+        import os
+        
+        # Priority order: sda > vda > mmcblk0 > nvme0n1
+        device_priority = ['sda', 'vda', 'mmcblk0', 'nvme0n1']
+        
+        for device_name in device_priority:
+            device_path = f'/dev/{device_name}'
+            if os.path.exists(device_path):
+                logger.debug(f"Found available device: {device_path}")
+                return device_path
+        
+        # Fallback: try to find any block device
+        try:
+            import glob
+            block_devices = glob.glob('/dev/sd*') + glob.glob('/dev/vd*') + glob.glob('/dev/mmcblk*') + glob.glob('/dev/nvme*')
+            if block_devices:
+                # Filter out partitions (e.g., sda1 -> sda)
+                for device in sorted(block_devices):
+                    if not device[-1].isdigit():
+                        logger.debug(f"Found block device: {device}")
+                        return device
+        except Exception as e:
+            logger.debug(f"Block device detection failed: {e}")
+        
+        return None
 
     def _resolve_test_dir(self):
         """Determine test directory: User specified > Auto-detected > Fallback default"""
