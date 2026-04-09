@@ -389,7 +389,17 @@ class FIO:
                 self.logger.info(f"FIO test completed: {config.name}")
                 self.logger.info(f"  Bandwidth: {metrics.bandwidth['value']:.2f} {metrics.bandwidth['unit']}")
                 self.logger.info(f"  IOPS: {metrics.iops['value']:.0f} {metrics.iops['unit']}")
-                self.logger.info(f"  Average latency: {metrics.latency_ns['mean']/1000:.2f} μs")
+                # Handle mixed read/write mode (latency_ns has 'read' and 'write' keys)
+                if 'mean' in metrics.latency_ns:
+                    avg_lat = metrics.latency_ns['mean'] / 1000
+                elif 'read' in metrics.latency_ns and 'write' in metrics.latency_ns:
+                    # Mixed mode: use weighted average
+                    read_lat = metrics.latency_ns['read'].get('mean', 0) / 1000
+                    write_lat = metrics.latency_ns['write'].get('mean', 0) / 1000
+                    avg_lat = (read_lat + write_lat) / 2
+                else:
+                    avg_lat = 0
+                self.logger.info(f"  Average latency: {avg_lat:.2f} μs")
 
                 return metrics
 

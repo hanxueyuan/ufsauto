@@ -376,11 +376,27 @@ class EnvironmentChecker:
             pass
 
     # ── 输出 ─────────────────────────────────────────────
+    def _get_framework_version(self):
+        """获取框架版本信息"""
+        try:
+            # 从 git 获取版本
+            import subprocess
+            result = subprocess.run(['git', 'describe' , '--tags' , '--always'],
+                                    capture_output=True, text=True, timeout=5,
+                                    cwd=Path(__file__).parent.parent.parent)
+            if result.returncode == 0:
+                return result.stdout.strip()
+        except Exception:
+            pass
+        # 回退到日期版本
+        return f"dev-{datetime.now().strftime('%Y%m%d')}"
+
 
     def run(self):
         print('=' * 60)
         print('UFS SysTest 环境信息')
         print('=' * 60)
+        print(f'框架版本：{self._get_framework_version()}')
         print(f'模式: {"开发模式" if self.mode == "dev" else "部署模式"}')
 
         self.collect_system()
