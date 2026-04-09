@@ -132,7 +132,7 @@ def cmd_run(args):
             suites_to_run = [args.suite]
         elif args.test:
             # Single test, find所属 suite
-            runner_tmp = TestRunner(dry_run=True)
+            runner_tmp = TestRunner()
             for suite_name, tests in runner_tmp.list_suites().items():
                 if args.test in tests:
                     suites_to_run = [suite_name]
@@ -149,7 +149,6 @@ def cmd_run(args):
                 device=args.device,
                 test_dir=args.test_dir,
                 verbose=args.verbose,
-                dry_run=args.dry_run,
                 ci_mode=args.ci if hasattr(args, 'ci') else False,
                 quick_factor=quick_factor
             )
@@ -434,7 +433,6 @@ Execute Tests:
   SysTest run --suite=performance --device=/dev/sda --test-dir=/mapdata/ufs_test
   SysTest run --suite=performance --config=configs/ufs31_128GB.json
   SysTest run --suite=performance --ci         # CI/CD mode
-  SysTest run --suite=performance --dry-run    # Dry run
   SysTest run --all                            # Run all suites
 
 View Information:
@@ -529,13 +527,6 @@ Complete Workflow:
   # CI/CD + batch test
   python3 bin/SysTest run --suite=performance --ci --batch=3
 
-  [Debugging and Validation]
-  # Dry run (do not actually run tests, validate framework)
-  python3 bin/SysTest run --suite=performance --dry-run
-
-  # Dry run + verbose output
-  python3 bin/SysTest run --suite=performance --dry-run -v
-
   [Complete Examples]
   # Automotive-grade performance validation: quick mode + batch 3 times + specify device
   python3 bin/SysTest run --suite=performance --quick --batch=3 --device=/dev/sda
@@ -554,7 +545,6 @@ Complete Workflow:
     run_parser.add_argument('--output', '-o', default='./results', help='Output directory')
     run_parser.add_argument('--format', '-f', default='html,json,txt', help='Report format (html/json/txt/csv)')
     run_parser.add_argument('--verbose', '-v', action='store_true', help='Verbose output')
-    run_parser.add_argument('--dry-run', '-n', action='store_true', help='Dry run (do not actually run tests)')
     run_parser.add_argument('--quick', '-q', action='store_true', help='Quick mode (reduce test time by 50%)')
     run_parser.add_argument('--batch', '-b', type=int, default=1, help='Batch test count (default 1)')
     run_parser.add_argument('--interval', '-i', type=int, default=60, help='Batch test interval in seconds (default 60s)')

@@ -276,13 +276,12 @@ class FIO:
         self.retries = retries
         self.logger = logger or logging.getLogger(__name__)
 
-    def run(self, config: FIOConfig, dry_run: bool = False, allowed_prefixes: list = None) -> FIOMetrics:
+    def run(self, config: FIOConfig, allowed_prefixes: list = None) -> FIOMetrics:
         """
         Execute FIO test
 
         Args:
             config: FIO configuration
-            dry_run: Whether to only print command without executing
             allowed_prefixes: List of allowed file path prefixes (e.g., ['/tmp', '/mapdata'])
 
         Returns:
@@ -303,10 +302,6 @@ class FIO:
 
         self.logger.info(f"Executing FIO test: {config.name}")
         self.logger.debug(f"FIO command: {' '.join(cmd)}")
-
-        if dry_run:
-            self.logger.info("[DRY-RUN] Simulated execution")
-            return self._create_mock_metrics(config.rw)
 
         # Execute FIO (with retry)
         last_error = None
@@ -428,16 +423,6 @@ class FIO:
 
         # All retries failed
         raise last_error or FIOError("FIO execution failed (unknown error)")
-
-    def _create_mock_metrics(self, rw_type: str) -> FIOMetrics:
-        """Create mock metrics (for dry-run)"""
-        return FIOMetrics(
-            bandwidth={'value': 0, 'unit': 'MB/s'},
-            iops={'value': 0, 'unit': 'IOPS'},
-            latency_ns={'min': 0, 'max': 0, 'mean': 0, 'stddev': 0, 'percentile': {}},
-            cpu={'usr': 0, 'sys': 0, 'total': 0},
-            raw={}
-        )
 
     # ========== Convenience methods: Common test scenarios ==========
 

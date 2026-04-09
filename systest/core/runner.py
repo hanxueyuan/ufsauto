@@ -421,30 +421,17 @@ class TestCase:
 class TestRunner:
     """Test execution engine"""
 
-    def __init__(self, device: str = None, test_dir: str = None, verbose: bool = False, dry_run: bool = False,
+    def __init__(self, device: str = None, test_dir: str = None, verbose: bool = False,
                  ci_mode: bool = False, quick_factor: float = 1.0):
         self.device_override = device  # User manually specified
         self.test_dir_override = test_dir  # User manually specified
         self.verbose = verbose
-        self.dry_run = dry_run
         self.ci_mode = ci_mode  # CI/CD environment mode
         self.quick_factor = quick_factor  # Quick mode factor (0.5 = time halved)
         self.suites_dir = Path(__file__).parent.parent / 'suites'
         self.config_dir = Path(__file__).parent.parent / 'config'
         self.test_dir = None  # Final determined test directory
         self.device = None  # Final determined device path
-
-        # === Dry-run mode: Use temporary parameters to validate framework ===
-        if self.dry_run:
-            logger.info("[DRY-RUN] Validating framework with temporary parameters")
-            self.device = '/dev/sda'  # Use standard device path (validation requires valid format)
-            self.test_dir = Path('/tmp/systest_dryrun')
-            self.test_dir.mkdir(parents=True, exist_ok=True)
-            logger.info(f"  Device path: {self.device} (temporary)")
-            logger.info(f"  Test directory: {self.test_dir} (temporary)")
-            # Skip CI environment validation (dry-run doesn't need real config)
-            self.suites = self._load_suites()
-            return
 
         # === Production mode: Use real parameters ===
         # Load runtime configuration
@@ -721,78 +708,6 @@ class TestRunner:
 
             logger.info(f"[{i}/{len(tests)}] Executing test: {test_name}")
 
-            if self.dry_run:
-                # Dry-run mode: Validate test case can be properly imported and parsed
-                # Validation includes: file exists, syntax correct, class exists, parameters parse
-                try:
-                    import sys
-                    suites_dir = Path(__file__).parent.parent / 'suites'
-                    if str(suites_dir) not in sys.path:
-                        sys.path.insert(0, str(suites_dir))
-
-                    # Import test module (verify file exists)
-                    if test_name.startswith('t_'):
-                        module_path = suites_dir / suite_name / f'{test_name}.py'
-                    else:
-                        module_path = suites_dir / suite_name / f'test_{test_name}.py'
-
-                    if not module_path.exists():
-                        logger.error(f"  Test file does not exist: {module_path}")
-                        results.append({
-                            'name': test_name,
-                            'status': 'ERROR',
-                            'reason': f'Test file not found: {module_path}',
-                            'duration': 0
-                        })
-                        continue
-
-                    # Dynamic import (verify syntax correct)
-                    import importlib.util
-                    spec = importlib.util.spec_from_file_location(f'{suite_name}.{test_name}', module_path)
-                    module = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(module)
-
-                    # Verify Test class exists (priority Test, then TestCase fallback)
-                    test_class = getattr(module, 'Test', None)
-                    if not test_class:
-                        test_class = getattr(module, 'TestCase', None)
-                    if not test_class:
-                        logger.error(f"  Test class does not exist: {test_name}")
-                        results.append({
-                            'name': test_name,
-                            'status': 'ERROR',
-                            'reason': 'Test class not found (expected Test or TestCase)',
-                            'duration': 0
-                        })
-                        continue
-
-                    # Create instance (verify parameter parsing)
-                    test_instance = test_class(device=self.device, test_dir=self.test_dir)
-                    logger.info(f"  [DRY-RUN] Test case validation passed: {test_instance.__class__.__name__}")
-                    results.append({
-                        'name': test_name,
-                        'status': 'DRY-RUN-PASS',
-                        'class': test_instance.__class__.__name__,
-                        'duration': 0
-                    })
-                except SyntaxError as e:
-                    logger.error(f"  [DRY-RUN] Syntax error: {e}")
-                    results.append({
-                        'name': test_name,
-                        'status': 'ERROR',
-                        'reason': f'Syntax error: {e}',
-                        'duration': 0
-                    })
-                except Exception as e:
-                    logger.error(f"  [DRY-RUN] Import failed: {e}")
-                    results.append({
-                        'name': test_name,
-                        'status': 'ERROR',
-                        'reason': f'Import error: {e}',
-                        'duration': 0
-                    })
-                continue
-
             # Dynamic import test case
             try:
                 import sys
@@ -863,7 +778,7 @@ class TestRunner:
 
         # Suite execution summary
         total = len(results)
-        passed = sum(1 for r in results if r['status'] == 'PASS' or r['status'] == 'DRY-RUN-PASS')
+        passed = sum(1 for r in results if r['status'] == 'PASS')
         failed = sum(1 for r in results if r['status'] == 'FAIL')
         errors = sum(1 for r in results if r['status'] == 'ERROR')
         skipped = sum(1 for r in results if r['status'] == 'SKIP')

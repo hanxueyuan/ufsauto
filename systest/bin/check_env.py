@@ -21,7 +21,7 @@ from datetime import datetime
 
 
 class EnvironmentChecker:
-    """环境信息收集器 — 只报事实,不做判断"""
+    """环境信息收集器 - 只报事实,不做判断"""
 
     def __init__(self, mode='dev', verbose=False, config_dir=None):
         self.mode = mode
@@ -100,11 +100,11 @@ class EnvironmentChecker:
 
     def collect_storage(self):
         """检测存储设备
-        
+
         设备类型判断方法(辅助判断,不阻断测试):
         1. dmesg 中查找 ufshcd 关键字(最可靠)
         2. 列出所有块设备,识别 UFS 设备路径
-        
+
         注意:不管设备类型如何,测试都应该继续
         """
         import re
@@ -136,7 +136,7 @@ class EnvironmentChecker:
                     match = re.search(r'rate\(([0-9]+)\)', line_lower)
                     if match:
                         ufs_info['rate'] = match.group(1)
-        
+
         if ufs_found:
             self._record('storage', '设备类型', 'UFS ✓')
             if 'address' in ufs_info:
@@ -155,7 +155,7 @@ class EnvironmentChecker:
         rc, out, _ = self._run(['lsblk', '-d', '-o', 'NAME,SIZE,TYPE,ROTA', '--noheadings'])
         if rc == 0:
             self._record('storage', '📋 块设备', '\n' + out)
-            
+
             # 解析块设备列表,找到 UFS 设备
             first_disk = None
             for line in out.strip().split('\n'):
@@ -176,13 +176,13 @@ class EnvironmentChecker:
                                 break
                         except Exception:
                             pass
-            
+
             # 如果已经通过 dmesg 找到了 UFS 主机控制器,但没通过驱动匹配到
             # 直接使用第一个块设备(UFS 通常是第一个磁盘)
             if ufs_found and not device_path and first_disk:
                 device_path = f'/dev/{first_disk}'
                 self._record('storage', 'UFS 设备路径', f'{device_path} (auto-detected: UFS host found, using first disk)')
-        
+
         # 如果没找到 UFS 设备,尝试通过 SCSI host 查找
         if not device_path and 'scsi_host' in ufs_info:
             # SCSI host0 通常对应 /dev/sda
@@ -210,7 +210,7 @@ class EnvironmentChecker:
                                 pass
                     if device_path:
                         break
-        
+
         # 保存设备路径到配置
         if device_path:
             self.runtime_config['device'] = device_path
@@ -219,7 +219,7 @@ class EnvironmentChecker:
             self._record('storage', '⚠️  设备路径', f'未自动检测到,将使用默认值 /dev/sda')
             self._record('storage', '💡 提示', '请手动指定设备路径: --device=/dev/sdX')
             self.runtime_config['device'] = '/dev/sda'
-    
+
     def collect_permissions(self):
         try:
             import pwd, grp
@@ -239,18 +239,18 @@ class EnvironmentChecker:
             self._record('permissions', '设备访问', access_str)
         except Exception as e:
             self._record('permissions', '权限检查', f'检查失败: {e}')
-    
+
     def collect_test_directory(self):
         """检查测试目录可用性"""
         # 检查 findmnt 命令兼容性
         rc, out, err = self._run(['findmnt', '--version'])
         findmnt_ver = out if rc == 0 else ('未安装' if rc == -1 else '检查失败')
         self._record('test_dir', 'findmnt 版本', findmnt_ver)
-        
+
         # 尝试新版 findmnt
         # 不限制文件系统类型:任何可挂载的可写文件系统都可以用
         rc, out, err = self._run(['findmnt', '-n', '-o', 'TARGET,SIZE,FSUSED,FSAVAIL'])
-        
+
         if rc != 0 and 'unknown column' in (err or '').lower():
             self._record('test_dir', 'findmnt 兼容性', '旧版 (不支持 FSUSED/FSAVAIL)')
             # 尝试旧版格式
@@ -269,7 +269,7 @@ class EnvironmentChecker:
             self._record('test_dir', '建议测试目录', '/tmp/ufs_test (无挂载点)')
             self.runtime_config['test_dir'] = '/tmp/ufs_test'
             return
-        
+
         # 找可用空间最大的挂载点
         max_avail_gb = 0
         best_mount = None
@@ -277,13 +277,13 @@ class EnvironmentChecker:
             parts = line.strip().split()
             if len(parts) < 2:
                 continue  # 至少需要两列
-            
+
             # 健壮解析:
             # use_simple = True  -> -o TARGET,AVAIL => 总是 TARGET=第一列 AVAIL=最后一列
             # use_simple = False -> -o TARGET,SIZE,FSUSED,FSAVAIL => TARGET=第一列 FSAVAIL=最后一列
             mount = parts[0]
             avail_str = parts[-1]  # AVAIL / FSAVAIL 总是最后一列
-            
+
             # 解析可用大小
             avail_gb = 0
             try:
@@ -295,21 +295,21 @@ class EnvironmentChecker:
                     avail_gb = float(avail_str[:-1]) / 1024
             except Exception:
                 continue
-            
+
             # 跳过根目录(通常是只读的)
             if mount == '/':
                 continue
-            
+
             # 检查挂载点是否可读写
             if not os.access(mount, os.W_OK):
                 continue
-            
+
             # 优先选可用空间最大的,至少 2GB 比较理想
             # 如果找不到 ≥2GB 的,就用最大的那个(有空间总比没空间好)
             if avail_gb > max_avail_gb:
                 max_avail_gb = avail_gb
                 best_mount = mount
-        
+
         if best_mount:
             # 不管空间大小,只要找到一个可用的,就用它
             # 如果空间小于 2GB 会在日志里提示,但仍然使用它
@@ -331,7 +331,7 @@ class EnvironmentChecker:
             rc, lsblk_out, _ = self._run(['lsblk', '-o', 'NAME,SIZE,MOUNTPOINT', '-n'])
             if rc != 0:
                 return
-            
+
             lines = lsblk_out.strip().split('\n')
             max_size_gb = 0
             best_mount = None
@@ -368,7 +368,7 @@ class EnvironmentChecker:
                             max_size_gb = size_gb
                             free_gb = current_free
                             best_mount = mount
-            
+
             if best_mount:
                 self._record('storage', '建议测试目录', f'{best_mount}/ufs_test (可用 {free_gb:.1f} GB)')
                 self._record('storage', '默认测试文件路径', f'{best_mount}/ufs_test/test.file')
@@ -477,9 +477,7 @@ def check_ci_environment(config_path=None):
     else:
         runtime_path = Path(__file__).parent.parent / 'config' / 'runtime.json'
 
-    if not runtime_path.exists():
-        warnings.append(f"runtime.json 不存在 (CI 使用 dry-run 模式,可忽略)")
-    # CI 环境不需要检查配置文件内容 - 使用 dry-run 模式验证框架
+    # CI 环境不需要检查配置文件内容
 
     # 2. 检查关键工具是否安装
     required_tools = ['fio', 'python3']
@@ -489,7 +487,7 @@ def check_ci_environment(config_path=None):
 
     # 输出结果
     print("" + "=" * 60)
-    print("CI 环境验证 (dry-run 模式)")
+    print("CI 环境验证")
     print("=" * 60)
 
     if errors:
@@ -503,7 +501,7 @@ def check_ci_environment(config_path=None):
             print(f"   {i}. {warn}")
 
     if not errors and not warnings:
-        print("✅ CI 环境验证通过 (dry-run 模式可用)")
+        print("✅ CI 环境验证通过")
 
     print("=" * 60)
 
