@@ -18,14 +18,15 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
+# Add project root to Python path
 script_dir = Path(__file__).parent.absolute()
-project_root = script_dir.parent
+project_root = script_dir.parent.parent  # Go up to project root
 sys.path.insert(0, str(project_root))
 
-from core.runner import TestRunner
-from core.collector import ResultCollector
-from core.reporter import ReportGenerator
-from core.logger import get_logger, close_all_loggers
+from systest.core.runner import TestRunner
+from systest.core.collector import ResultCollector
+from systest.core.reporter import ReportGenerator
+from systest.core.logger import get_logger, close_all_loggers
 
 def get_test_mode(args, runtime_config):
     """Determine test mode: command line > env > config > default"""
