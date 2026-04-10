@@ -28,7 +28,7 @@ tools_dir = Path(__file__).parent.parent.parent / 'tools'
 sys.path.insert(0, str(core_dir))
 sys.path.insert(0, str(tools_dir))
 
-from runner import TestCase
+from systest.core.runner import TestCase
 from .base import PerformanceTestCase
 
 class Test(PerformanceTestCase):

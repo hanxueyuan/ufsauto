@@ -31,9 +31,9 @@ tools_dir = Path(__file__).parent.parent.parent / 'tools'
 sys.path.insert(0, str(core_dir))
 sys.path.insert(0, str(tools_dir))
 
-from runner import TestCase
-from fio_wrapper import FIO, FIOError
-from ufs_utils import UFSDevice
+from systest.core.runner import TestCase
+from systest.tools.fio_wrapper import FIO, FIOError
+from systest.tools.ufs_utils import UFSDevice
 from typing import Dict, Any
 
 class Test(TestCase):
