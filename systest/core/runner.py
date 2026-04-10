@@ -176,7 +176,7 @@ class TestCase:
         self.logger.debug(f"Setup: {self.name}")
 
         try:
-            from tools.ufs_utils import UFSDevice
+            from systest.tools.ufs_utils import UFSDevice
             ufs = UFSDevice(self.device, logger=self.logger)
             self._pre_test_health = ufs.get_health_status()
             self.logger.debug(f"Recorded health baseline: {self._pre_test_health.get('status', 'Unknown')}")
@@ -357,7 +357,7 @@ class TestCase:
             self.logger.debug("Validating results...")
 
             try:
-                from tools.ufs_utils import UFSDevice
+                from systest.tools.ufs_utils import UFSDevice
                 ufs = UFSDevice(self.device, logger=self.logger)
                 self._post_test_health = ufs.get_health_status()
                 self.logger.debug(f"Recorded post-test health status: {self._post_test_health.get('status', 'Unknown')}")

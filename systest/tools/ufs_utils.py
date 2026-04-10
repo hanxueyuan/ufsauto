@@ -10,7 +10,7 @@ Production-grade UFS device management tool providing:
 - Performance counter reading
 
 Usage:
-    from tools.ufs_utils import UFSDevice
+    from systest.tools.ufs_utils import UFSDevice
 
     ufs = UFSDevice('/dev/ufs0')
     info = ufs.get_device_info()
