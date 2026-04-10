@@ -514,63 +514,43 @@ def cmd_compare_baseline(args):
 def main():
     """Main function - Unified entry"""
     parser = argparse.ArgumentParser(
-        description='UFS System Test Framework - SysTest',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-================================================================================
-Quick Start:
-  SysTest check-env --save-config
-  SysTest run --suite performance
-  SysTest run --all
-  SysTest report --latest
-  SysTest report --list            # List all available reports
-  SysTest mode                    # View current test mode
-  SysTest mode --set=production   # Switch to production mode
+        description='''UFS Auto - UFS 存储设备自动化测试框架
 
-Execute Tests:
-  SysTest run --suite performance
-  SysTest run --suite performance --mode=production  # Run in production mode
-  SysTest run --suite qos
-  SysTest run --test t_perf_SeqReadBurst_001
-  SysTest run --test t_perf_SeqReadBurst_001 -v
-  SysTest run --suite performance --batch 3 --interval 60
-  SysTest run --suite performance --device /dev/sda
-  SysTest run --suite performance --test-dir /mapdata/ufs_test
-  SysTest run --suite performance --config configs/ufs31_128GB.json
-  SysTest run --all
+快速开始:
+  %(prog)s check-env --save-config     # 检查环境并保存配置
+  %(prog)s run --suite performance     # 运行性能测试（开发模式）
+  %(prog)s mode --show                 # 查看当前模式
 
-View Information:
-  SysTest list
-  SysTest list --suite performance  # List tests in specific suite
-  SysTest list --detail
-  SysTest report --latest
-  SysTest report --id SysTest_performance_20260409_090726
-  SysTest report --list            # List all available reports
-  SysTest report --latest --export-csv
-  SysTest mode                    # View current test mode
+常用命令:
+  %(prog)s list                        # 列出所有测试
+  %(prog)s run --suite <name>          # 运行测试套件
+  %(prog)s report --latest             # 查看最新报告
+  %(prog)s config --show               # 查看配置
+  %(prog)s mode --set=production       # 切换到生产模式
 
-Environment Management:
-  SysTest check-env
-  SysTest check-env --save-config
-  SysTest check-env --no-save      # Skip saving configuration
-  SysTest config --show
-  SysTest config --device /dev/sda
-  SysTest config --test-dir /mapdata/ufs_test
-  SysTest config --reset
+使用示例:
+  # 开发模式快速验证
+  %(prog)s run --suite performance
 
-Compare Baselines:
-  SysTest compare-baseline --baseline1 results/gold/ --baseline2 results/current/
+  # 生产模式完整测试
+  %(prog)s run --suite performance --mode=production
 
-Complete Workflow:
-  SysTest check-env --save-config
-  SysTest mode --set=development  # Set development mode for quick tests
-  SysTest run --suite performance
-  SysTest mode --set=production   # Switch to production mode for final validation
-  SysTest run --suite performance
-  SysTest report --latest
-  SysTest compare-baseline --baseline1 results/gold/ --baseline2 results/current/
-================================================================================
-        """
+  # 运行单个测试
+  %(prog)s run --test t_perf_SeqReadBurst_001
+
+  # 查看详细日志
+  %(prog)s run --suite performance --verbose
+
+  # 自定义设备和测试目录
+  %(prog)s run --suite performance --device=/dev/sda --test-dir=/mapdata/ufs_test
+
+  # 批量测试（3 次，间隔 60 秒）
+  %(prog)s run --suite performance --batch=3 --interval=60
+
+详细文档：docs/README.md
+GitHub: https://github.com/hanxueyuan/ufsauto
+''',
+        formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
@@ -613,19 +593,19 @@ Complete Workflow:
 
   python3 bin/SysTest run --config=configs/ufs31_128GB.json
 """)
-    run_parser.add_argument('--suite', '-s', help='Test suite name (performance/qos)')
-    run_parser.add_argument('--test', '-t', help='Single test item name')
-    run_parser.add_argument('--all', '-a', action='store_true', help='Run all test suites')
-    run_parser.add_argument('--device', '-d', default=None, help='Test device path (default from runtime.json)')
-    run_parser.add_argument('--test-dir', '-tdir', default=None, help='Test file directory (default auto-select)')
-    run_parser.add_argument('--output', '-o', default='./results', help='Output directory')
-    run_parser.add_argument('--format', '-f', default='html,json,txt', help='Report format (html/json/txt/csv)')
-    run_parser.add_argument('--verbose', '-v', action='store_true', help='Verbose output')
-    run_parser.add_argument('--batch', '-b', type=int, default=1, help='Batch test count (default 1)')
-    run_parser.add_argument('--interval', '-i', type=int, default=60, help='Batch test interval in seconds (default 60s)')
-    run_parser.add_argument('--config', '-c', default=None, help='Load preset configuration (e.g., configs/ufs31_128GB.json)')
-    run_parser.add_argument('--mode', '-m', choices=['development', 'production'], help='Test mode (overrides config file)')
-    run_parser.add_argument('--export-csv', action='store_true', help='Export CSV format results')
+    run_parser.add_argument('--suite', '-s', type=str, help='测试套件名称 (performance, qos)')
+    run_parser.add_argument('--test', '-t', type=str, help='单个测试名称 (t_perf_SeqReadBurst_001)')
+    run_parser.add_argument('--all', '-a', action='store_true', help='运行所有测试套件')
+    run_parser.add_argument('--device', '-d', default=None, help='设备路径 (默认：/dev/sda)')
+    run_parser.add_argument('--test-dir', '-tdir', default=None, help='测试目录 (默认：/tmp/ufs_test)')
+    run_parser.add_argument('--output', '-o', default='./results', help='输出目录')
+    run_parser.add_argument('--format', '-f', default='html,json,txt', help='报告格式 (html/json/txt/csv)')
+    run_parser.add_argument('--verbose', '-v', action='store_true', help='详细日志模式')
+    run_parser.add_argument('--batch', '-b', type=int, default=1, help='批量测试次数')
+    run_parser.add_argument('--interval', '-i', type=int, default=60, help='批量测试间隔 (秒)')
+    run_parser.add_argument('--config', '-c', default=None, help='预设配置文件路径')
+    run_parser.add_argument('--mode', '-m', choices=['development', 'production'], help='测试模式 (默认：development)')
+    run_parser.add_argument('--export-csv', action='store_true', help='导出 CSV 格式结果')
     run_parser.set_defaults(func=cmd_run)
 
     list_parser = subparsers.add_parser('list',
@@ -638,8 +618,8 @@ Complete Workflow:
 
   python3 bin/SysTest list --detail
 """)
-    list_parser.add_argument('--detail', action='store_true', help='Show detailed information')
-    list_parser.add_argument('--suite', '-s', help='Filter by suite name')
+    list_parser.add_argument('--detail', action='store_true', help='显示详细信息')
+    list_parser.add_argument('--suite', '-s', type=str, help='按套件名称过滤 (performance, qos)')
     list_parser.set_defaults(func=cmd_list)
 
     report_parser = subparsers.add_parser('report',
@@ -652,11 +632,11 @@ Complete Workflow:
 
   python3 bin/SysTest report --latest --export-csv
 """)
-    report_parser.add_argument('--latest', action='store_true', help='View latest report')
-    report_parser.add_argument('--id', help='Specify report ID')
-    report_parser.add_argument('--list', action='store_true', help='List all available reports')
-    report_parser.add_argument('--open', action='store_true', help='Open in browser')
-    report_parser.add_argument('--export-csv', action='store_true', help='Export CSV format')
+    report_parser.add_argument('--latest', action='store_true', help='显示最新报告路径')
+    report_parser.add_argument('--id', type=str, help='指定报告 ID')
+    report_parser.add_argument('--list', action='store_true', help='列出所有历史报告')
+    report_parser.add_argument('--open', action='store_true', help='在浏览器中打开')
+    report_parser.add_argument('--export-csv', action='store_true', help='导出 CSV 格式')
     report_parser.set_defaults(func=cmd_report)
 
     config_parser = subparsers.add_parser('config',
@@ -752,7 +732,8 @@ Three ways to set mode:
 
 Priority: CLI arg > Environment > Config file > Default (development)
 """)
-    mode_parser.add_argument('--set', choices=['development', 'production'], help='Set test mode')
+    mode_parser.add_argument('--set', type=str, choices=['development', 'production'], help='设置测试模式')
+    mode_parser.add_argument('--show', action='store_true', help='显示当前模式')
     mode_parser.set_defaults(func=cmd_mode)
 
     args = parser.parse_args()

@@ -1,239 +1,285 @@
-# UFS Auto - UFS System Test Framework
+# UFS Auto - UFS 存储设备自动化测试框架
+
+基于 Python 的 UFS 存储设备性能和质量测试自动化框架。
 
 [![Status: Production Ready](https://img.shields.io/badge/status-production--ready-green)](.)
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![FIO](https://img.shields.io/badge/fio-3.20+-orange.svg)](https://github.com/axboe/fio)
 
-Production-grade UFS storage device test framework.
+**特性：**
+- ✅ 开发/生产模式切换
+- ✅ 毫秒级时间戳日志
+- ✅ 性能量化分析
+- ✅ 自动生成测试报告
+- ✅ 健康状态监控
 
 ---
 
-## 🚀 Quick Start
+## 🚀 快速开始
+
+### 环境要求
+- Python 3.8+
+- FIO 3.20+
+- Linux (ARM/x86)
+
+### 安装
 
 ```bash
-# 1. Install FIO
+# 安装 FIO
 apt-get install fio
 
-# 2. Check environment
-python3 systest/bin/systest.py check-env --save-config
+# 克隆项目
+git clone https://github.com/hanxueyuan/ufsauto.git
+cd ufsauto
 
-# 3. Run tests (Development mode - 31 seconds)
+# 检查环境
+python3 systest/bin/systest.py check-env --save-config
+```
+
+### 运行测试
+
+```bash
+# 开发模式（快速验证，~2 分钟）
 python3 systest/bin/systest.py run --suite performance
 
-# 4. Run all tests (Production mode - 6 minutes)
-python3 systest/bin/systest.py run --all
+# 生产模式（完整测试，~50 分钟）
+python3 systest/bin/systest.py run --suite performance --mode=production
+
+# 单个测试
+python3 systest/bin/systest.py run --test t_perf_SeqReadBurst_001
 ```
 
 ---
 
-## 📋 Usage Examples
+## 📋 使用示例
 
-### Environment Setup
+### 环境配置
 
 ```bash
-# Check environment and save config
-python3 systest/bin/systest.py check-env --save-config
-
-# View configuration
+# 查看当前配置
 python3 systest/bin/systest.py config --show
 
-# Set device path
+# 设置设备路径
 python3 systest/bin/systest.py config --device=/dev/sda
 
-# Reset configuration
+# 设置测试目录
+python3 systest/bin/systest.py config --test-dir=/mapdata/ufs_test
+
+# 重置配置
 python3 systest/bin/systest.py config --reset
 ```
 
-### Run Tests
+### 模式切换
 
 ```bash
-# Run performance test suite
-python3 systest/bin/systest.py run --suite performance
+# 查看当前模式
+python3 systest/bin/systest.py mode
 
-# Run QoS test suite
-python3 systest/bin/systest.py run --suite qos
+# 切换到开发模式（默认）
+python3 systest/bin/systest.py mode --set=development
 
-# Run all test suites
-python3 systest/bin/systest.py run --all
+# 切换到生产模式
+python3 systest/bin/systest.py mode --set=production
 
-# Run single test
-python3 systest/bin/systest.py run --test t_perf_SeqReadBurst_001
-
-# Verbose mode (detailed output)
-python3 systest/bin/systest.py run --suite performance -v
-
-# Batch testing (3 times, 60s interval)
-python3 systest/bin/systest.py run --suite performance --batch=3 --interval=60
-
-# With custom device
-python3 systest/bin/systest.py run --suite performance --device=/dev/sda
-
-# With custom test directory
-python3 systest/bin/systest.py run --suite performance --test-dir=/mapdata/ufs_test
-
-# Load preset configuration
-python3 systest/bin/systest.py run --suite performance --config=configs/ufs31_128GB.json
+# 临时使用生产模式（不影响配置）
+python3 systest/bin/systest.py run --suite performance --mode=production
 ```
 
-### View Results
+### 运行测试
 
 ```bash
-# List all tests
+# 列出所有测试
 python3 systest/bin/systest.py list
 
-# View latest report
-python3 systest/bin/systest.py report --latest
+# 按套件列出测试
+python3 systest/bin/systest.py list --suite performance
+python3 systest/bin/systest.py list --suite qos
 
-# View specific report
-python3 systest/bin/systest.py report --id=SysTest_performance_20260409_090726
+# 运行性能测试套件
+python3 systest/bin/systest.py run --suite performance
 
-# Export CSV
-python3 systest/bin/systest.py report --latest --export-csv
+# 运行 QoS 测试套件
+python3 systest/bin/systest.py run --suite qos
+
+# 运行单个测试
+python3 systest/bin/systest.py run --test t_perf_SeqReadBurst_001
+
+# 详细日志模式
+python3 systest/bin/systest.py run --suite performance --verbose
+
+# 自定义设备和测试目录
+python3 systest/bin/systest.py run --suite performance \
+  --device=/dev/sda \
+  --test-dir=/mapdata/ufs_test
+
+# 批量测试（运行 3 次，间隔 60 秒）
+python3 systest/bin/systest.py run --suite performance \
+  --batch=3 --interval=60
+
+# 使用预设配置文件
+python3 systest/bin/systest.py run --suite performance \
+  --config=configs/ufs31_128GB.json
 ```
 
-### Compare Baselines
+### 查看报告
 
 ```bash
-# Compare two test results
-python3 systest/bin/systest.py compare-baseline --baseline1 results/gold/ --baseline2 results/current/
+# 查看最新报告
+python3 systest/bin/systest.py report --latest
+
+# 列出所有历史报告
+python3 systest/bin/systest.py report --list
+
+# 打开 HTML 报告（需要浏览器）
+firefox results/systest_performance_*/report.html
+```
+
+### 健康状态检查
+
+```bash
+# 检查 UFS 设备健康状态
+python3 systest/tools/health_monitor.py --device /dev/sda
+
+# 扫描所有 UFS 设备
+python3 systest/tools/health_monitor.py --scan
 ```
 
 ---
 
-## 🧪 Test Suites
+## 🧪 开发模式 vs 生产模式
 
-| Suite | Cases | Description | Time |
-|-------|-------|-------------|------|
-| **performance** | 5 | Seq read/write, random read/write, mixed RW | ~25s |
-| **qos** | 1 | Latency percentiles (p50/p99/p99.99) | ~5s |
-
-### Performance Tests
-
-| Test | Block Size | QD | Target |
-|------|------------|----|--------|
-| Seq Read | 128K | 1 | ≥2100 MB/s |
-| Seq Write | 128K | 1 | ≥1650 MB/s |
-| Rand Read | 4K | 32 | ≥120K IOPS |
-| Rand Write | 4K | 32 | ≥100K IOPS |
-| Mixed RW | 4K | 32 | ≥150K IOPS (70% read) |
-
-### QoS Tests
-
-| Test | Block Size | QD | Targets |
-|------|------------|----|---------|
-| Latency Percentile | 4K | 1 | p50<50μs, p99<200μs, p99.99<500μs |
+| 特性 | 开发模式 | 生产模式 |
+|------|----------|----------|
+| 循环次数 | 2 次 | 10 次 |
+| 测试时长 | 60 秒/次 | 300 秒/次 |
+| 总测试时间 | ~2 分钟 | ~50 分钟 |
+| 日志级别 | DEBUG | INFO |
+| 保留文件 | 是 | 否 |
+| 适用场景 | 开发调试 | 生产验证 |
 
 ---
 
-## 🔧 Configuration
-
-Edit `systest/config/runtime.json`:
-
-```json
-{
-  "device": "/dev/sda",
-  "test_dir": "/mapdata/ufs_test",
-  "test_mode": {
-    "mode": "development",
-    "runtime_seconds": 5,
-    "test_size": "64M",
-    "skip_prefill": true
-  }
-}
-```
-
-### Switch to Production Mode
-
-```json
-{
-  "test_mode": {
-    "mode": "production",
-    "runtime_seconds": 60,
-    "test_size": "1G",
-    "skip_prefill": false
-  }
-}
-```
-
----
-
-## 📁 Project Structure
+## 📁 项目结构
 
 ```
 ufsauto/
-├── systest/
-│   ├── bin/              # CLI entry point (systest.py)
-│   ├── core/             # Framework
-│   ├── tools/            # Utilities
-│   ├── suites/           # Test suites
-│   └── config/           # Configuration
-├── scripts/              # Helper scripts
-├── results/              # Test reports
-├── logs/                 # Log files
-└── README.md             # This file
+├── README.md              # 本文件
+├── systest/               # 测试框架核心
+│   ├── bin/              # 命令行入口
+│   ├── config/           # 配置文件
+│   ├── core/             # 核心模块
+│   ├── suites/           # 测试套件
+│   └── tools/            # 工具模块
+├── scripts/              # 脚本工具
+│   └── tools/           # 工具脚本
+├── demos/                # 演示脚本
+├── docs/                 # 文档
+├── tools/                # Shell 工具
+├── results/              # 测试结果
+└── logs/                 # 日志文件
 ```
+
+### 目录说明
+
+| 目录 | 说明 |
+|------|------|
+| `systest/bin/` | 命令行入口 (systest.py) |
+| `systest/core/` | 核心框架 (runner, collector, reporter, logger) |
+| `systest/suites/` | 测试套件 (performance, qos) |
+| `systest/tools/` | 工具模块 (health_monitor, fio_wrapper, ufs_utils) |
+| `systest/config/` | 配置文件 (runtime.json) |
+| `scripts/` | 辅助脚本 |
+| `scripts/tools/` | 工具脚本 (chart_generator, report_generator) |
+| `demos/` | 演示脚本 |
+| `docs/` | 文档 |
+| `results/` | 测试结果输出 |
+| `logs/` | 日志文件 |
 
 ---
 
-## 🆘 Troubleshooting
+## 🆘 故障排查
 
-### Device Not Found
+### 常见问题
+
+**Q: 测试失败，显示 "Device not found"**
 
 ```bash
-# Check available devices
-lsblk
+# 检查设备路径
+ls -la /dev/sd*
 
-# Set correct device
+# 设置正确的设备路径
 python3 systest/bin/systest.py config --device=/dev/sda
 ```
 
-### Insufficient Space
+**Q: 显示 "Permission denied"**
 
 ```bash
-# Check space
-df -h
+# 使用 sudo 运行
+sudo python3 systest/bin/systest.py run --suite performance
 
-# Clean test directory
-rm -rf /mapdata/ufs_test/*
+# 或者将用户加入 disk 组
+sudo usermod -aG disk $USER
 ```
 
-### FIO Not Installed
+**Q: 显示 "FIO not found"**
 
 ```bash
-# Install FIO
-apt-get update
-apt-get install -y fio
+# 安装 FIO
+apt-get install fio
 
-# Verify
-fio --version
+# 验证安装
+which fio
+```
+
+**Q: 健康状态显示 "数据不完整"**
+
+```bash
+# 检查 UFS 设备是否存在
+ls /sys/bus/ufs/devices/
+
+# 查看设备健康信息
+cat /sys/bus/ufs/devices/*/health_descriptor/*
 ```
 
 ---
 
-## 📖 CLI Help
+## 📖 CLI 帮助
 
 ```bash
-# View main help
+# 查看主帮助
 python3 systest/bin/systest.py --help
 
-# View run command help
+# 查看 run 命令帮助
 python3 systest/bin/systest.py run --help
 
-# View list command help
+# 查看 list 命令帮助
 python3 systest/bin/systest.py list --help
 
-# View report command help
+# 查看 report 命令帮助
 python3 systest/bin/systest.py report --help
 
-# View config command help
+# 查看 config 命令帮助
 python3 systest/bin/systest.py config --help
 
-# View check-env command help
+# 查看 mode 命令帮助
+python3 systest/bin/systest.py mode --help
+
+# 查看 check-env 命令帮助
 python3 systest/bin/systest.py check-env --help
 ```
 
 ---
 
-**Last Updated**: 2026-04-09  
-**Version**: 1.0  
-**Status**: Production Ready ✅
+## 📚 更多文档
+
+- [模式切换演示](docs/MODE_SWITCH_DEMO.md)
+- [改进报告](docs/IMPROVEMENT_REPORT.md)
+- [UFS 健康状态调查报告](docs/ufs_health_investigation_report.md)
+- [健康状态快速参考](docs/health_status_quick_reference.md)
+
+---
+
+**最后更新**: 2026-04-10  
+**版本**: 1.0  
+**状态**: Production Ready ✅  
+**GitHub**: https://github.com/hanxueyuan/ufsauto
