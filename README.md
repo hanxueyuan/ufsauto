@@ -22,17 +22,10 @@
 - FIO 3.20+
 - Linux (ARM/x86)
 
-### 安装
+### 检查环境
 
 ```bash
-# 安装 FIO
-apt-get install fio
-
-# 克隆项目
-git clone https://github.com/hanxueyuan/ufsauto.git
 cd ufsauto
-
-# 检查环境
 python3 systest/bin/systest.py check-env --save-config
 ```
 
@@ -224,10 +217,7 @@ sudo usermod -aG disk $USER
 **Q: 显示 "FIO not found"**
 
 ```bash
-# 安装 FIO
-apt-get install fio
-
-# 验证安装
+# 请确认 FIO 已正确安装
 which fio
 ```
 
@@ -281,5 +271,4 @@ python3 systest/bin/systest.py check-env --help
 
 **最后更新**: 2026-04-10  
 **版本**: 1.0  
-**状态**: Production Ready ✅  
-**GitHub**: https://github.com/hanxueyuan/ufsauto
+**状态**: Production Ready ✅
