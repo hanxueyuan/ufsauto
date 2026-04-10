@@ -19,9 +19,9 @@ import subprocess
 from pathlib import Path
 from typing import Dict, Any, Optional
 
-from runner import TestCase
-from fio_wrapper import FIO, FIOConfig, FIOError
-from ufs_utils import UFSDevice
+from systest.core.runner import TestCase
+from systest.tools.fio_wrapper import FIO, FIOConfig, FIOError
+from systest.tools.ufs_utils import UFSDevice
 
 class PerformanceTestCase(TestCase):
     """性能测试基类
