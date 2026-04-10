@@ -25,6 +25,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from .constants import Config
+
 logger = logging.getLogger(__name__)
 
 PERFORMANCE_THRESHOLD = 0.9
@@ -53,33 +55,33 @@ def print_debug_tips(error_msg: str, log_file: str = None):
         error_msg: Error message string
         log_file: Optional log file path to display
     """
-    print("\n💡 调试建议:")
+    logger.info("\n💡 调试建议:")
     error_lower = error_msg.lower()
     
     if 'device' in error_lower:
-        print("  1. 检查设备路径是否正确")
-        print("  2. 运行 'lsblk' 查看设备列表")
-        print("  3. 检查设备权限：ls -la /dev/sd*")
+        logger.info("  1. 检查设备路径是否正确")
+        logger.info("  2. 运行 'lsblk' 查看设备列表")
+        logger.info("  3. 检查设备权限：ls -la /dev/sd*")
     elif 'permission' in error_lower or 'access' in error_lower:
-        print("  1. 使用 sudo 运行测试")
-        print("  2. 或将用户加入 disk 组：sudo usermod -aG disk $USER")
+        logger.info("  1. 使用 sudo 运行测试")
+        logger.info("  2. 或将用户加入 disk 组：sudo usermod -aG disk $USER")
     elif 'space' in error_lower or 'no space' in error_lower:
-        print("  1. 检查磁盘空间：df -h")
-        print("  2. 清理测试目录或指定 --test-dir")
+        logger.info("  1. 检查磁盘空间：df -h")
+        logger.info("  2. 清理测试目录或指定 --test-dir")
     elif 'timeout' in error_lower:
-        print("  1. 检查设备性能是否正常")
-        print("  2. 增加超时时间设置")
-        print("  3. 检查系统负载：top, iostat")
+        logger.info("  1. 检查设备性能是否正常")
+        logger.info("  2. 增加超时时间设置")
+        logger.info("  3. 检查系统负载：top, iostat")
     elif 'fio' in error_lower:
-        print("  1. 检查 fio 是否安装：which fio")
-        print("  2. 检查 fio 版本：fio --version")
-        print("  3. 查看详细错误日志")
+        logger.info("  1. 检查 fio 是否安装：which fio")
+        logger.info("  2. 检查 fio 版本：fio --version")
+        logger.info("  3. 查看详细错误日志")
     else:
-        print("  1. 查看详细日志：tail -f logs/*.log")
-        print("  2. 检查错误日志：cat logs/*_error.log")
+        logger.info("  1. 查看详细日志：tail -f logs/*.log")
+        logger.info("  2. 检查错误日志：cat logs/*_error.log")
     
     if log_file:
-        print(f"\n详细错误信息请查看：{log_file}\n")
+        logger.info(f"\n详细错误信息请查看：{log_file}\n")
 
 class TestCase:
     """
@@ -578,42 +580,56 @@ class TestRunner:
 
         return None
 
+    def _validate_and_resolve_test_dir(self, path: Path) -> Path:
+        """Validate and resolve test directory path
+        
+        Security: Ensures path is within allowed prefixes to prevent
+        writing to sensitive locations.
+        """
+        allowed_prefixes = Config.ALLOWED_TEST_DIR_PREFIXES
+        
+        # 先创建目录（如果需要）
+        path.mkdir(parents=True, exist_ok=True)
+        
+        # 再验证路径
+        try:
+            real_path = path.resolve()
+        except (OSError, ValueError) as e:
+            raise RuntimeError(f"Cannot resolve path {path}: {e}")
+        
+        # 严格验证
+        if not any(str(real_path).startswith(p) for p in allowed_prefixes):
+            logger.error(
+                f"Test directory not within allowed paths: {real_path}\n"
+                f"Allowed prefixes: {allowed_prefixes}"
+            )
+            raise RuntimeError(
+                f"Test directory must be within {allowed_prefixes}"
+            )
+        
+        return real_path
+
     def _resolve_test_dir(self):
         """Determine test directory: User specified > Auto-detected > Fallback default"""
-        allowed_prefixes = ['/tmp', '/mapdata']
-
         if self.test_dir_override:
             test_dir = Path(self.test_dir_override).absolute()
             try:
-                real_path = test_dir.resolve()
-                if not any(str(real_path).startswith(p) for p in allowed_prefixes):
-                    logger.error(f"Test directory not within allowed paths: {test_dir} (real path: {real_path})")
-                    logger.error(f"Allowed directory prefixes: {allowed_prefixes}")
-                    raise RuntimeError(f"Test directory must be within: {allowed_prefixes}")
-            except FileNotFoundError:
-                try:
-                    test_dir.mkdir(parents=True, exist_ok=True)
-                    real_path = test_dir.resolve()
-                    if not any(str(real_path).startswith(p) for p in allowed_prefixes):
-                        logger.error(f"Test directory not within allowed paths: {test_dir} (real path: {real_path})")
-                        logger.error(f"Allowed directory prefixes: {allowed_prefixes}")
-                        raise RuntimeError(f"Test directory must be within: {allowed_prefixes}")
-                except Exception as e:
-                    logger.error(f"Test directory verification failed: {e}")
-                    raise
+                self.test_dir = self._validate_and_resolve_test_dir(test_dir)
+                logger.info(f"Test directory: {self.test_dir} (manually specified)")
+                return
             except Exception as e:
-                logger.error(f"Test directory verification failed: {e}")
+                logger.error(f"Test directory validation failed: {e}")
                 raise
-            self.test_dir = test_dir
-            self.test_dir.mkdir(parents=True, exist_ok=True)
-            logger.info(f"Test directory: {self.test_dir} (manually specified)")
-            return
 
         if self.runtime_config.get("test_dir"):
-            self.test_dir = Path(self.runtime_config["test_dir"]).absolute()
-            self.test_dir.mkdir(parents=True, exist_ok=True)
-            logger.info(f"Test directory: {self.test_dir} (auto-detected)")
-            return
+            test_dir = Path(self.runtime_config["test_dir"]).absolute()
+            try:
+                self.test_dir = self._validate_and_resolve_test_dir(test_dir)
+                logger.info(f"Test directory: {self.test_dir} (auto-detected)")
+                return
+            except Exception as e:
+                logger.error(f"Auto-detected test directory validation failed: {e}")
+                raise
 
         fallback_dirs = [
             Path('/mapdata/ufs_test').absolute(),
@@ -621,8 +637,7 @@ class TestRunner:
         ]
         for fallback in fallback_dirs:
             try:
-                fallback.mkdir(parents=True, exist_ok=True)
-                self.test_dir = fallback
+                self.test_dir = self._validate_and_resolve_test_dir(fallback)
                 logger.warning(f"Falling back to default directory: {self.test_dir}")
                 return
             except Exception:
@@ -630,7 +645,7 @@ class TestRunner:
 
         try:
             self.test_dir = Path('/tmp/ufs_test').absolute()
-            self.test_dir.mkdir(parents=True, exist_ok=True)
+            self.test_dir = self._validate_and_resolve_test_dir(self.test_dir)
             logger.error(f"All fallback directories failed, forcing: {self.test_dir}")
         except Exception as e:
             logger.critical(f"Test directory creation completely failed: {e}")
@@ -642,8 +657,8 @@ class TestRunner:
             import shutil
             stat = shutil.disk_usage(self.test_dir)
             free_gb = stat.free / (1024 ** 3)
-            if free_gb < 2:
-                logger.warning(f"Insufficient space in test directory: {free_gb:.1f} GB (recommended >= 2GB)")
+            if free_gb < Config.MIN_AVAILABLE_SPACE_GB:
+                logger.warning(f"Insufficient space in test directory: {free_gb:.1f} GB (recommended >= {Config.MIN_AVAILABLE_SPACE_GB}GB)")
                 logger.warning(f"Please free up space or specify --test-dir to another directory")
                 logger.warning(f"Check disk usage: df -h {self.test_dir}")
             else:
@@ -727,14 +742,13 @@ class TestRunner:
         mode_display = 'Production' if self.is_production else 'Development'
         loop_count = mode_params.get('loop_count', 1)
         
-        # 终端清晰显示测试开始
-        print("\n" + "=" * 60)
-        print(f"🚀 执行测试套件：{suite_name}")
-        print("=" * 60)
-        print(f"模式：{mode_display}")
-        print(f"循环次数：{loop_count}")
-        print(f"单次测试时长：{mode_params['fio_runtime']}s")
-        print("=" * 60 + "\n")
+        logger.info("=" * 60)
+        logger.info(f"🚀 执行测试套件：{suite_name}")
+        logger.info("=" * 60)
+        logger.info(f"模式：{mode_display}")
+        logger.info(f"循环次数：{loop_count}")
+        logger.info(f"单次测试时长：{mode_params['fio_runtime']}s")
+        logger.info("=" * 60)
         
         logger.info(f"Executing test suite: {suite_name} (Mode: {mode_display})")
         logger.info(f"  Loop count: {loop_count}")
@@ -757,7 +771,7 @@ class TestRunner:
             for i, test_name in enumerate(tests, 1):
                 if stopped:
                     logger.warning(f"[{i}/{len(tests)}] Skipping test (previous Fail-Stop): {test_name}")
-                    print(f"  ⏭️  跳过测试：{test_name} (前序测试 Fail-Stop)")
+                    logger.info(f"  ⏭️  跳过测试：{test_name} (前序测试 Fail-Stop)")
                     loop_results.append({
                         'name': test_name,
                         'status': 'SKIP',
@@ -767,9 +781,8 @@ class TestRunner:
                     })
                     continue
 
-                # 终端清晰显示测试开始
-                print(f"\n[{i}/{len(tests)}] 🧪 测试：{test_name}")
-                print("-" * 60)
+                logger.info(f"\n[{i}/{len(tests)}] 🧪 测试：{test_name}")
+                logger.info("-" * 60)
                 logger.info(f"[{i}/{len(tests)}] Executing test: {test_name}")
 
                 try:
@@ -807,41 +820,37 @@ class TestRunner:
 
                     if result.get('fail_mode') == 'stop':
                         logger.error(f"  Fail-Stop triggered, subsequent tests will be skipped")
-                        print(f"  \033[31m❌ Fail-Stop 触发，后续测试将跳过\033[0m")
+                        logger.error(f"  ❌ Fail-Stop 触发，后续测试将跳过")
                         stopped = True
 
-                    # 终端清晰显示测试结果
                     status = result['status']
                     duration = result['duration']
                     
                     if status == 'PASS':
-                        print(f"  \033[32m✅ PASS\033[0m ({duration:.2f}s)")
+                        logger.info(f"  ✅ PASS ({duration:.2f}s)")
                     elif status == 'FAIL':
-                        print(f"  \033[31m❌ FAIL\033[0m ({duration:.2f}s)")
-                        # 显示失败原因
+                        logger.error(f"  ❌ FAIL ({duration:.2f}s)")
                         if 'reason' in result:
-                            print(f"     原因：{result['reason']}")
+                            logger.error(f"     原因：{result['reason']}")
                         if 'failures' in result:
-                            for f in result['failures'][:3]:  # 显示前 3 个失败项
-                                print(f"     - {f['check']}: {f['reason']}")
+                            for f in result['failures'][:3]:
+                                logger.error(f"     - {f['check']}: {f['reason']}")
                     elif status == 'ERROR':
-                        print(f"  \033[31m⚠️  ERROR\033[0m ({duration:.2f}s)")
+                        logger.error(f"  ⚠️  ERROR ({duration:.2f}s)")
                         if 'error' in result:
-                            print(f"     错误：{result['error']}")
+                            logger.error(f"     错误：{result['error']}")
                     elif status == 'SKIP':
-                        print(f"  ⏭️  SKIP ({duration:.2f}s)")
+                        logger.warning(f"  ⏭️  SKIP ({duration:.2f}s)")
                         if 'reason' in result:
-                            print(f"     原因：{result['reason']}")
+                            logger.warning(f"     原因：{result['reason']}")
                     elif status == 'ABORT':
-                        print(f"  \033[33m⚠️  ABORT\033[0m ({duration:.2f}s)")
+                        logger.warning(f"  ⚠️  ABORT ({duration:.2f}s)")
                         if 'reason' in result:
-                            print(f"     原因：{result['reason']}")
-                    
-                    logger.info(f"  {result['status']} ({result['duration']:.2f}s)")
+                            logger.warning(f"     原因：{result['reason']}")
 
                 except ImportError as e:
                     logger.error(f"Unable to import test case {test_name}: {e}")
-                    print(f"  \033[31m❌ 导入失败：{e}\033[0m")
+                    logger.error(f"  ❌ 导入失败：{e}")
                     print_debug_tips(str(e))
                     loop_results.append({
                         'name': test_name,
@@ -852,7 +861,7 @@ class TestRunner:
                     })
                 except Exception as e:
                     logger.error(f"Test execution failed {test_name}: {e}", exc_info=True)
-                    print(f"  \033[31m❌ 测试执行失败：{e}\033[0m")
+                    logger.error(f"  ❌ 测试执行失败：{e}")
                     print_debug_tips(str(e))
                     loop_results.append({
                         'name': test_name,
@@ -872,15 +881,12 @@ class TestRunner:
             loop_total = len(loop_results)
             
             logger.info(f"\n[Loop {loop_idx + 1}/{loop_count}] Summary: {loop_passed}/{loop_total} passed\n")
-            
-            # 终端清晰显示循环总结
-            print(f"\n[Loop {loop_idx + 1}/{loop_count}] 小结:")
-            print(f"  \033[32m✅ 通过：{loop_passed}/{loop_total}\033[0m")
+            logger.info(f"[Loop {loop_idx + 1}/{loop_count}] 小结:")
+            logger.info(f"  ✅ 通过：{loop_passed}/{loop_total}")
             if loop_failed > 0:
-                print(f"  \033[31m❌ 失败：{loop_failed}\033[0m")
+                logger.error(f"  ❌ 失败：{loop_failed}")
             if loop_errors > 0:
-                print(f"  \033[31m⚠️  错误：{loop_errors}\033[0m")
-            print()
+                logger.error(f"  ⚠️  错误：{loop_errors}")
 
         # Final summary (all loops combined)
         total = len(all_results)
@@ -903,44 +909,38 @@ class TestRunner:
         logger.info(f"  [ABORT]: {aborted}")
         logger.info("-" * 60)
 
-        # 终端清晰显示最终总结
-        print("\n" + "=" * 60)
-        print(f"📊 测试套件执行总结：{suite_name}")
-        print("=" * 60)
-        print(f"总测试数：{total} (共 {loop_count} 轮)")
-        print(f"\033[32m✅ 通过：{passed}\033[0m")
+        logger.info("\n" + "=" * 60)
+        logger.info(f"📊 测试套件执行总结：{suite_name}")
+        logger.info("=" * 60)
+        logger.info(f"总测试数：{total} (共 {loop_count} 轮)")
+        logger.info(f"✅ 通过：{passed}")
         if failed > 0:
-            print(f"\033[31m❌ 失败：{failed}\033[0m")
+            logger.error(f"❌ 失败：{failed}")
         if errors > 0:
-            print(f"\033[31m⚠️  错误：{errors}\033[0m")
+            logger.error(f"⚠️  错误：{errors}")
         if skipped > 0:
-            print(f"⏭️  跳过：{skipped}")
+            logger.warning(f"⏭️  跳过：{skipped}")
         if aborted > 0:
-            print(f"\033[33m⚠️  中断：{aborted}\033[0m")
-        print(f"通过率：{pass_rate:.1f}%")
-        print("=" * 60)
+            logger.warning(f"⚠️  中断：{aborted}")
+        logger.info(f"通过率：{pass_rate:.1f}%")
+        logger.info("=" * 60)
 
         if failed > 0 or errors > 0:
-            suite_status = '\033[31m[FAIL]\033[0m'
-            print(f"\n套件状态：{suite_status} ({failed + errors} 个测试失败)")
-            
-            # 显示失败测试列表
-            print("\n失败测试详情:")
+            logger.error(f"\n套件状态：[FAIL] ({failed + errors} 个测试失败)")
+            logger.info("\n失败测试详情:")
             for r in all_results:
                 if r['status'] in ['FAIL', 'ERROR']:
-                    print(f"  ❌ {r['name']} (loop {r.get('loop', 1)})")
+                    logger.error(f"  ❌ {r['name']} (loop {r.get('loop', 1)})")
                     if 'reason' in r:
-                        print(f"     原因：{r['reason']}")
+                        logger.error(f"     原因：{r['reason']}")
                     if 'error' in r:
-                        print(f"     错误：{r['error']}")
+                        logger.error(f"     错误：{r['error']}")
         elif passed > 0:
-            suite_status = '\033[32m[PASS]\033[0m'
-            print(f"\n套件状态：{suite_status} (所有测试通过)")
+            logger.info(f"\n套件状态：[PASS] (所有测试通过)")
         else:
-            suite_status = '\033[33m[SKIP]\033[0m'
-            print(f"\n套件状态：{suite_status} (所有测试跳过)")
+            logger.warning(f"\n套件状态：[SKIP] (所有测试跳过)")
         
-        print("=" * 60 + "\n")
+        logger.info("=" * 60)
 
         return all_results
 
