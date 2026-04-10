@@ -207,8 +207,8 @@ def cmd_run(args):
                 batch_results.append(report_data)
 
             except Exception as e:
+                logger.error(f"测试执行失败：{e}", exc_info=True)
                 logger.critical(f"Test execution failed: {e}", exc_info=True)
-                logger.error(f"Error log: {logger.get_error_file()}")
                 
                 # 终端错误输出 - 红色高亮 + 调试建议
                 print(f"\n\033[31m❌ 严重错误：{e}\033[0m")
@@ -227,8 +227,7 @@ def cmd_run(args):
                     print("  2. 清理测试目录或指定 --test-dir")
                 else:
                     print("  1. 查看详细日志：tail -f logs/*.log")
-                    print("  2. 检查错误日志：cat logs/*_error.log")
-                print(f"\n详细错误信息请查看：{logger.get_error_file()}\n")
+                print(f"\n详细错误信息请查看日志文件：{logger.get_log_file()}\n")
                 
                 if args.batch == 1:
                     close_all_loggers()
@@ -298,9 +297,7 @@ def cmd_run(args):
     
     # 显示日志和报告路径
     log_file = logger.get_log_file()
-    error_file = logger.get_error_file()
     print(f"\n详细日志：{log_file}")
-    print(f"错误日志：{error_file}")
     if batch_results:
         report_path = batch_results[0].get('report_path', 'N/A')
         print(f"测试报告：{report_path}")

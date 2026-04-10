@@ -50,6 +50,38 @@ class StructuredFormatter(logging.Formatter):
 
         return json.dumps(log_data, ensure_ascii=False)
 
+class FileFormatter(logging.Formatter):
+    """File log formatter (with enhanced detail)
+
+    格式：2024-08-26 21:04:50.123 - logger_name - LEVEL - [完整路径：行号] - 消息
+    ERROR 级别及以上自动输出完整堆栈信息
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        """Format log with millisecond timestamp and full source location
+        
+        ERROR 级别及以上自动输出完整堆栈信息
+        """
+        time_str = datetime.fromtimestamp(record.created).strftime('%Y-%m-%d %H:%M:%S')
+        milliseconds = f"{int(record.msecs):03d}"
+        time_str = f"{time_str}.{milliseconds}"
+
+        level = f"{record.levelname:<8}"
+
+        source = f"[{record.pathname}:{record.lineno}]"
+
+        message = record.getMessage()
+
+        log_line = f"{time_str} - {record.name} - {level} - {source} - {message}"
+
+        # ERROR 级别及以上自动输出完整堆栈
+        if record.levelno >= logging.ERROR and record.exc_info:
+            stack_trace = self.formatException(record.exc_info)
+            log_line = f"{log_line}\n{stack_trace}"
+
+        return log_line
+
+
 class ConsoleFormatter(logging.Formatter):
     """Console log formatter (with enhanced colors)
 
@@ -134,7 +166,6 @@ class TestLogger:
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
         self.log_file = self.log_dir / f"{test_id}.log"
-        self.error_file = self.log_dir / f"{test_id}_error.log"
 
         self.logger = logging.getLogger(f"systest.{test_id}")
         self.logger.setLevel(logging.DEBUG)
@@ -144,8 +175,6 @@ class TestLogger:
         self._add_console_handler(console_level)
 
         self._add_file_handler(file_level, max_bytes, backup_count)
-
-        self._add_error_handler(file_level, max_bytes, backup_count)
 
         self.json_formatter = StructuredFormatter() if enable_json else None
 
@@ -159,8 +188,8 @@ class TestLogger:
     def _add_file_handler(self, level: int, max_bytes: int, backup_count: int):
         """Add file handler (with rotation)
 
-        文件格式：2024-08-26 21:04:50.123 - logger_name - LEVEL - [filename:lineno] - message
-        ERROR 级别自动记录堆栈信息
+        文件格式：2024-08-26 21:04:50.123 - logger_name - LEVEL - [完整路径：行号] - 消息
+        ERROR 级别及以上自动记录堆栈信息
         """
         file_handler = RotatingFileHandler(
             self.log_file,
@@ -169,30 +198,8 @@ class TestLogger:
             encoding='utf-8'
         )
         file_handler.setLevel(level)
-        file_handler.setFormatter(logging.Formatter(
-            '%(asctime)s.%(msecs)03d - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
-        ))
+        file_handler.setFormatter(FileFormatter())
         self.logger.addHandler(file_handler)
-
-    def _add_error_handler(self, level: int, max_bytes: int, backup_count: int):
-        """Add error file handler (only ERROR and above)
-
-        文件格式：2024-08-26 21:04:50.123 - logger_name - ERROR - [filename:lineno] - message
-        自动记录完整堆栈信息
-        """
-        error_handler = RotatingFileHandler(
-            self.error_file,
-            maxBytes=max_bytes,
-            backupCount=backup_count,
-            encoding='utf-8'
-        )
-        error_handler.setLevel(logging.ERROR)
-        error_handler.setFormatter(logging.Formatter(
-            '%(asctime)s.%(msecs)03d - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
-        ))
-        self.logger.addHandler(error_handler)
 
     def debug(self, msg: str, **kwargs):
         """DEBUG level log"""
@@ -266,10 +273,6 @@ class TestLogger:
     def get_log_file(self) -> Path:
         """Get log file path"""
         return self.log_file
-
-    def get_error_file(self) -> Path:
-        """Get error log file path"""
-        return self.error_file
 
     def close(self):
         """Close all handlers"""

@@ -78,10 +78,9 @@ def print_debug_tips(error_msg: str, log_file: str = None):
         logger.info("  3. 查看详细错误日志")
     else:
         logger.info("  1. 查看详细日志：tail -f logs/*.log")
-        logger.info("  2. 检查错误日志：cat logs/*_error.log")
     
     if log_file:
-        logger.info(f"\n详细错误信息请查看：{log_file}\n")
+        logger.info(f"\n详细错误信息请查看日志文件：{log_file}\n")
 
 class TestCase:
     """
@@ -456,11 +455,12 @@ class TestCase:
         except Exception as e:
             self.end_time = datetime.now()
             duration = (self.end_time - self.start_time).total_seconds()
-            self.logger.error(f"Test execution failed {self.name}: {e}", exc_info=True)
+            self.logger.error(f"测试执行失败 {self.name}: {e}", exc_info=True)
+            self.logger.critical(f"Test execution failed {self.name}: {type(e).__name__}: {e}", exc_info=True)
             return {
                 'name': self.name,
                 'status': 'ERROR',
-                'error': str(e),
+                'error': f'{type(e).__name__}: {e}',
                 'duration': duration,
                 'timestamp': self.start_time.isoformat()
             }
@@ -849,7 +849,7 @@ class TestRunner:
                             logger.warning(f"     原因：{result['reason']}")
 
                 except ImportError as e:
-                    logger.error(f"Unable to import test case {test_name}: {e}")
+                    logger.error(f"Unable to import test case {test_name}: {e}", exc_info=True)
                     logger.error(f"  ❌ 导入失败：{e}")
                     print_debug_tips(str(e))
                     loop_results.append({
@@ -860,13 +860,14 @@ class TestRunner:
                         'loop': loop_idx + 1
                     })
                 except Exception as e:
-                    logger.error(f"Test execution failed {test_name}: {e}", exc_info=True)
+                    logger.error(f"测试执行失败 {test_name}: {e}", exc_info=True)
+                    logger.critical(f"Test execution failed {test_name}: {type(e).__name__}: {e}", exc_info=True)
                     logger.error(f"  ❌ 测试执行失败：{e}")
                     print_debug_tips(str(e))
                     loop_results.append({
                         'name': test_name,
                         'status': 'ERROR',
-                        'error': str(e),
+                        'error': f'{type(e).__name__}: {e}',
                         'duration': 0,
                         'loop': loop_idx + 1
                     })
