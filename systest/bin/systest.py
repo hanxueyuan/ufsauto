@@ -230,6 +230,21 @@ def cmd_list(args):
 
     runner = TestRunner()
 
+    # Filter by suite if specified
+    if hasattr(args, 'suite') and args.suite:
+        suites = runner.list_suites()
+        if args.suite in suites:
+            print(f"\n=== Test Suite: {args.suite} ===\n")
+            tests = suites[args.suite]
+            for test in tests:
+                print(f"  - {test}")
+            print(f"\nTotal: {len(tests)} test items in suite '{args.suite}'")
+        else:
+            print(f"Unknown suite: {args.suite}")
+            print(f"Available suites: {', '.join(suites.keys())}")
+            return 1
+        return 0
+
     print("\n=== Available Test Suites ===\n")
     suites = runner.list_suites()
 
@@ -246,16 +261,55 @@ def cmd_report(args):
     from core.reporter import ReportGenerator
     from core.logger import get_logger
     from datetime import datetime
+    import glob
 
     logger = get_logger(test_id='report', log_dir='logs', console_level=logging.INFO, file_level=logging.DEBUG)
     reporter = ReportGenerator()
+
+    if hasattr(args, 'list') and args.list:
+        # List all available reports
+        print("\n=== Available Reports ===\n")
+        report_dir = Path('./results')
+        if report_dir.exists():
+            html_reports = sorted(glob.glob(str(report_dir / 'SysTest_*_*.html')))
+            json_reports = sorted(glob.glob(str(report_dir / 'SysTest_*_*.json')))
+            
+            if html_reports:
+                print(f"HTML Reports ({len(html_reports)}):")
+                for report in html_reports[-10:]:  # Show latest 10
+                    report_name = Path(report).name
+                    report_time = Path(report).stat().st_mtime
+                    report_date = datetime.fromtimestamp(report_time).strftime('%Y-%m-%d %H:%M:%S')
+                    print(f"  - {report_name} ({report_date})")
+                if len(html_reports) > 10:
+                    print(f"  ... and {len(html_reports) - 10} more")
+            else:
+                print("No HTML reports found")
+            
+            print()
+            
+            if json_reports:
+                print(f"JSON Reports ({len(json_reports)}):")
+                for report in json_reports[-10:]:  # Show latest 10
+                    report_name = Path(report).name
+                    report_time = Path(report).stat().st_mtime
+                    report_date = datetime.fromtimestamp(report_time).strftime('%Y-%m-%d %H:%M:%S')
+                    print(f"  - {report_name} ({report_date})")
+                if len(json_reports) > 10:
+                    print(f"  ... and {len(json_reports) - 10} more")
+            else:
+                print("No JSON reports found")
+        else:
+            print(f"Report directory does not exist: {report_dir}")
+            print("Run tests first to generate reports")
+        return 0
 
     if args.latest:
         report_path = reporter.get_latest_report()
     elif args.id:
         report_path = reporter.get_report(args.id)
     else:
-        print("Please specify --latest or --id")
+        print("Please specify --latest, --id, or --list")
         return 1
 
     if report_path:
@@ -366,7 +420,8 @@ def cmd_check_env(args):
     cmd = [sys.executable, str(check_script)]
     if args.report:
         cmd.extend(['--report', '--output', args.output])
-    if args.no_save:
+    # --save-config is default behavior, --no-save overrides it
+    if hasattr(args, 'no_save') and args.no_save:
         cmd.append('--no-save')
     if args.verbose:
         cmd.append('-v')
@@ -464,6 +519,7 @@ Quick Start:
   SysTest run --suite performance
   SysTest run --all
   SysTest report --latest
+  SysTest report --list            # List all available reports
   SysTest mode                    # View current test mode
   SysTest mode --set=production   # Switch to production mode
 
@@ -481,15 +537,18 @@ Execute Tests:
 
 View Information:
   SysTest list
+  SysTest list --suite performance  # List tests in specific suite
   SysTest list --detail
   SysTest report --latest
   SysTest report --id SysTest_performance_20260409_090726
+  SysTest report --list            # List all available reports
   SysTest report --latest --export-csv
   SysTest mode                    # View current test mode
 
 Environment Management:
   SysTest check-env
   SysTest check-env --save-config
+  SysTest check-env --no-save      # Skip saving configuration
   SysTest config --show
   SysTest config --device /dev/sda
   SysTest config --test-dir /mapdata/ufs_test
@@ -573,9 +632,12 @@ Complete Workflow:
         epilog="""Examples:
   python3 bin/SysTest list
 
+  python3 bin/SysTest list --suite performance
+
   python3 bin/SysTest list --detail
 """)
     list_parser.add_argument('--detail', action='store_true', help='Show detailed information')
+    list_parser.add_argument('--suite', '-s', help='Filter by suite name')
     list_parser.set_defaults(func=cmd_list)
 
     report_parser = subparsers.add_parser('report',
@@ -590,6 +652,7 @@ Complete Workflow:
 """)
     report_parser.add_argument('--latest', action='store_true', help='View latest report')
     report_parser.add_argument('--id', help='Specify report ID')
+    report_parser.add_argument('--list', action='store_true', help='List all available reports')
     report_parser.add_argument('--open', action='store_true', help='Open in browser')
     report_parser.add_argument('--export-csv', action='store_true', help='Export CSV format')
     report_parser.set_defaults(func=cmd_report)
@@ -626,7 +689,8 @@ Complete Workflow:
 """)
     check_env_parser.add_argument('--report', action='store_true', help='Generate JSON report')
     check_env_parser.add_argument('--output', default='env_check_report.json', help='Report output path')
-    check_env_parser.add_argument('--no-save', action='store_true', help='Do not save configuration file (default will auto-save runtime.json)')
+    check_env_parser.add_argument('--save-config', action='store_true', help='Save configuration to runtime.json (default behavior)')
+    check_env_parser.add_argument('--no-save', action='store_true', help='Do not save configuration file')
     check_env_parser.add_argument('--verbose', '-v', action='store_true', help='Verbose output')
     check_env_parser.set_defaults(func=cmd_check_env)
 

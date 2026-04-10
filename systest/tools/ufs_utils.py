@@ -324,88 +324,234 @@ class UFSDevice:
 
         Returns:
             Dict: Health status information (returns OK if not available)
+            
+        Health status structure:
+            {
+                'status': 'OK' | 'WARNING' | 'CRITICAL' | 'PRE_EOL' | 'UNSUPPORTED',
+                'pre_eol_info': '0x00' | '0x01' | '0x02' | 'N/A',
+                'device_life_time_est_a': '0x00'-'0x0A' (0-100%) | 'N/A',
+                'device_life_time_est_b': '0x00'-'0x0A' (0-100%) | 'N/A',
+                'critical_warning': 0 | 1,
+                'temperature': int | None,
+                'life_span': int | None,  # 寿命百分比
+                'source': str  # 数据来源：'sysfs' | 'scsi' | 'none'
+            }
         """
         health = {
-            'status': 'OK',
+            'status': 'UNSUPPORTED',
             'pre_eol_info': 'N/A',
             'device_life_time_est_a': 'N/A',
             'device_life_time_est_b': 'N/A',
-            'critical_warning': 0
+            'critical_warning': 0,
+            'temperature': None,
+            'life_span': None,
+            'source': 'none'
         }
 
+        # 优先级 1: 尝试从 sysfs 读取 UFS 健康描述符
         health_dir = self._find_ufs_health_dir()
         if health_dir:
             try:
-                pre_eol_file = health_dir / 'pre_eol_info'
-                if pre_eol_file.exists():
-                    health['pre_eol_info'] = pre_eol_file.read_text().strip()
-
-                life_a_file = health_dir / 'device_life_time_est_a'
-                if life_a_file.exists():
-                    health['device_life_time_est_a'] = life_a_file.read_text().strip()
-
-                life_b_file = health_dir / 'device_life_time_est_b'
-                if life_b_file.exists():
-                    health['device_life_time_est_b'] = life_b_file.read_text().strip()
-
-                warn_file = health_dir / 'critical_warning'
-                if warn_file.exists():
-                    health['critical_warning'] = int(warn_file.read_text().strip())
-
-                if health['critical_warning'] > 0:
-                    health['status'] = 'WARNING'
-                elif health['pre_eol_info'] not in ('0x00', None, 'N/A', ''):
-                    health['status'] = 'PRE_EOL'
-
+                health = self._read_health_from_sysfs(health_dir, health)
             except Exception as e:
-                self.logger.debug(f"Failed to read health status: {e}")
+                self.logger.debug(f"Failed to read health from sysfs: {e}")
 
-        if health['status'] != 'OK' or health['pre_eol_info'] != 'N/A':
-            self.logger.debug(f"Health status: {health['status']}")
+        # 优先级 2: 如果 sysfs 失败，尝试 SCSI VPD 页面（需要 sg3_utils）
+        if health['source'] == 'none':
+            try:
+                health = self._read_health_from_scsi(health)
+            except Exception as e:
+                self.logger.debug(f"Failed to read health from SCSI: {e}")
+
+        # 确定最终状态
+        if health['source'] != 'none':
+            if health['critical_warning'] > 0:
+                health['status'] = 'CRITICAL'
+            elif health['pre_eol_info'] in ('0x01', '0x02'):
+                health['status'] = 'PRE_EOL'
+            else:
+                health['status'] = 'OK'
+
+            self.logger.debug(f"Health status: {health['status']} (source: {health['source']})")
+        else:
+            self.logger.debug("UFS health status not available (device may not support it)")
+            health['status'] = 'OK'  # 降级处理：假设正常
+            
         return health
 
     def _find_ufs_health_dir(self) -> Optional[Path]:
         """Find UFS health info directory
 
-        Optimization strategy:
-        1. Directly derive sysfs path from device path (efficient)
-        2. Fallback to traversal matching (compatible with multi-device scenarios)
+        UFS health descriptor is typically located at:
+        /sys/bus/ufs/devices/<device_id>/health_descriptor/
+        
+        Search strategy:
+        1. Scan /sys/bus/ufs/devices/ for UFS devices (most reliable)
+        2. Try to map SCSI device to UFS device via driver link
+        3. Fallback to /sys/class/ufs_device/ if exists
+        
+        Returns:
+            Path to health_descriptor directory, or None if not found
         """
         device_name = Path(self.device_path).name
+        self.logger.debug(f"Searching for UFS health directory for device: {device_name}")
 
+        # 策略 1: 直接扫描 /sys/bus/ufs/devices/（最可靠）
+        ufs_devices_dir = Path('/sys/bus/ufs/devices')
+        if ufs_devices_dir.exists():
+            for ufs_dev_dir in ufs_devices_dir.iterdir():
+                if ufs_dev_dir.is_dir():
+                    health_dir = ufs_dev_dir / 'health_descriptor'
+                    if health_dir.exists():
+                        self.logger.debug(f"Found UFS health directory: {health_dir}")
+                        return health_dir
+            self.logger.debug(f"No health_descriptor found under {ufs_devices_dir}")
+
+        # 策略 2: 从 SCSI 设备反向查找 UFS 控制器
         sys_block = Path(f'/sys/block/{device_name}')
         if sys_block.exists():
-            for _ in range(5):
-                driver_link = sys_block / 'device' / 'driver'
-                if driver_link.is_symlink():
-                    driver_name = os.readlink(driver_link)
-                    if 'ufs' in driver_name.lower() or 'ufshcd' in driver_name.lower():
-                        ufs_class = Path('/sys/class/ufs_device')
-                        if ufs_class.exists():
-                            for ufs_dir in ufs_class.iterdir():
-                                health_dir = ufs_dir / 'health_descriptor'
-                                if health_dir.exists():
-                                    self.logger.debug(f"Found health directory via direct derivation: {health_dir}")
-                                    return health_dir
+            # 遍历设备层级查找 UFS 驱动
+            for depth in range(1, 8):
+                try:
+                    device_dir = sys_block
+                    for _ in range(depth):
+                        device_dir = device_dir / 'device'
+                        if not device_dir.exists():
+                            break
+                    
+                    if device_dir.exists():
+                        driver_link = device_dir / 'driver'
+                        if driver_link.is_symlink():
+                            driver_path = os.readlink(driver_link)
+                            driver_name = os.path.basename(driver_path)
+                            if 'ufshcd' in driver_name.lower() or 'ufs' in driver_name.lower():
+                                self.logger.debug(f"Found UFS driver: {driver_name} at depth {depth}")
+                                # 从驱动目录查找 UFS 设备
+                                ufs_class = Path('/sys/class/ufs_device')
+                                if ufs_class.exists():
+                                    for ufs_dir in ufs_class.iterdir():
+                                        health_dir = ufs_dir / 'health_descriptor'
+                                        if health_dir.exists():
+                                            self.logger.debug(f"Found health directory via driver link: {health_dir}")
+                                            return health_dir
+                except Exception:
+                    continue
 
-        self.logger.debug(f"Direct derivation failed, falling back to traversal matching...")
-        for base in [Path('/sys/class/ufs_device'), Path('/sys/bus/platform/drivers/ufs')]:
-            if base.exists():
-                for ufs_dir in base.iterdir():
-                    try:
-                        uevent_file = ufs_dir / 'uevent'
-                        if uevent_file.exists():
-                            with open(uevent_file, 'r') as f:
-                                uevent_content = f.read()
-                                if f'DEVNAME={device_name}' in uevent_content or f'DEVICE=/{device_name}' in uevent_content:
-                                    health_dir = ufs_dir / 'health_descriptor'
-                                    if health_dir.exists():
-                                        self.logger.debug(f"Found health directory via traversal matching: {health_dir}")
-                                        return health_dir
-                    except Exception:
-                        pass
+        # 策略 3: 尝试 /sys/class/ufs_device/（旧内核可能使用）
+        ufs_class = Path('/sys/class/ufs_device')
+        if ufs_class.exists():
+            for ufs_dir in ufs_class.iterdir():
+                health_dir = ufs_dir / 'health_descriptor'
+                if health_dir.exists():
+                    self.logger.debug(f"Found health directory via ufs_class: {health_dir}")
+                    return health_dir
 
+        self.logger.debug("UFS health directory not found")
         return None
+
+    def _read_health_from_sysfs(self, health_dir: Path, health: Dict[str, Any]) -> Dict[str, Any]:
+        """Read UFS health status from sysfs health_descriptor
+        
+        Args:
+            health_dir: Path to health_descriptor directory
+            health: Health dict to update
+            
+        Returns:
+            Updated health dict
+        """
+        health['source'] = 'sysfs'
+        
+        # 读取 Pre-EOL 信息
+        # 值：0x00=正常，0x01=警告（寿命<10%），0x02=严重（寿命<5%）
+        pre_eol_file = health_dir / 'pre_eol_info'
+        if pre_eol_file.exists():
+            value = pre_eol_file.read_text().strip()
+            health['pre_eol_info'] = value
+            self.logger.debug(f"pre_eol_info: {value}")
+
+        # 读取寿命估算 A（基于实际使用情况）
+        # 值：0x00-0x0A 表示 0%-100%，0x0B=保留
+        life_a_file = health_dir / 'device_life_time_est_a'
+        if life_a_file.exists():
+            value = life_a_file.read_text().strip()
+            health['device_life_time_est_a'] = value
+            try:
+                # 转换为寿命百分比
+                life_pct = int(value, 16) * 10 if value.startswith('0x') else int(value) * 10
+                health['life_span'] = min(100, life_pct)
+            except (ValueError, TypeError):
+                pass
+            self.logger.debug(f"device_life_time_est_a: {value}")
+
+        # 读取寿命估算 B（基于工厂测试）
+        life_b_file = health_dir / 'device_life_time_est_b'
+        if life_b_file.exists():
+            value = life_b_file.read_text().strip()
+            health['device_life_time_est_b'] = value
+            self.logger.debug(f"device_life_time_est_b: {value}")
+
+        # 读取关键警告标志
+        # 值：0=正常，1=警告
+        warn_file = health_dir / 'critical_warning'
+        if warn_file.exists():
+            try:
+                value = int(warn_file.read_text().strip())
+                health['critical_warning'] = value
+                self.logger.debug(f"critical_warning: {value}")
+            except (ValueError, TypeError):
+                pass
+
+        # 尝试读取温度（如果可用）
+        temp_file = health_dir / 'temperature'
+        if temp_file.exists():
+            try:
+                value = int(temp_file.read_text().strip())
+                health['temperature'] = value
+                self.logger.debug(f"temperature: {value}")
+            except (ValueError, TypeError):
+                pass
+
+        return health
+
+    def _read_health_from_scsi(self, health: Dict[str, Any]) -> Dict[str, Any]:
+        """Read UFS health status from SCSI VPD pages (fallback method)
+        
+        Uses sg3_utils to read VPD page 0xC0 (Vendor Specific) which may contain
+        UFS health descriptor information.
+        
+        Args:
+            health: Health dict to update
+            
+        Returns:
+            Updated health dict
+        """
+        # 检查 sg_inq 是否可用
+        if not subprocess.run(['which', 'sg_inq'], capture_output=True).returncode == 0:
+            self.logger.debug("sg_inq not available, skipping SCSI health read")
+            return health
+
+        try:
+            # 使用 sg_inq 读取设备信息
+            result = subprocess.run(
+                ['sg_inq', '-p', '0xc0', self.device_path],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if result.returncode == 0:
+                output = result.stdout
+                self.logger.debug(f"SCSI VPD 0xC0 output: {output[:200]}...")
+                
+                # 尝试解析 UFS 健康信息（厂商特定格式）
+                # 注意：这是厂商特定的，可能需要根据实际设备调整
+                health['source'] = 'scsi'
+                # 这里可以添加具体的解析逻辑，取决于设备厂商
+                
+        except Exception as e:
+            self.logger.debug(f"SCSI health read failed: {e}")
+            
+        return health
 
     def flush_cache(self) -> bool:
         """

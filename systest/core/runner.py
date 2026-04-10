@@ -653,23 +653,29 @@ class TestRunner:
 
     def get_mode_params(self) -> Dict[str, Any]:
         """Get test parameters based on mode"""
+        # Load mode-specific parameters from runtime.json if available
+        modes_config = self.runtime_config.get('modes', {})
+        mode_config = modes_config.get(self.mode, {})
+        
         if self.is_production:
             return {
-                'fio_runtime': 300,  # 5 minutes for production
-                'iterations': 3,  # Multiple iterations
+                'fio_runtime': mode_config.get('test_duration', 300),  # 5 minutes for production
+                'loop_count': mode_config.get('loop_count', 10),  # Number of iterations
                 'log_level': logging.INFO,
                 'report_detail': 'full',
                 'precheck_skip': False,  # Run all pre-checks
                 'auto_cleanup': True,  # Auto cleanup test files
+                'keep_files': mode_config.get('keep_files', False),
             }
         else:
             return {
-                'fio_runtime': 60,  # 1 minute for development
-                'iterations': 1,  # Single iteration
+                'fio_runtime': mode_config.get('test_duration', 60),  # 1 minute for development
+                'loop_count': mode_config.get('loop_count', 2),  # Number of iterations
                 'log_level': logging.DEBUG,
                 'report_detail': 'brief',
-                'precheck_skip': True,  # Skip some pre-checks
-                'auto_cleanup': False,  # Keep test files
+                'precheck_skip': False,  # Run all pre-checks (same logic as production)
+                'auto_cleanup': False,  # Keep test files for debugging
+                'keep_files': mode_config.get('keep_files', True),
             }
 
     def run_suite(self, suite_name: str, mode_params: Dict[str, Any] = None) -> List[Dict[str, Any]]:
