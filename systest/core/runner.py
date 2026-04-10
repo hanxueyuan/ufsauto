@@ -44,6 +44,43 @@ class FailStop(Exception):
     """
     pass
 
+
+def print_debug_tips(error_msg: str, log_file: str = None):
+    """
+    Print debug tips to terminal based on error message
+    
+    Args:
+        error_msg: Error message string
+        log_file: Optional log file path to display
+    """
+    print("\n💡 调试建议:")
+    error_lower = error_msg.lower()
+    
+    if 'device' in error_lower:
+        print("  1. 检查设备路径是否正确")
+        print("  2. 运行 'lsblk' 查看设备列表")
+        print("  3. 检查设备权限：ls -la /dev/sd*")
+    elif 'permission' in error_lower or 'access' in error_lower:
+        print("  1. 使用 sudo 运行测试")
+        print("  2. 或将用户加入 disk 组：sudo usermod -aG disk $USER")
+    elif 'space' in error_lower or 'no space' in error_lower:
+        print("  1. 检查磁盘空间：df -h")
+        print("  2. 清理测试目录或指定 --test-dir")
+    elif 'timeout' in error_lower:
+        print("  1. 检查设备性能是否正常")
+        print("  2. 增加超时时间设置")
+        print("  3. 检查系统负载：top, iostat")
+    elif 'fio' in error_lower:
+        print("  1. 检查 fio 是否安装：which fio")
+        print("  2. 检查 fio 版本：fio --version")
+        print("  3. 查看详细错误日志")
+    else:
+        print("  1. 查看详细日志：tail -f logs/*.log")
+        print("  2. 检查错误日志：cat logs/*_error.log")
+    
+    if log_file:
+        print(f"\n详细错误信息请查看：{log_file}\n")
+
 class TestCase:
     """
     Base test case class.
@@ -690,6 +727,15 @@ class TestRunner:
         mode_display = 'Production' if self.is_production else 'Development'
         loop_count = mode_params.get('loop_count', 1)
         
+        # 终端清晰显示测试开始
+        print("\n" + "=" * 60)
+        print(f"🚀 执行测试套件：{suite_name}")
+        print("=" * 60)
+        print(f"模式：{mode_display}")
+        print(f"循环次数：{loop_count}")
+        print(f"单次测试时长：{mode_params['fio_runtime']}s")
+        print("=" * 60 + "\n")
+        
         logger.info(f"Executing test suite: {suite_name} (Mode: {mode_display})")
         logger.info(f"  Loop count: {loop_count}")
         logger.info(f"  Test duration per loop: {mode_params['fio_runtime']}s")
@@ -711,6 +757,7 @@ class TestRunner:
             for i, test_name in enumerate(tests, 1):
                 if stopped:
                     logger.warning(f"[{i}/{len(tests)}] Skipping test (previous Fail-Stop): {test_name}")
+                    print(f"  ⏭️  跳过测试：{test_name} (前序测试 Fail-Stop)")
                     loop_results.append({
                         'name': test_name,
                         'status': 'SKIP',
@@ -720,6 +767,9 @@ class TestRunner:
                     })
                     continue
 
+                # 终端清晰显示测试开始
+                print(f"\n[{i}/{len(tests)}] 🧪 测试：{test_name}")
+                print("-" * 60)
                 logger.info(f"[{i}/{len(tests)}] Executing test: {test_name}")
 
                 try:
@@ -757,17 +807,42 @@ class TestRunner:
 
                     if result.get('fail_mode') == 'stop':
                         logger.error(f"  Fail-Stop triggered, subsequent tests will be skipped")
+                        print(f"  \033[31m❌ Fail-Stop 触发，后续测试将跳过\033[0m")
                         stopped = True
 
-                    status_icons = {
-                        'PASS': '[PASS]', 'FAIL': '[FAIL]', 'ERROR': '[ERROR]',
-                        'SKIP': '[SKIP]', 'ABORT': '[ABORT]'
-                    }
-                    icon = status_icons.get(result['status'], '[UNKNOWN]')
+                    # 终端清晰显示测试结果
+                    status = result['status']
+                    duration = result['duration']
+                    
+                    if status == 'PASS':
+                        print(f"  \033[32m✅ PASS\033[0m ({duration:.2f}s)")
+                    elif status == 'FAIL':
+                        print(f"  \033[31m❌ FAIL\033[0m ({duration:.2f}s)")
+                        # 显示失败原因
+                        if 'reason' in result:
+                            print(f"     原因：{result['reason']}")
+                        if 'failures' in result:
+                            for f in result['failures'][:3]:  # 显示前 3 个失败项
+                                print(f"     - {f['check']}: {f['reason']}")
+                    elif status == 'ERROR':
+                        print(f"  \033[31m⚠️  ERROR\033[0m ({duration:.2f}s)")
+                        if 'error' in result:
+                            print(f"     错误：{result['error']}")
+                    elif status == 'SKIP':
+                        print(f"  ⏭️  SKIP ({duration:.2f}s)")
+                        if 'reason' in result:
+                            print(f"     原因：{result['reason']}")
+                    elif status == 'ABORT':
+                        print(f"  \033[33m⚠️  ABORT\033[0m ({duration:.2f}s)")
+                        if 'reason' in result:
+                            print(f"     原因：{result['reason']}")
+                    
                     logger.info(f"  {result['status']} ({result['duration']:.2f}s)")
 
                 except ImportError as e:
                     logger.error(f"Unable to import test case {test_name}: {e}")
+                    print(f"  \033[31m❌ 导入失败：{e}\033[0m")
+                    print_debug_tips(str(e))
                     loop_results.append({
                         'name': test_name,
                         'status': 'ERROR',
@@ -776,7 +851,9 @@ class TestRunner:
                         'loop': loop_idx + 1
                     })
                 except Exception as e:
-                    logger.error(f"Test execution failed {test_name}: {e}")
+                    logger.error(f"Test execution failed {test_name}: {e}", exc_info=True)
+                    print(f"  \033[31m❌ 测试执行失败：{e}\033[0m")
+                    print_debug_tips(str(e))
                     loop_results.append({
                         'name': test_name,
                         'status': 'ERROR',
@@ -790,8 +867,20 @@ class TestRunner:
             
             # Loop summary
             loop_passed = sum(1 for r in loop_results if r['status'] == 'PASS')
+            loop_failed = sum(1 for r in loop_results if r['status'] == 'FAIL')
+            loop_errors = sum(1 for r in loop_results if r['status'] == 'ERROR')
             loop_total = len(loop_results)
+            
             logger.info(f"\n[Loop {loop_idx + 1}/{loop_count}] Summary: {loop_passed}/{loop_total} passed\n")
+            
+            # 终端清晰显示循环总结
+            print(f"\n[Loop {loop_idx + 1}/{loop_count}] 小结:")
+            print(f"  \033[32m✅ 通过：{loop_passed}/{loop_total}\033[0m")
+            if loop_failed > 0:
+                print(f"  \033[31m❌ 失败：{loop_failed}\033[0m")
+            if loop_errors > 0:
+                print(f"  \033[31m⚠️  错误：{loop_errors}\033[0m")
+            print()
 
         # Final summary (all loops combined)
         total = len(all_results)
@@ -800,6 +889,8 @@ class TestRunner:
         errors = sum(1 for r in all_results if r['status'] == 'ERROR')
         skipped = sum(1 for r in all_results if r['status'] == 'SKIP')
         aborted = sum(1 for r in all_results if r['status'] == 'ABORT')
+        
+        pass_rate = (passed / total * 100) if total > 0 else 0
 
         logger.info("=" * 60)
         logger.info(f"Test Suite Execution Summary: {suite_name} ({loop_count} loops)")
@@ -812,25 +903,44 @@ class TestRunner:
         logger.info(f"  [ABORT]: {aborted}")
         logger.info("-" * 60)
 
-        logger.info("Test case execution times (all loops):")
-        for r in all_results:
-            duration = r.get('duration', 0)
-            status = r.get('status', 'UNKNOWN')
-            name = r.get('name', 'unknown')
-            loop_num = r.get('loop', 1)
-            logger.info(f"  {name} (loop {loop_num}): {duration:.2f}s [{status}]")
+        # 终端清晰显示最终总结
+        print("\n" + "=" * 60)
+        print(f"📊 测试套件执行总结：{suite_name}")
+        print("=" * 60)
+        print(f"总测试数：{total} (共 {loop_count} 轮)")
+        print(f"\033[32m✅ 通过：{passed}\033[0m")
+        if failed > 0:
+            print(f"\033[31m❌ 失败：{failed}\033[0m")
+        if errors > 0:
+            print(f"\033[31m⚠️  错误：{errors}\033[0m")
+        if skipped > 0:
+            print(f"⏭️  跳过：{skipped}")
+        if aborted > 0:
+            print(f"\033[33m⚠️  中断：{aborted}\033[0m")
+        print(f"通过率：{pass_rate:.1f}%")
+        print("=" * 60)
 
         if failed > 0 or errors > 0:
-            suite_status = '[FAIL]'
-            logger.info(f"Suite status: {suite_status} ({failed + errors} tests failed across all loops)")
+            suite_status = '\033[31m[FAIL]\033[0m'
+            print(f"\n套件状态：{suite_status} ({failed + errors} 个测试失败)")
+            
+            # 显示失败测试列表
+            print("\n失败测试详情:")
+            for r in all_results:
+                if r['status'] in ['FAIL', 'ERROR']:
+                    print(f"  ❌ {r['name']} (loop {r.get('loop', 1)})")
+                    if 'reason' in r:
+                        print(f"     原因：{r['reason']}")
+                    if 'error' in r:
+                        print(f"     错误：{r['error']}")
         elif passed > 0:
-            suite_status = '[PASS]'
-            logger.info(f"Suite status: {suite_status} (All tests passed across all loops)")
+            suite_status = '\033[32m[PASS]\033[0m'
+            print(f"\n套件状态：{suite_status} (所有测试通过)")
         else:
-            suite_status = '[SKIP]'
-            logger.info(f"Suite status: {suite_status} (All tests skipped)")
-
-        logger.info("=" * 60)
+            suite_status = '\033[33m[SKIP]\033[0m'
+            print(f"\n套件状态：{suite_status} (所有测试跳过)")
+        
+        print("=" * 60 + "\n")
 
         return all_results
 

@@ -51,23 +51,37 @@ class StructuredFormatter(logging.Formatter):
         return json.dumps(log_data, ensure_ascii=False)
 
 class ConsoleFormatter(logging.Formatter):
-    """Console log formatter (with colors)
+    """Console log formatter (with enhanced colors)
 
     格式：2024-08-26 21:04:50.123 [INFO] [base.py:156] 消息内容
     ERROR 级别自动附加堆栈信息
+    
+    颜色方案:
+        - DEBUG: 青色 (详细调试信息)
+        - INFO: 绿色 (关键信息)
+        - RESULT: 蓝色 (性能结果)
+        - WARNING: 黄色 (警告)
+        - ERROR: 红色 (错误，自动输出堆栈)
+        - FAIL: 紫红色 (测试失败)
+        - CRITICAL: 红色加粗 (严重错误)
     """
 
     COLORS = {
-        'DEBUG': '\033[36m',
-        'INFO': '\033[32m',
-        'WARNING': '\033[33m',
-        'ERROR': '\033[31m',
-        'CRITICAL': '\033[35m',
+        'DEBUG': '\033[36m',      # 青色 - 详细调试
+        'INFO': '\033[32m',       # 绿色 - 关键信息
+        'RESULT': '\033[34m',     # 蓝色 - 性能结果
+        'WARNING': '\033[33m',    # 黄色 - 警告
+        'ERROR': '\033[31m',      # 红色 - 错误
+        'FAIL': '\033[35m',       # 紫红色 - 测试失败
+        'CRITICAL': '\033[31;1m', # 红色加粗 - 严重错误
         'RESET': '\033[0m'
     }
 
     def format(self, record: logging.LogRecord) -> str:
-        """Format colored log with millisecond timestamp and source location"""
+        """Format colored log with millisecond timestamp and source location
+        
+        ERROR 级别及以上自动输出完整堆栈信息
+        """
         color = self.COLORS.get(record.levelname, self.COLORS['RESET'])
         reset = self.COLORS['RESET']
 
@@ -83,6 +97,7 @@ class ConsoleFormatter(logging.Formatter):
 
         log_line = f"{time_str} {level} {source} {message}"
 
+        # ERROR 级别及以上自动输出完整堆栈
         if record.levelno >= logging.ERROR and record.exc_info:
             stack_trace = self.formatException(record.exc_info)
             log_line = f"{log_line}\n{stack_trace}"

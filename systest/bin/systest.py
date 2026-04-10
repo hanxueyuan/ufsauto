@@ -85,6 +85,18 @@ def cmd_run(args):
         file_level=file_level
     )
 
+    # 测试前摘要 - 终端清晰显示
+    print("\n" + "=" * 60)
+    print("📊 UFS 测试开始")
+    print("=" * 60)
+    print(f"测试模式：{mode_display.upper()}")
+    print(f"设备路径：{args.device or 'auto'}")
+    print(f"测试目录：{args.test_dir or 'auto'}")
+    print(f"测试套件：{args.suite or args.test or 'all'}")
+    if args.batch > 1:
+        print(f"批量测试：{args.batch} 轮，间隔 {args.interval}s")
+    print("=" * 60 + "\n")
+
     # Log test mode at startup
     logger.info(f"测试模式：{mode_display}")
 
@@ -196,6 +208,27 @@ def cmd_run(args):
             except Exception as e:
                 logger.critical(f"Test execution failed: {e}", exc_info=True)
                 logger.error(f"Error log: {logger.get_error_file()}")
+                
+                # 终端错误输出 - 红色高亮 + 调试建议
+                print(f"\n\033[31m❌ 严重错误：{e}\033[0m")
+                print("测试已 forcibly 终止\n")
+                print("💡 调试建议:")
+                error_msg = str(e).lower()
+                if 'device' in error_msg:
+                    print("  1. 检查设备路径是否正确")
+                    print("  2. 运行 'lsblk' 查看设备列表")
+                    print("  3. 检查设备权限：ls -la /dev/sd*")
+                elif 'permission' in error_msg:
+                    print("  1. 使用 sudo 运行测试")
+                    print("  2. 或将用户加入 disk 组：sudo usermod -aG disk $USER")
+                elif 'space' in error_msg:
+                    print("  1. 检查磁盘空间：df -h")
+                    print("  2. 清理测试目录或指定 --test-dir")
+                else:
+                    print("  1. 查看详细日志：tail -f logs/*.log")
+                    print("  2. 检查错误日志：cat logs/*_error.log")
+                print(f"\n详细错误信息请查看：{logger.get_error_file()}\n")
+                
                 if args.batch == 1:
                     close_all_loggers()
                     return 2
@@ -204,20 +237,73 @@ def cmd_run(args):
             logger.info(f"\nWaiting {args.interval}s before next round...")
             time.sleep(args.interval)
 
+    # 测试完成摘要 - 终端清晰显示
+    print("\n" + "=" * 60)
+    print("📊 测试完成摘要")
+    print("=" * 60)
+    
     if args.batch > 1:
         logger.info("\n" + "=" * 60)
         logger.info(f"Batch Test Results Summary ({args.batch} rounds)")
         logger.info("=" * 60)
+        
+        print(f"批量测试汇总 ({args.batch} 轮):")
         for i, result in enumerate(batch_results, 1):
             summary = result['summary']
             logger.info(f"  Round {i}: {summary['passed']}/{summary['total']} passed ({summary['pass_rate']:.1f}%)")
+            print(f"  第 {i} 轮：{summary['passed']}/{summary['total']} 通过 ({summary['pass_rate']:.1f}%)")
 
         total_tests = sum(r['summary']['total'] for r in batch_results)
         total_passed = sum(r['summary']['passed'] for r in batch_results)
+        total_failed = sum(r['summary']['failed'] for r in batch_results)
+        total_errors = sum(r['summary']['errors'] for r in batch_results)
         overall_pass_rate = (total_passed / total_tests * 100) if total_tests > 0 else 0
         logger.info("-" * 60)
         logger.info(f"  Total: {total_passed}/{total_tests} passed ({overall_pass_rate:.1f}%)")
         logger.info("=" * 60)
+        
+        print("-" * 60)
+        print(f"  总计：{total_passed}/{total_tests} 通过 ({overall_pass_rate:.1f}%)")
+    else:
+        # 单轮测试摘要
+        if batch_results:
+            result = batch_results[0]
+            summary = result['summary']
+            total = summary['total']
+            passed = summary['passed']
+            failed = summary['failed']
+            errors = summary['errors']
+            pass_rate = summary['pass_rate']
+            
+            print(f"总测试数：{total}")
+            print(f"\033[32m✅ 通过：{passed}\033[0m")
+            if failed > 0:
+                print(f"\033[31m❌ 失败：{failed}\033[0m")
+            if errors > 0:
+                print(f"\033[31m⚠️  错误：{errors}\033[0m")
+            print(f"通过率：{pass_rate:.1f}%")
+            
+            # 显示失败测试列表
+            if failed > 0:
+                print("\n失败测试列表:")
+                for tc in result.get('test_cases', []):
+                    if tc.get('status') == 'FAIL':
+                        print(f"  \033[31m❌ {tc['name']}\033[0m")
+                        if 'failures' in tc:
+                            for f in tc['failures']:
+                                print(f"     - {f['check']}: {f['reason']}")
+    
+    print("=" * 60)
+    
+    # 显示日志和报告路径
+    log_file = logger.get_log_file()
+    error_file = logger.get_error_file()
+    print(f"\n详细日志：{log_file}")
+    print(f"错误日志：{error_file}")
+    if batch_results:
+        report_path = batch_results[0].get('report_path', 'N/A')
+        print(f"测试报告：{report_path}")
+    print("=" * 60 + "\n")
 
     close_all_loggers()
 
