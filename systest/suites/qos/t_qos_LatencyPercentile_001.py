@@ -48,6 +48,7 @@ class Test(TestCase):
         test_dir: Path = None,
         verbose: bool = False,
         logger=None,
+        mode: str = None,
         bs: str = '4k',
         size: str = '1G',
         runtime: int = 60,
@@ -59,6 +60,7 @@ class Test(TestCase):
         p9999_latency_us: float = 500,
     ):
         super().__init__(device, test_dir, verbose, logger)
+        self.mode = mode
         self.test_file = self.get_test_file_path('qos_latency')
         self.bs = bs
         self.size = size
@@ -70,6 +72,10 @@ class Test(TestCase):
         self.p99_latency_us = p99_latency_us
         self.p9999_latency_us = p9999_latency_us
 
+        # Adjust runtime based on mode
+        if mode == 'production':
+            self.runtime = max(runtime, 300)  # Production mode: at least 300s
+        
         self.fio = FIO(timeout=self.runtime + self.ramp_time + 30, logger=self.logger)
         self.ufs = UFSDevice(device, logger=self.logger)
 

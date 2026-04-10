@@ -261,7 +261,6 @@ def cmd_report(args):
     from core.reporter import ReportGenerator
     from core.logger import get_logger
     from datetime import datetime
-    import glob
 
     logger = get_logger(test_id='report', log_dir='logs', console_level=logging.INFO, file_level=logging.DEBUG)
     reporter = ReportGenerator()
@@ -269,38 +268,43 @@ def cmd_report(args):
     if hasattr(args, 'list') and args.list:
         # List all available reports
         print("\n=== Available Reports ===\n")
-        report_dir = Path('./results')
-        if report_dir.exists():
-            html_reports = sorted(glob.glob(str(report_dir / 'SysTest_*_*.html')))
-            json_reports = sorted(glob.glob(str(report_dir / 'SysTest_*_*.json')))
+        results_dir = Path('./results')
+        if results_dir.exists():
+            # Scan subdirectories for report.html files
+            html_reports = list(results_dir.glob('*/report.html'))
+            json_reports = list(results_dir.glob('*/results.json'))
+            
+            # Sort by modification time (newest first)
+            html_reports.sort(key=lambda x: x.parent.stat().st_mtime, reverse=True)
+            json_reports.sort(key=lambda x: x.parent.stat().st_mtime, reverse=True)
             
             if html_reports:
-                print(f"HTML Reports ({len(html_reports)}):")
-                for report in html_reports[-10:]:  # Show latest 10
-                    report_name = Path(report).name
-                    report_time = Path(report).stat().st_mtime
-                    report_date = datetime.fromtimestamp(report_time).strftime('%Y-%m-%d %H:%M:%S')
-                    print(f"  - {report_name} ({report_date})")
+                print(f"Found {len(html_reports)} HTML report(s):\n")
+                for i, report in enumerate(html_reports[:10], 1):  # Show latest 10
+                    mtime = datetime.fromtimestamp(report.parent.stat().st_mtime)
+                    print(f"{i}. {report.parent.name}")
+                    print(f"   Path: {report.absolute()}")
+                    print(f"   Time: {mtime.strftime('%Y-%m-%d %H:%M:%S')}")
                 if len(html_reports) > 10:
-                    print(f"  ... and {len(html_reports) - 10} more")
+                    print(f"\n... and {len(html_reports) - 10} more")
             else:
                 print("No HTML reports found")
             
             print()
             
             if json_reports:
-                print(f"JSON Reports ({len(json_reports)}):")
-                for report in json_reports[-10:]:  # Show latest 10
-                    report_name = Path(report).name
-                    report_time = Path(report).stat().st_mtime
-                    report_date = datetime.fromtimestamp(report_time).strftime('%Y-%m-%d %H:%M:%S')
-                    print(f"  - {report_name} ({report_date})")
+                print(f"Found {len(json_reports)} JSON report(s):\n")
+                for i, report in enumerate(json_reports[:10], 1):  # Show latest 10
+                    mtime = datetime.fromtimestamp(report.parent.stat().st_mtime)
+                    print(f"{i}. {report.parent.name}")
+                    print(f"   Path: {report.absolute()}")
+                    print(f"   Time: {mtime.strftime('%Y-%m-%d %H:%M:%S')}")
                 if len(json_reports) > 10:
-                    print(f"  ... and {len(json_reports) - 10} more")
+                    print(f"\n... and {len(json_reports) - 10} more")
             else:
                 print("No JSON reports found")
         else:
-            print(f"Report directory does not exist: {report_dir}")
+            print(f"Report directory does not exist: {results_dir}")
             print("Run tests first to generate reports")
         return 0
 
@@ -579,8 +583,6 @@ Complete Workflow:
   python3 bin/SysTest run --suite=performance
 
   python3 bin/SysTest run --suite=qos
-
-  python3 bin/SysTest run --suite=reliability
 
   python3 bin/SysTest run --all
 
