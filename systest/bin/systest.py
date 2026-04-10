@@ -221,7 +221,7 @@ def cmd_run(args):
                     print("  3. 检查设备权限：ls -la /dev/sd*")
                 elif 'permission' in error_msg:
                     print("  1. 使用 sudo 运行测试")
-                    print("  2. 或将用户加入 disk 组：sudo usermod -aG disk $USER")
+                    print("  2. 或将用户加入 disk 组：sudo usermod -aG disk " + "$(whoami)")
                 elif 'space' in error_msg:
                     print("  1. 检查磁盘空间：df -h")
                     print("  2. 清理测试目录或指定 --test-dir")
