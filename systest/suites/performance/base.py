@@ -113,11 +113,31 @@ class PerformanceTestCase(TestCase):
         # 5. 创建测试文件路径
         self.test_file = self.get_test_file_path(self.name)
 
-        # 6. 记录测试配置
-        self.logger.info("📋 测试配置:")
-        self.logger.info(f"  bs={self.fio_bs}, size={self.fio_size}, runtime={self.fio_runtime}s")
-        self.logger.info(f"  iodepth={self.fio_iodepth}, rw={self.fio_rw}, ramp_time={self.fio_ramp_time}s")
-        self.logger.info(f"  target_bw={self.target_bandwidth_mbps} MB/s, max_lat={self.max_avg_latency_us} μs")
+        # 6. 记录测试配置（详细信息）
+        self.logger.info("=" * 60)
+        self.logger.info("📋 测试配置详情:")
+        self.logger.info("=" * 60)
+        self.logger.info(f"  FIO 参数:")
+        self.logger.info(f"    - rw (读写模式): {self.fio_rw}")
+        self.logger.info(f"    - bs (块大小): {self.fio_bs}")
+        self.logger.info(f"    - size (测试文件大小): {self.fio_size}")
+        self.logger.info(f"    - runtime (测试时长): {self.fio_runtime}s")
+        self.logger.info(f"    - ramp_time (预热时间): {self.fio_ramp_time}s")
+        self.logger.info(f"    - iodepth (队列深度): {self.fio_iodepth}")
+        self.logger.info(f"    - ioengine (IO 引擎): {self.fio_ioengine}")
+        if self.fio_rw == 'randrw' and self.fio_rwmixread:
+            self.logger.info(f"    - rwmixread (读混合比例): {self.fio_rwmixread}%")
+        self.logger.info(f"")
+        self.logger.info(f"  性能目标:")
+        if self.target_bandwidth_mbps > 0:
+            self.logger.info(f"    - 带宽：≥ {self.target_bandwidth_mbps} MB/s")
+        if self.target_iops > 0:
+            self.logger.info(f"    - IOPS: ≥ {self.target_iops}")
+        if self.max_avg_latency_us < float('inf'):
+            self.logger.info(f"    - 平均延迟：≤ {self.max_avg_latency_us} μs")
+        if self.max_tail_latency_us < float('inf'):
+            self.logger.info(f"    - 尾部延迟 (p99.999): ≤ {self.max_tail_latency_us} μs")
+        self.logger.info("=" * 60)
 
         self.logger.info("✅ 前置条件检查通过")
         return True
@@ -253,7 +273,7 @@ class PerformanceTestCase(TestCase):
 
     def validate_performance(self, metrics: Dict[str, Any]) -> bool:
         """
-        通用性能验证
+        通用性能验证 - 量化性能达标比例
 
         Args:
             metrics: 性能指标字典
@@ -270,40 +290,78 @@ class PerformanceTestCase(TestCase):
             )
             return True
 
-        # 带宽验证（低于 90% 目标报 WARNING，不记录为 failure）
+        self.logger.info("=" * 60)
+        self.logger.info("📊 性能验证结果:")
+        self.logger.info("=" * 60)
+
+        # 带宽验证（量化达标比例）
         if self.target_bandwidth_mbps > 0:
             bw = metrics.get('bandwidth_mbps', 0)
-            if bw < self.target_bandwidth_mbps * 0.9:
-                self.logger.warning(f"⚠️  带宽未达标：{bw:.1f} MB/s < {self.target_bandwidth_mbps} MB/s")
-                # 不记录为 failure，只记录为 warning
-            elif bw < self.target_bandwidth_mbps:
-                self.logger.warning(f"⚠️  带宽未达标：{bw:.1f} MB/s < {self.target_bandwidth_mbps} MB/s（但在容忍范围内）")
+            bw_ratio = (bw / self.target_bandwidth_mbps) * 100
+            if bw_ratio >= 100:
+                self.logger.info(f"  ✅ 带宽：{bw:.1f} MB/s / {self.target_bandwidth_mbps} MB/s = {bw_ratio:.1f}% (达标)")
+            elif bw_ratio >= 90:
+                self.logger.warning(f"  ⚠️  带宽：{bw:.1f} MB/s / {self.target_bandwidth_mbps} MB/s = {bw_ratio:.1f}% (达标率 90-100%，可接受)")
+            else:
+                self.logger.warning(f"  ⚠️  带宽：{bw:.1f} MB/s / {self.target_bandwidth_mbps} MB/s = {bw_ratio:.1f}% (显著不达标 <90%)")
+                self.record_failure(
+                    "带宽性能",
+                    f"≥ {self.target_bandwidth_mbps} MB/s",
+                    f"{bw:.1f} MB/s",
+                    f"带宽性能显著不达标 ({bw_ratio:.1f}% < 90%)"
+                )
 
-        # IOPS 验证（低于 90% 目标报 WARNING，不记录为 failure）
+        # IOPS 验证（量化达标比例）
         if self.target_iops > 0:
             iops_val = metrics.get('iops', 0)
-            if iops_val < self.target_iops * 0.9:
-                self.logger.warning(f"⚠️  IOPS 未达标：{iops_val:.0f} < {self.target_iops}")
-                # 不记录为 failure，只记录为 warning
+            iops_ratio = (iops_val / self.target_iops) * 100
+            if iops_ratio >= 100:
+                self.logger.info(f"  ✅ IOPS: {iops_val:.0f} / {self.target_iops} = {iops_ratio:.1f}% (达标)")
+            elif iops_ratio >= 90:
+                self.logger.warning(f"  ⚠️  IOPS: {iops_val:.0f} / {self.target_iops} = {iops_ratio:.1f}% (达标率 90-100%，可接受)")
+            else:
+                self.logger.warning(f"  ⚠️  IOPS: {iops_val:.0f} / {self.target_iops} = {iops_ratio:.1f}% (显著不达标 <90%)")
+                self.record_failure(
+                    "IOPS 性能",
+                    f"≥ {self.target_iops}",
+                    f"{iops_val:.0f}",
+                    f"IOPS 性能显著不达标 ({iops_ratio:.1f}% < 90%)"
+                )
 
-        # 平均延迟验证（超出限制报 WARNING，不记录为 failure）
+        # 平均延迟验证（量化超出比例）
         if self.max_avg_latency_us < float('inf'):
             lat = metrics.get('avg_latency_us', float('inf'))
-            if lat > self.max_avg_latency_us:
-                self.logger.warning(f"⚠️  平均延迟超出限制：{lat:.1f} μs > {self.max_avg_latency_us} μs")
-                # 不记录为 failure，只记录为 warning
+            lat_ratio = (lat / self.max_avg_latency_us) * 100 if self.max_avg_latency_us > 0 else 0
+            if lat_ratio <= 100:
+                self.logger.info(f"  ✅ 平均延迟：{lat:.1f} μs / {self.max_avg_latency_us} μs = {lat_ratio:.1f}% (达标)")
+            else:
+                self.logger.warning(f"  ⚠️  平均延迟：{lat:.1f} μs / {self.max_avg_latency_us} μs = {lat_ratio:.1f}% (超出限制)")
+                self.record_failure(
+                    "平均延迟",
+                    f"≤ {self.max_avg_latency_us} μs",
+                    f"{lat:.1f} μs",
+                    f"平均延迟超出限制 ({lat_ratio:.1f}% > 100%)"
+                )
 
-        # 尾部延迟验证（超出限制报 WARNING，不记录为 failure）
+        # 尾部延迟验证（量化超出比例）
         if self.max_tail_latency_us < float('inf'):
             tail_lat = metrics.get('p99999_latency_us', float('inf'))
-            if tail_lat > self.max_tail_latency_us:
-                self.logger.warning(f"⚠️  尾部延迟超出预期：{tail_lat:.0f} μs > {self.max_tail_latency_us} μs")
-                # 不记录为 failure，只记录为 warning
+            tail_ratio = (tail_lat / self.max_tail_latency_us) * 100 if self.max_tail_latency_us > 0 else 0
+            if tail_ratio <= 100:
+                self.logger.info(f"  ✅ 尾部延迟：{tail_lat:.0f} μs / {self.max_tail_latency_us} μs = {tail_ratio:.1f}% (达标)")
+            else:
+                self.logger.warning(f"  ⚠️  尾部延迟：{tail_lat:.0f} μs / {self.max_tail_latency_us} μs = {tail_ratio:.1f}% (超出预期)")
+                self.record_failure(
+                    "尾部延迟 (p99.999)",
+                    f"≤ {self.max_tail_latency_us} μs",
+                    f"{tail_lat:.0f} μs",
+                    f"尾部延迟超出预期 ({tail_ratio:.1f}% > 100%)"
+                )
+
+        self.logger.info("=" * 60)
 
         # 执行 Postcondition 检查（硬件健康）
         self._check_postcondition()
-
-        self.logger.info("✅ 性能验证完成（详细结果见上）")
 
         return True  # 性能测试始终返回 True，由框架根据 failures 判断最终状态
 

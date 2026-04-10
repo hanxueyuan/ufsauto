@@ -188,49 +188,82 @@ class TestCase:
             bool: True if check passes; records failure but returns True if
                   hardware damage detected (let framework handle it)
         """
+        self.logger.info("=" * 60)
+        self.logger.info("🔍 开始 Postcondition 检查（硬件健康验证）...")
+        self.logger.info("=" * 60)
+        
+        # Check if health data is available
+        if not self._pre_test_health:
+            self.logger.warning("⚠️  缺少测试前健康状态数据")
+            self.logger.warning("   可能原因：setup() 中健康状态采集失败，或 UFS 设备不支持健康查询")
+        
+        if not self._post_test_health:
+            self.logger.warning("⚠️  缺少测试后健康状态数据")
+            self.logger.warning("   可能原因：validate() 前健康状态采集失败，或 UFS 设备不支持健康查询")
+        
         if not self._pre_test_health or not self._post_test_health:
-            self.logger.warning("Postcondition check skipped: Health status data incomplete")
+            self.logger.info("⏭️  Postcondition 检查跳过：健康状态数据不完整（非致命，继续测试流程）")
+            self.logger.info("=" * 60)
             return True
 
-        # Check health status degradation
+        # Display health status comparison
+        self.logger.info("📊 健康状态对比:")
         pre_status = self._pre_test_health.get('status', 'OK')
         post_status = self._post_test_health.get('status', 'OK')
+        self.logger.info(f"   测试前：{pre_status}")
+        self.logger.info(f"   测试后：{post_status}")
 
+        # Check health status degradation
         if pre_status == 'OK' and post_status != 'OK':
+            self.logger.error(f"❌ 设备健康状态恶化：{pre_status} → {post_status}")
             self.record_failure(
                 "Device Health Status",
                 "OK",
                 post_status,
                 "Device health status degraded after test"
             )
+        else:
+            self.logger.info(f"✅ 设备健康状态正常：{pre_status} → {post_status}")
 
-        # Check bad block increase (requires specific bad block counting logic)
-        # Note: Current ufs_utils.py get_health_status() returns simplified data
-        # Real projects need to read specific bad block counts from SMART or UFS descriptors
+        # Check critical warning flag
         pre_warning = self._pre_test_health.get('critical_warning', 0)
         post_warning = self._post_test_health.get('critical_warning', 0)
+        self.logger.info(f"📊 Critical Warning 对比:")
+        self.logger.info(f"   测试前：{pre_warning}")
+        self.logger.info(f"   测试后：{post_warning}")
 
         if post_warning > pre_warning:
+            self.logger.error(f"❌ 设备出现新的 Critical Warning：{pre_warning} → {post_warning}")
             self.record_failure(
                 "Critical Warning Flag",
                 f"{pre_warning}",
                 f"{post_warning}",
                 "Device has new critical warnings"
             )
+        else:
+            self.logger.info(f"✅ Critical Warning 状态正常：{pre_warning} → {post_warning}")
 
         # Check pre-EOL status change
         pre_eol = self._pre_test_health.get('pre_eol_info', '0x00')
         post_eol = self._post_test_health.get('pre_eol_info', '0x00')
+        self.logger.info(f"📊 Pre-EOL 状态对比:")
+        self.logger.info(f"   测试前：{pre_eol}")
+        self.logger.info(f"   测试后：{post_eol}")
 
         if pre_eol == '0x00' and post_eol != '0x00':
+            self.logger.error(f"❌ 设备接近寿命终点：{post_eol}")
             self.record_failure(
                 "Pre-EOL Status",
                 "Normal",
                 f"EOL Warning: {post_eol}",
                 "Device approaching end of life"
             )
+        else:
+            self.logger.info(f"✅ Pre-EOL 状态正常：{pre_eol} → {post_eol}")
 
-        self.logger.info("Postcondition check completed")
+        self.logger.info("=" * 60)
+        self.logger.info("✅ Postcondition 检查完成")
+        self.logger.info("=" * 60)
         return True
 
     def teardown(self) -> bool:
@@ -264,7 +297,15 @@ class TestCase:
         """Complete execution flow"""
         self.start_time = datetime.now()
         self._failures = []  # Reset failure collector
-        self.logger.info(f"Starting test: {self.name}")
+        
+        # Log test environment information at the beginning
+        self.logger.info("=" * 60)
+        self.logger.info(f"Test Case: {self.name}")
+        self.logger.info(f"Description: {self.description}")
+        self.logger.info(f"Device: {self.device}")
+        self.logger.info(f"Test Directory: {self.test_dir}")
+        self.logger.info(f"Test File: {getattr(self, 'test_file', 'Not set')}")
+        self.logger.info("=" * 60)
 
         # Register signal handler for interruption
         original_handler = signal.getsignal(signal.SIGINT)

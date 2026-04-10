@@ -386,54 +386,48 @@ class ReportGenerator:
         
         lines.append("")
         
-        # 5. 改进建议章节
-        lines.append("## 5. 改进建议\n")
+        # 5. 改进建议章节（仅在有实际建议时显示）
+        specific_actions = []
         
-        lines.append("### 5.1 立即执行项\n")
-        if failed_tests:
-            lines.append("1. **调查失败原因**")
-            lines.append("   - 查看错误日志文件")
-            lines.append("   - 检查设备连接状态")
-            lines.append("   - 验证测试环境配置")
+        # 收集具体的改进建议
+        for tc in failed_tests:
+            name = tc.get('name', 'N/A')
+            error = tc.get('error', '').lower()
+            status = tc.get('status', 'UNKNOWN')
+            
+            # 根据具体错误类型生成建议
+            if 'timeout' in error or 'timeout' in status.lower():
+                specific_actions.append(f"**{name}**: 检查设备响应超时 - 查看 dmesg 日志确认设备状态")
+            elif 'permission' in error:
+                specific_actions.append(f"**{name}**: 修复权限问题 - 使用 sudo 或将用户加入 disk 组")
+            elif 'no space' in error or 'space' in error:
+                specific_actions.append(f"**{name}**: 释放磁盘空间或指定 --test-dir 到其他分区")
+            elif 'not found' in error:
+                specific_actions.append(f"**{name}**: 验证设备路径是否正确 - 运行 lsblk 确认")
+            elif 'fio' in error:
+                specific_actions.append(f"**{name}**: 检查 FIO 工具安装 - 运行 'which fio' 验证")
+        
+        # 性能不达标的建议
+        for item in underperforming:
+            name = item['name']
+            if '带宽' in item['issue']:
+                specific_actions.append(f"**{name}**: 带宽不达标 - 检查 IO 调度器、设备队列深度")
+            elif '延迟' in item['issue']:
+                specific_actions.append(f"**{name}**: 延迟过高 - 检查系统负载、CPU 频率调节")
+        
+        # 仅在有具体建议时显示改进建议章节
+        if specific_actions:
+            lines.append("## 5. 改进建议\n")
+            lines.append("### 5.1 具体改进行动\n")
+            for i, action in enumerate(specific_actions, 1):
+                lines.append(f"{i}. {action}")
             lines.append("")
-        
-        if underperforming:
-            lines.append("2. **优化性能配置**")
-            lines.append("   - 调整 IO 深度 (iodepth)")
-            lines.append("   - 优化块大小 (bs)")
-            lines.append("   - 检查系统 IO 调度器")
+            lines.append("### 5.2 通用建议\n")
+            lines.append("- 查看详细日志文件定位具体问题")
+            lines.append("- 检查系统资源使用情况 (CPU/内存/IO)")
+            lines.append("- 对比历史测试结果分析趋势")
             lines.append("")
-        
-        if not failed_tests and not underperforming:
-            lines.append("✅ 当前配置表现良好，无需立即调整。\n")
-        
-        lines.append("### 5.2 后续优化项\n")
-        lines.append("1. **长期监控**")
-        lines.append("   - 建立性能基线")
-        lines.append("   - 定期运行测试对比")
-        lines.append("   - 跟踪性能趋势")
-        lines.append("")
-        lines.append("2. **环境优化**")
-        lines.append("   - 优化内核参数")
-        lines.append("   - 调整 IO 调度器")
-        lines.append("   - 减少系统负载")
-        lines.append("")
-        lines.append("3. **测试完善**")
-        lines.append("   - 增加更多测试场景")
-        lines.append("   - 延长测试时间")
-        lines.append("   - 添加压力测试")
-        lines.append("")
-        
-        # 优先级标记
-        lines.append("### 5.3 优先级标记\n")
-        lines.append("| 优先级 | 项目 | 影响 | 难度 |")
-        lines.append("|--------|------|------|------|")
-        if failed_tests:
-            lines.append("| 🔴 高 | 修复失败测试 | 高 | 中 |")
-        if underperforming:
-            lines.append("| 🟡 中 | 优化性能配置 | 中 | 低 |")
-        lines.append("| 🟢 低 | 建立监控体系 | 低 | 中 |")
-        lines.append("")
+        # 如果没有具体建议，不显示改进建议章节（避免空话）
         
         # 结尾
         lines.append("---\n")
