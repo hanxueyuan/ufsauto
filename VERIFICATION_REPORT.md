@@ -10,7 +10,7 @@
 ### 1. Help 命令
 
 ```bash
-python3 systest/bin/systest_cli.py --help
+python3 systest/bin/systest.py --help
 ```
 
 **验证结果**:
@@ -24,7 +24,7 @@ python3 systest/bin/systest_cli.py --help
 ### 2. List 命令
 
 ```bash
-python3 systest/bin/systest_cli.py list
+python3 systest/bin/systest.py list
 ```
 
 **输出**:
@@ -51,7 +51,7 @@ Total: 6 test items, 2 suites
 ### 3. Check-Env 命令
 
 ```bash
-python3 systest/bin/systest_cli.py check-env
+python3 systest/bin/systest.py check-env
 ```
 
 **输出**:
@@ -75,7 +75,7 @@ UFS SysTest 环境信息
 ### 4. Run 命令（Performance 套件）
 
 ```bash
-python3 systest/bin/systest_cli.py run --suite performance
+python3 systest/bin/systest.py run --suite performance
 ```
 
 **输出**:

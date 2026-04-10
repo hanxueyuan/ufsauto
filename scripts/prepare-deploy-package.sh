@@ -138,7 +138,7 @@ echo ""
 echo "步骤 2/3: 验证 UFS Auto 环境"
 echo "-----------------------------"
 cd ufsauto
-python3 systest/bin/systest_cli.py check-env
+python3 systest/bin/systest.py check-env
 
 # 提示
 echo ""
@@ -149,13 +149,13 @@ echo "✅ 部署完成！可以开始测试了"
 echo ""
 echo "常用命令:"
 echo "  # 运行性能测试"
-echo "  python3 systest/bin/systest_cli.py run --suite performance"
+echo "  python3 systest/bin/systest.py run --suite performance"
 echo ""
 echo "  # 运行 QoS 测试"
-echo "  python3 systest/bin/systest_cli.py run --suite qos"
+echo "  python3 systest/bin/systest.py run --suite qos"
 echo ""
 echo "  # 查看报告"
-echo "  python3 systest/bin/systest_cli.py report --latest"
+echo "  python3 systest/bin/systest.py report --latest"
 echo ""
 DEPLOY_SCRIPT
 
@@ -199,10 +199,10 @@ cd /mapdata/ufsauto-deploy
 
 # 2. 验证环境
 cd ufsauto
-python3 systest/bin/systest_cli.py check-env
+python3 systest/bin/systest.py check-env
 
 # 3. 执行测试
-python3 systest/bin/systest_cli.py run --suite performance
+python3 systest/bin/systest.py run --suite performance
 \`\`\`
 
 ## 📋 环境要求
@@ -224,7 +224,7 @@ python3 --version
 
 # 检查 UFS Auto 环境
 cd ufsauto
-python3 systest/bin/systest_cli.py check-env
+python3 systest/bin/systest.py check-env
 \`\`\`
 
 ## 📖 详细文档

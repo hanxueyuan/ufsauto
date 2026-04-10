@@ -55,7 +55,7 @@ echo "步骤 3/3: 检查 UFS Auto 配置"
 echo "-----------------------------"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-if [ -f "$SCRIPT_DIR/systest/bin/systest_cli.py" ]; then
+if [ -f "$SCRIPT_DIR/systest/bin/systest.py" ]; then
     echo "✅ UFS Auto 项目文件存在"
     echo "   位置：$SCRIPT_DIR"
 else
@@ -67,7 +67,7 @@ fi
 echo ""
 echo "运行环境检查..."
 cd "$SCRIPT_DIR"
-python3 systest/bin/systest_cli.py check-env
+python3 systest/bin/systest.py check-env
 
 echo ""
 echo "======================================"
@@ -81,11 +81,11 @@ echo "   项目位置：$SCRIPT_DIR"
 echo ""
 echo "🚀 开始测试:"
 echo "   # 运行性能测试"
-echo "   python3 systest/bin/systest_cli.py run --suite performance"
+echo "   python3 systest/bin/systest.py run --suite performance"
 echo ""
 echo "   # 运行 QoS 测试"
-echo "   python3 systest/bin/systest_cli.py run --suite qos"
+echo "   python3 systest/bin/systest.py run --suite qos"
 echo ""
 echo "   # 查看帮助"
-echo "   python3 systest/bin/systest_cli.py --help"
+echo "   python3 systest/bin/systest.py --help"
 echo ""

@@ -15,13 +15,13 @@ Production-grade UFS storage device test framework.
 apt-get install fio
 
 # 2. Check environment
-python3 systest/bin/systest_cli.py check-env --save-config
+python3 systest/bin/systest.py check-env --save-config
 
 # 3. Run tests (Development mode - 31 seconds)
-python3 systest/bin/systest_cli.py run --suite performance
+python3 systest/bin/systest.py run --suite performance
 
 # 4. Run all tests (Production mode - 6 minutes)
-python3 systest/bin/systest_cli.py run --all
+python3 systest/bin/systest.py run --all
 ```
 
 ---
@@ -32,70 +32,70 @@ python3 systest/bin/systest_cli.py run --all
 
 ```bash
 # Check environment and save config
-python3 systest/bin/systest_cli.py check-env --save-config
+python3 systest/bin/systest.py check-env --save-config
 
 # View configuration
-python3 systest/bin/systest_cli.py config --show
+python3 systest/bin/systest.py config --show
 
 # Set device path
-python3 systest/bin/systest_cli.py config --device=/dev/sda
+python3 systest/bin/systest.py config --device=/dev/sda
 
 # Reset configuration
-python3 systest/bin/systest_cli.py config --reset
+python3 systest/bin/systest.py config --reset
 ```
 
 ### Run Tests
 
 ```bash
 # Run performance test suite
-python3 systest/bin/systest_cli.py run --suite performance
+python3 systest/bin/systest.py run --suite performance
 
 # Run QoS test suite
-python3 systest/bin/systest_cli.py run --suite qos
+python3 systest/bin/systest.py run --suite qos
 
 # Run all test suites
-python3 systest/bin/systest_cli.py run --all
+python3 systest/bin/systest.py run --all
 
 # Run single test
-python3 systest/bin/systest_cli.py run --test t_perf_SeqReadBurst_001
+python3 systest/bin/systest.py run --test t_perf_SeqReadBurst_001
 
 # Verbose mode (detailed output)
-python3 systest/bin/systest_cli.py run --suite performance -v
+python3 systest/bin/systest.py run --suite performance -v
 
 # Batch testing (3 times, 60s interval)
-python3 systest/bin/systest_cli.py run --suite performance --batch=3 --interval=60
+python3 systest/bin/systest.py run --suite performance --batch=3 --interval=60
 
 # With custom device
-python3 systest/bin/systest_cli.py run --suite performance --device=/dev/sda
+python3 systest/bin/systest.py run --suite performance --device=/dev/sda
 
 # With custom test directory
-python3 systest/bin/systest_cli.py run --suite performance --test-dir=/mapdata/ufs_test
+python3 systest/bin/systest.py run --suite performance --test-dir=/mapdata/ufs_test
 
 # Load preset configuration
-python3 systest/bin/systest_cli.py run --suite performance --config=configs/ufs31_128GB.json
+python3 systest/bin/systest.py run --suite performance --config=configs/ufs31_128GB.json
 ```
 
 ### View Results
 
 ```bash
 # List all tests
-python3 systest/bin/systest_cli.py list
+python3 systest/bin/systest.py list
 
 # View latest report
-python3 systest/bin/systest_cli.py report --latest
+python3 systest/bin/systest.py report --latest
 
 # View specific report
-python3 systest/bin/systest_cli.py report --id=SysTest_performance_20260409_090726
+python3 systest/bin/systest.py report --id=SysTest_performance_20260409_090726
 
 # Export CSV
-python3 systest/bin/systest_cli.py report --latest --export-csv
+python3 systest/bin/systest.py report --latest --export-csv
 ```
 
 ### Compare Baselines
 
 ```bash
 # Compare two test results
-python3 systest/bin/systest_cli.py compare-baseline --baseline1 results/gold/ --baseline2 results/current/
+python3 systest/bin/systest.py compare-baseline --baseline1 results/gold/ --baseline2 results/current/
 ```
 
 ---
@@ -162,7 +162,7 @@ Edit `systest/config/runtime.json`:
 ```
 ufsauto/
 ├── systest/
-│   ├── bin/              # CLI entry point (systest_cli.py)
+│   ├── bin/              # CLI entry point (systest.py)
 │   ├── core/             # Framework
 │   ├── tools/            # Utilities
 │   ├── suites/           # Test suites
@@ -184,7 +184,7 @@ ufsauto/
 lsblk
 
 # Set correct device
-python3 systest/bin/systest_cli.py config --device=/dev/sda
+python3 systest/bin/systest.py config --device=/dev/sda
 ```
 
 ### Insufficient Space
@@ -214,22 +214,22 @@ fio --version
 
 ```bash
 # View main help
-python3 systest/bin/systest_cli.py --help
+python3 systest/bin/systest.py --help
 
 # View run command help
-python3 systest/bin/systest_cli.py run --help
+python3 systest/bin/systest.py run --help
 
 # View list command help
-python3 systest/bin/systest_cli.py list --help
+python3 systest/bin/systest.py list --help
 
 # View report command help
-python3 systest/bin/systest_cli.py report --help
+python3 systest/bin/systest.py report --help
 
 # View config command help
-python3 systest/bin/systest_cli.py config --help
+python3 systest/bin/systest.py config --help
 
 # View check-env command help
-python3 systest/bin/systest_cli.py check-env --help
+python3 systest/bin/systest.py check-env --help
 ```
 
 ---

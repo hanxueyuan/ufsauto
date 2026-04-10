@@ -7,7 +7,7 @@
 ```
 /workspace/projects/ufsauto/systest/
 ├── bin/                      # 可执行脚本
-│   ├── SysTest              # 主入口 (systest_cli.py)
+│   ├── SysTest              # 主入口 (systest.py)
 │   ├── check_env.py         # 环境检查
 │   ├── fio_wrapper.py       # fio 封装
 │   └── report_gen.py        # 报告生成
