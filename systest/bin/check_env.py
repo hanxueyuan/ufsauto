@@ -346,7 +346,7 @@ class EnvironmentChecker:
         # 输出测试模式
         print('\n=== 测试模式 ===')
         mode_display = 'Development' if self.mode == 'dev' else 'Production'
-        loop_count = 2 if self.mode == 'dev' else 10
+        loop_count = 1  # 开发和生产模式都只执行 1 次
         duration = 60 if self.mode == 'dev' else 300
         print(f'当前模式：{mode_display}')
         print(f'循环次数：{loop_count}')

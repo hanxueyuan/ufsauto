@@ -310,7 +310,7 @@ def cmd_run(args):
 
 def cmd_list(args):
     """List available tests"""
-    from core.runner import TestRunner
+    from systest.core.runner import TestRunner
 
     runner = TestRunner()
 
@@ -342,8 +342,8 @@ def cmd_list(args):
 
 def cmd_report(args):
     """Generate/view report"""
-    from core.reporter import ReportGenerator
-    from core.logger import get_logger
+    from systest.core.reporter import ReportGenerator
+    from systest.core.logger import get_logger
     from datetime import datetime
 
     logger = get_logger(test_id='report', log_dir='logs', console_level=logging.INFO, file_level=logging.DEBUG)

@@ -25,7 +25,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .constants import Config
+try:
+    from .constants import Config
+except ImportError:
+    from systest.core.constants import Config
 
 logger = logging.getLogger(__name__)
 

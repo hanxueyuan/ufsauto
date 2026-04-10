@@ -6,5 +6,5 @@
   "system": {},
   "toolchain": {},
   "_comment": "Configuration reset, please run check-env --save-config to regenerate",
-  "mode": "production"
+  "mode": "development"
 }
