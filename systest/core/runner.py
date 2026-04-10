@@ -432,7 +432,7 @@ class TestCase:
 class TestRunner:
     """Test execution engine"""
 
-    def __init__(self, device: str = None, test_dir: str = None, verbose: bool = False):
+    def __init__(self, device: str = None, test_dir: str = None, verbose: bool = False, mode: str = None):
         self.device_override = device
         self.test_dir_override = test_dir
         self.verbose = verbose
@@ -442,6 +442,19 @@ class TestRunner:
         self.device = None
 
         self.runtime_config = self._load_runtime_config()
+        
+        # Determine test mode: parameter > config > default
+        import os
+        if mode:
+            self.mode = mode
+        elif os.environ.get('SYSTEST_MODE'):
+            self.mode = os.environ.get('SYSTEST_MODE')
+        elif self.runtime_config.get('mode'):
+            self.mode = self.runtime_config['mode']
+        else:
+            self.mode = 'development'
+        
+        self.is_production = self.mode == 'production'
 
         import importlib.util
         spec = importlib.util.spec_from_file_location("check_env", str(Path(__file__).parent.parent / 'bin' / 'check_env.py'))
@@ -638,12 +651,41 @@ class TestRunner:
         """List all available test suites"""
         return self.suites
 
-    def run_suite(self, suite_name: str) -> List[Dict[str, Any]]:
+    def get_mode_params(self) -> Dict[str, Any]:
+        """Get test parameters based on mode"""
+        if self.is_production:
+            return {
+                'fio_runtime': 300,  # 5 minutes for production
+                'iterations': 3,  # Multiple iterations
+                'log_level': logging.INFO,
+                'report_detail': 'full',
+                'precheck_skip': False,  # Run all pre-checks
+                'auto_cleanup': True,  # Auto cleanup test files
+            }
+        else:
+            return {
+                'fio_runtime': 60,  # 1 minute for development
+                'iterations': 1,  # Single iteration
+                'log_level': logging.DEBUG,
+                'report_detail': 'brief',
+                'precheck_skip': True,  # Skip some pre-checks
+                'auto_cleanup': False,  # Keep test files
+            }
+
+    def run_suite(self, suite_name: str, mode_params: Dict[str, Any] = None) -> List[Dict[str, Any]]:
         """Execute test suite"""
         if suite_name not in self.suites:
             raise ValueError(f"Unknown test suite: {suite_name}")
 
-        logger.info(f"Executing test suite: {suite_name}")
+        # Get mode-specific parameters
+        if mode_params is None:
+            mode_params = self.get_mode_params()
+        
+        mode_display = 'Production' if self.is_production else 'Development'
+        logger.info(f"Executing test suite: {suite_name} (Mode: {mode_display})")
+        logger.info(f"  Test duration: {mode_params['fio_runtime']}s")
+        logger.info(f"  Iterations: {mode_params['iterations']}")
+        logger.info(f"  Auto cleanup: {mode_params['auto_cleanup']}")
 
         results = []
         tests = self.suites[suite_name]
@@ -687,7 +729,8 @@ class TestRunner:
                     device=self.device,
                     test_dir=self.test_dir,
                     verbose=self.verbose,
-                    logger=logger
+                    logger=logger,
+                    mode=self.mode
                 )
 
                 result = test_instance.run()

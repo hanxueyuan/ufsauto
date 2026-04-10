@@ -1,4 +1,5 @@
 {
+  "mode": "development",
   "device": "/dev/sda",
   "test_dir": "/mapdata/ufs_test",
   "device_capacity_gb": null,

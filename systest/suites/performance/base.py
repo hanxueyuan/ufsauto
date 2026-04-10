@@ -44,13 +44,41 @@ class PerformanceTestCase(TestCase):
     fio_rw: str = 'read'
     fio_bs: str = '4k'
     fio_size: str = '1G'
-    fio_runtime: int = 60
+    fio_runtime: int = 60  # Default, will be adjusted by mode
     fio_iodepth: int = 1
     fio_ramp_time: int = 0
     fio_ioengine: str = 'sync'
     fio_rwmixread: int = 70
 
-    def __init__(self, device: str = '/dev/sda', test_dir: Path = None, verbose: bool = False, logger=None):
+    def __init__(self, device: str = '/dev/sda', test_dir: Path = None, verbose: bool = False, logger=None, mode: str = None):
+        # Determine mode and adjust runtime
+        import os
+        if mode:
+            test_mode = mode
+        elif os.environ.get('SYSTEST_MODE'):
+            test_mode = os.environ.get('SYSTEST_MODE')
+        else:
+            # Try to load from config
+            from pathlib import Path
+            config_path = Path(__file__).parent.parent.parent / 'config' / 'runtime.json'
+            if config_path.exists():
+                import json
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                test_mode = config.get('mode', 'development')
+            else:
+                test_mode = 'development'
+        
+        # Adjust runtime based on mode
+        if test_mode == 'production':
+            base_runtime = 300  # 5 minutes for production
+        else:
+            base_runtime = 60  # 1 minute for development
+        
+        # Allow subclass to override
+        if not hasattr(self, '_runtime_overridden') or not self._runtime_overridden:
+            self.fio_runtime = base_runtime
+        
         super().__init__(device, test_dir, verbose, logger)
         self.fio = FIO(
             timeout=self.fio_runtime + self.fio_ramp_time + 30,
@@ -58,6 +86,7 @@ class PerformanceTestCase(TestCase):
         )
         self.ufs = UFSDevice(device, logger=self.logger)
         self.test_file: Optional[Path] = None
+        self.test_mode = test_mode
 
     def setup(self) -> bool:
         """通用前置条件检查"""

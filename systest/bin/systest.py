@@ -27,6 +27,26 @@ from core.collector import ResultCollector
 from core.reporter import ReportGenerator
 from core.logger import get_logger, close_all_loggers
 
+def get_test_mode(args, runtime_config):
+    """Determine test mode: command line > env > config > default"""
+    # Priority 1: Command line argument
+    if hasattr(args, 'mode') and args.mode:
+        return args.mode
+    
+    # Priority 2: Environment variable
+    import os
+    env_mode = os.environ.get('SYSTEST_MODE')
+    if env_mode:
+        return env_mode
+    
+    # Priority 3: Config file
+    if runtime_config.get('mode'):
+        return runtime_config['mode']
+    
+    # Default: development
+    return 'development'
+
+
 def cmd_run(args):
     """Execute tests"""
     import time
@@ -40,12 +60,33 @@ def cmd_run(args):
         name_suffix = f"_{args.test}"
     test_id = f"{script_name}{name_suffix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
+    # Load runtime config to determine mode
+    default_config_path = project_root / 'config' / 'runtime.json'
+    runtime_config = {}
+    if default_config_path.exists():
+        try:
+            with open(default_config_path, 'r', encoding='utf-8') as f:
+                runtime_config = json.load(f)
+        except json.JSONDecodeError:
+            runtime_config = {}
+    
+    # Determine test mode
+    test_mode = get_test_mode(args, runtime_config)
+    mode_display = 'Development' if test_mode == 'development' else 'Production'
+    
+    # Determine log level based on mode
+    console_level = logging.DEBUG if (args.verbose or test_mode == 'development') else logging.INFO
+    file_level = logging.DEBUG if test_mode == 'development' else logging.INFO
+
     logger = get_logger(
         test_id=test_id,
         log_dir='logs',
-        console_level=logging.DEBUG if args.verbose else logging.INFO,
-        file_level=logging.DEBUG
+        console_level=console_level,
+        file_level=file_level
     )
+
+    # Log test mode at startup
+    logger.info(f"测试模式：{mode_display}")
 
     if hasattr(args, 'config') and args.config:
         config_path = Path(args.config)
@@ -128,7 +169,8 @@ def cmd_run(args):
             runner = TestRunner(
                 device=args.device,
                 test_dir=args.test_dir,
-                verbose=args.verbose
+                verbose=args.verbose,
+                mode=test_mode
             )
             collector = ResultCollector(output_dir=args.output)
             reporter = ReportGenerator(template='default')
@@ -332,6 +374,53 @@ def cmd_check_env(args):
     result = subprocess.run(cmd)
     return result.returncode
 
+def cmd_mode(args):
+    """View/set test mode"""
+    import json
+    from pathlib import Path
+
+    config_path = Path(__file__).parent.parent / 'config' / 'runtime.json'
+    
+    # Load current config
+    if config_path.exists():
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+    else:
+        config = {}
+    
+    current_mode = config.get('mode', 'development')
+    
+    if hasattr(args, 'set') and args.set:
+        # Set mode
+        if args.set not in ['development', 'production']:
+            print(f"Invalid mode: {args.set}. Must be 'development' or 'production'")
+            return 1
+        
+        config['mode'] = args.set
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+        
+        mode_display = 'Development' if args.set == 'development' else 'Production'
+        print(f"Test mode set to: {mode_display}")
+        print(f"Configuration file: {config_path}")
+    else:
+        # Show current mode
+        mode_display = 'Development' if current_mode == 'development' else 'Production'
+        print(f"\n=== Current Test Mode ===")
+        print(f"Mode: {mode_display}")
+        print(f"Config file: {config_path}")
+        print(f"\nTo change mode:")
+        print(f"  python3 bin/systest.py mode --set=development")
+        print(f"  python3 bin/systest.py mode --set=production")
+        print(f"\nOr use environment variable:")
+        print(f"  export SYSTEST_MODE=production")
+        print(f"\nOr use command line argument:")
+        print(f"  python3 bin/systest.py run --suite performance --mode=production")
+    
+    return 0
+
+
 def cmd_compare_baseline(args):
     """Performance baseline comparison"""
     import subprocess
@@ -375,9 +464,12 @@ Quick Start:
   SysTest run --suite performance
   SysTest run --all
   SysTest report --latest
+  SysTest mode                    # View current test mode
+  SysTest mode --set=production   # Switch to production mode
 
 Execute Tests:
   SysTest run --suite performance
+  SysTest run --suite performance --mode=production  # Run in production mode
   SysTest run --suite qos
   SysTest run --test t_perf_SeqReadBurst_001
   SysTest run --test t_perf_SeqReadBurst_001 -v
@@ -393,6 +485,7 @@ View Information:
   SysTest report --latest
   SysTest report --id SysTest_performance_20260409_090726
   SysTest report --latest --export-csv
+  SysTest mode                    # View current test mode
 
 Environment Management:
   SysTest check-env
@@ -407,8 +500,10 @@ Compare Baselines:
 
 Complete Workflow:
   SysTest check-env --save-config
+  SysTest mode --set=development  # Set development mode for quick tests
   SysTest run --suite performance
-  SysTest run --suite qos
+  SysTest mode --set=production   # Switch to production mode for final validation
+  SysTest run --suite performance
   SysTest report --latest
   SysTest compare-baseline --baseline1 results/gold/ --baseline2 results/current/
 ================================================================================
@@ -468,6 +563,7 @@ Complete Workflow:
     run_parser.add_argument('--batch', '-b', type=int, default=1, help='Batch test count (default 1)')
     run_parser.add_argument('--interval', '-i', type=int, default=60, help='Batch test interval in seconds (default 60s)')
     run_parser.add_argument('--config', '-c', default=None, help='Load preset configuration (e.g., configs/ufs31_128GB.json)')
+    run_parser.add_argument('--mode', '-m', choices=['development', 'production'], help='Test mode (overrides config file)')
     run_parser.add_argument('--export-csv', action='store_true', help='Export CSV format results')
     run_parser.set_defaults(func=cmd_run)
 
@@ -553,6 +649,45 @@ Complete Workflow:
     compare_parser.add_argument('--threshold', type=float, default=0.10, help='Allowed difference ratio (default 0.10)')
     compare_parser.add_argument('--output', help='Report output path')
     compare_parser.set_defaults(func=cmd_compare_baseline)
+
+    mode_parser = subparsers.add_parser('mode',
+        help='View/set test mode',
+        description='View or set test mode (development/production)',
+        epilog="""Examples:
+  python3 bin/systest.py mode
+
+  python3 bin/systest.py mode --set=development
+
+  python3 bin/systest.py mode --set=production
+
+Mode Differences:
+  Development mode (default):
+    - Test duration: 60s (short)
+    - Iterations: Single run
+    - Log level: DEBUG (verbose)
+    - Reports: Brief summary
+    - Pre-checks: Skip some validations
+    - Cleanup: Keep test files for debugging
+    - Use for: Quick iteration during development
+  
+  Production mode:
+    - Test duration: 300s+ (comprehensive)
+    - Iterations: Multiple runs (3x)
+    - Log level: INFO (concise)
+    - Reports: Complete detailed reports
+    - Pre-checks: All validations enabled
+    - Cleanup: Auto cleanup test files
+    - Use for: Final validation before deployment
+
+Three ways to set mode:
+  1. Config file: Edit config/runtime.json (persistent)
+  2. Environment: export SYSTEST_MODE=production (session)
+  3. CLI arg: --mode=production (one-time override)
+
+Priority: CLI arg > Environment > Config file > Default (development)
+""")
+    mode_parser.add_argument('--set', choices=['development', 'production'], help='Set test mode')
+    mode_parser.set_defaults(func=cmd_mode)
 
     args = parser.parse_args()
 
