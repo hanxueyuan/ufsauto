@@ -20,15 +20,12 @@ import logging
 from pathlib import Path
 from datetime import datetime
 
-# Add systest directory to Python path (where core/ tools/ suites/ live)
 systest_dir = Path(__file__).parent / 'systest'
 sys.path.insert(0, str(systest_dir / 'core'))
 sys.path.insert(0, str(systest_dir / 'tools'))
 
-# Import after path setup
 from runner import TestCase
 from logger import get_logger
-
 
 class QuickTest(TestCase):
     """快速验证测试 - 5 秒顺序读"""
@@ -39,11 +36,10 @@ class QuickTest(TestCase):
     def __init__(self, device='/dev/sda', test_dir=None, verbose=True, logger=None):
         super().__init__(device, test_dir, verbose, logger)
         self.test_file = self.get_test_file_path('quick_test')
-        # 开发模式配置：最少时间和循环
         self.bs = '128k'
-        self.size = '64M'  # 小文件
-        self.runtime = 5   # 5 秒测试
-        self.ramp_time = 0  # 无预热
+        self.size = '64M'
+        self.runtime = 5
+        self.ramp_time = 0
         self.ioengine = 'sync'
         self.iodepth = 1
 
@@ -51,13 +47,11 @@ class QuickTest(TestCase):
         """简化前置检查 - 开发模式跳过设备检查"""
         self.logger.info("=== 快速测试 - 前置检查 ===")
 
-        # 1. 检查设备（开发模式可选）
         if os.path.exists(self.device):
             self.logger.info(f"✓ 设备存在：{self.device}")
         else:
             self.logger.warning(f"⚠ 设备不存在：{self.device}（开发模式继续）")
 
-        # 2. 检查空间
         try:
             import subprocess
             result = subprocess.run(['df', '-B1', os.path.dirname(self.test_file)],
@@ -66,7 +60,7 @@ class QuickTest(TestCase):
                 lines = result.stdout.strip().split('\n')
                 if len(lines) >= 2:
                     parts = lines[1].split()
-                    avail = int(parts[3]) / (1024**3)  # GB
+                    avail = int(parts[3]) / (1024**3)
                     if avail < 1.0:
                         self.logger.error(f"可用空间不足：{avail:.1f}GB < 1GB")
                         return False
@@ -74,7 +68,6 @@ class QuickTest(TestCase):
         except Exception as e:
             self.logger.warning(f"空间检查跳过：{e}")
 
-        # 3. 检查 FIO
         try:
             result = subprocess.run(['fio', '--version'], capture_output=True, text=True)
             if result.returncode == 0:
@@ -83,13 +76,11 @@ class QuickTest(TestCase):
             self.logger.error(f"FIO 未安装：{e}")
             return False
 
-        # 4. 创建测试文件（小文件，快速创建）
         self.logger.info(f"创建测试文件：{self.test_file} ({self.size})")
         try:
             self.test_file.parent.mkdir(parents=True, exist_ok=True)
-            # 快速创建文件（不预填充随机数据）
             with open(self.test_file, 'wb') as f:
-                f.seek(64 * 1024 * 1024 - 1)  # 64MB
+                f.seek(64 * 1024 * 1024 - 1)
                 f.write(b'\0')
             self.logger.info(f"✓ 测试文件创建完成")
         except Exception as e:
@@ -128,12 +119,10 @@ class QuickTest(TestCase):
                 self.logger.error(f"FIO 执行失败：{result.stderr}")
                 return {'error': result.stderr}
 
-            # 解析 JSON 输出
             fio_output = json.loads(result.stdout)
             job = fio_output.get('jobs', [{}])[0]
             read_stats = job.get('read', {})
 
-            # 提取指标
             bw_bytes = read_stats.get('bw_bytes', 0)
             bw_mbps = bw_bytes / (1024 * 1024)
             iops = read_stats.get('iops', 0)
@@ -170,7 +159,6 @@ class QuickTest(TestCase):
             self.logger.error(f"验证失败：{result['error']}")
             return False
 
-        # 简单验证：只要有数据就算通过
         bw = result.get('bandwidth_mbps', 0)
         if bw > 0:
             self.logger.info(f"✓ 验证通过：带宽 {bw:.1f} MB/s")
@@ -190,7 +178,6 @@ class QuickTest(TestCase):
             self.logger.warning(f"清理失败：{e}")
         return True
 
-
 def main():
     """主函数"""
     print("=" * 60)
@@ -198,7 +185,6 @@ def main():
     print("=" * 60)
     print()
 
-    # 初始化日志
     test_id = f"QuickTest_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     logger = get_logger(
         test_id=test_id,
@@ -207,9 +193,8 @@ def main():
         file_level=logging.DEBUG
     )
 
-    # 加载配置
     config_path = Path(__file__).parent / 'config' / 'runtime.json'
-    device = '/dev/vda'  # 当前环境使用 vda
+    device = '/dev/vda'
     test_dir = Path('/tmp/ufs_test')
 
     if config_path.exists():
@@ -224,30 +209,24 @@ def main():
             print(f"测试目录：{test_dir}")
             print()
 
-    # 创建测试目录
     test_dir.mkdir(parents=True, exist_ok=True)
 
-    # 执行测试
     print("开始测试...")
     print()
 
     test = QuickTest(device=device, test_dir=test_dir, verbose=True, logger=logger)
 
     try:
-        # Setup
         if not test.setup():
             print("\n❌ 前置检查失败")
             return 1
 
-        # Execute
         result = test.execute()
 
-        # Validate
         if not test.validate(result):
             print("\n❌ 验证失败")
             return 1
 
-        # Teardown
         test.teardown()
 
         print()
@@ -269,7 +248,6 @@ def main():
         logger.error(f"测试异常：{e}")
         print(f"\n❌ 测试异常：{e}")
         return 1
-
 
 if __name__ == '__main__':
     sys.exit(main())

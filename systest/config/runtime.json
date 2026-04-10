@@ -5,18 +5,5 @@
   "env_checked_at": null,
   "system": {},
   "toolchain": {},
-  "deployment": {
-    "target": "offline_board",
-    "network": "offline",
-    "user": "root"
-  },
-  "test_mode": {
-    "mode": "development",
-    "quick_test": true,
-    "runtime_seconds": 5,
-    "ramp_time_seconds": 0,
-    "test_size": "64M",
-    "skip_prefill": true,
-    "description": "开发模式：最少时间和循环次数快速验证框架"
-  }
+  "_comment": "Configuration reset, please run check-env --save-config to regenerate"
 }

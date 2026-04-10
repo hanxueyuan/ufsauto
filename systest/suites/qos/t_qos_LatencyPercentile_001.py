@@ -26,7 +26,6 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-# Add core and tools module paths
 core_dir = Path(__file__).parent.parent.parent / 'core'
 tools_dir = Path(__file__).parent.parent.parent / 'tools'
 sys.path.insert(0, str(core_dir))
@@ -36,7 +35,6 @@ from runner import TestCase
 from fio_wrapper import FIO, FIOError
 from ufs_utils import UFSDevice
 from typing import Dict, Any
-
 
 class Test(TestCase):
     """QoS latency percentile test"""
@@ -50,14 +48,12 @@ class Test(TestCase):
         test_dir: Path = None,
         verbose: bool = False,
         logger=None,
-        # === Test parameters ===
         bs: str = '4k',
         size: str = '1G',
         runtime: int = 60,
         ramp_time: int = 10,
         ioengine: str = 'sync',
         iodepth: int = 1,
-        # === Performance targets ===
         p50_latency_us: float = 50,
         p99_latency_us: float = 200,
         p9999_latency_us: float = 500,
@@ -74,7 +70,6 @@ class Test(TestCase):
         self.p99_latency_us = p99_latency_us
         self.p9999_latency_us = p9999_latency_us
 
-        # Initialize tools
         self.fio = FIO(timeout=self.runtime + self.ramp_time + 30, logger=self.logger)
         self.ufs = UFSDevice(device, logger=self.logger)
 
@@ -82,19 +77,16 @@ class Test(TestCase):
         """Pre-test setup - Check prerequisites"""
         self.logger.info("Checking prerequisites...")
 
-        # 1. Check device exists
         if not self.ufs.exists():
             self.logger.error(f"Device does not exist: {self.device}")
             return False
         self.logger.debug(f"Device exists: {self.device}")
 
-        # 2. Check available space
         if not self.ufs.check_available_space(min_gb=2.0):
             self.logger.error("Insufficient available space (requires >= 2GB)")
             return False
         self.logger.debug(f"Available space sufficient (>= 2GB)")
 
-        # 3. Check FIO is installed
         import subprocess
         try:
             result = subprocess.run(['which', 'fio'], capture_output=True, text=True)
@@ -106,13 +98,11 @@ class Test(TestCase):
             self.logger.error(f"FIO check failed: {e}")
             return False
 
-        # 4. Check device permissions
         if not self.ufs.check_device():
             self.logger.error(f"Insufficient device permissions: {self.device}")
             return False
         self.logger.debug(f"Device permissions OK")
 
-        # 5. Record health baseline
         health = self.ufs.get_health_status()
         self._pre_test_health = health
         self.logger.debug(f"Health baseline: {health['status']}")
@@ -127,7 +117,6 @@ class Test(TestCase):
         self.logger.info(f"  bs={self.bs}, size={self.size}, runtime={self.runtime}s, iodepth={self.iodepth}")
 
         try:
-            # Execute FIO random read test (QD=1, measure latency)
             self.logger.info("Executing FIO random read test (QD=1)...")
             metrics_obj = self.fio.run_rand_read(
                 filename=self.test_file,
@@ -140,13 +129,11 @@ class Test(TestCase):
                 direct=True,
             )
 
-            # Extract complete latency distribution data
             lat_ns = metrics_obj.latency_ns
             percentiles = lat_ns.get('percentile', {})
 
-            # Collect all percentile data
             lat_distribution = {
-                'p50': percentiles.get('50.000000', 0) / 1000,  # ns -> us
+                'p50': percentiles.get('50.000000', 0) / 1000,
                 'p90': percentiles.get('90.000000', 0) / 1000,
                 'p95': percentiles.get('95.000000', 0) / 1000,
                 'p99': percentiles.get('99.000000', 0) / 1000,
@@ -172,7 +159,6 @@ class Test(TestCase):
             self.logger.info(f"  mean:    {lat_distribution['mean']:.1f} us")
             self.logger.info(f"  stddev:  {lat_distribution['stddev']:.1f} us")
 
-            # Save latency distribution data to file (for subsequent chart plotting)
             try:
                 distribution_file = self.test_file.parent / f'qos_latency_distribution_{self.test_file.stem}.json'
                 with open(distribution_file, 'w', encoding='utf-8') as f:
@@ -201,7 +187,6 @@ class Test(TestCase):
         lat_p99 = result.get('p99', 0)
         lat_p9999 = result.get('p99.99', 0)
 
-        # Validate p50
         if lat_p50 > self.p50_latency_us:
             self.record_failure(
                 "p50 Latency",
@@ -212,7 +197,6 @@ class Test(TestCase):
         else:
             self.logger.info(f"  p50 latency: {lat_p50:.1f} us (< {self.p50_latency_us} us)")
 
-        # Validate p99
         if lat_p99 > self.p99_latency_us:
             self.record_failure(
                 "p99 Latency",
@@ -223,7 +207,6 @@ class Test(TestCase):
         else:
             self.logger.info(f"  p99 latency: {lat_p99:.1f} us (< {self.p99_latency_us} us)")
 
-        # Validate p99.99
         if lat_p9999 > self.p9999_latency_us:
             self.record_failure(
                 "p99.99 Latency",
@@ -234,7 +217,6 @@ class Test(TestCase):
         else:
             self.logger.info(f"  p99.99 latency: {lat_p9999:.1f} us (< {self.p9999_latency_us} us)")
 
-        # Postcondition check (hardware health)
         self._check_postcondition()
 
         return True

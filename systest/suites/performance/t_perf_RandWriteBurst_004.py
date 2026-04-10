@@ -31,14 +31,12 @@ sys.path.insert(0, str(tools_dir))
 from runner import TestCase
 from .base import PerformanceTestCase
 
-
 class Test(PerformanceTestCase):
     """Random write performance test"""
 
     name = "rand_write_burst"
     description = "Random write performance test (4K QD32)"
 
-    # FIO 配置
     fio_rw = 'randwrite'
     fio_bs = '4k'
     fio_size = '1G'
@@ -47,7 +45,6 @@ class Test(PerformanceTestCase):
     fio_ramp_time = 10
     fio_ioengine = 'sync'
 
-    # 性能目标
     target_iops = 100000
     max_avg_latency_us = 150
     max_tail_latency_us = 8000

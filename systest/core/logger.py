@@ -27,7 +27,6 @@ from datetime import datetime
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from typing import Optional, Dict, Any
 
-
 class StructuredFormatter(logging.Formatter):
     """Structured log formatter (JSON format)"""
 
@@ -43,32 +42,28 @@ class StructuredFormatter(logging.Formatter):
             'line': record.lineno
         }
 
-        # Add extra fields
         if hasattr(record, 'extra_data'):
             log_data['data'] = record.extra_data
 
-        # Add exception info
         if record.exc_info:
             log_data['exception'] = self.formatException(record.exc_info)
 
         return json.dumps(log_data, ensure_ascii=False)
 
-
 class ConsoleFormatter(logging.Formatter):
     """Console log formatter (with colors)
-    
+
     格式：2024-08-26 21:04:50.123 [INFO] [base.py:156] 消息内容
     ERROR 级别自动附加堆栈信息
     """
 
-    # ANSI color codes
     COLORS = {
-        'DEBUG': '\033[36m',      # Cyan
-        'INFO': '\033[32m',       # Green
-        'WARNING': '\033[33m',    # Yellow
-        'ERROR': '\033[31m',      # Red
-        'CRITICAL': '\033[35m',   # Purple
-        'RESET': '\033[0m'        # Reset
+        'DEBUG': '\033[36m',
+        'INFO': '\033[32m',
+        'WARNING': '\033[33m',
+        'ERROR': '\033[31m',
+        'CRITICAL': '\033[35m',
+        'RESET': '\033[0m'
     }
 
     def format(self, record: logging.LogRecord) -> str:
@@ -76,31 +71,23 @@ class ConsoleFormatter(logging.Formatter):
         color = self.COLORS.get(record.levelname, self.COLORS['RESET'])
         reset = self.COLORS['RESET']
 
-        # Timestamp with millisecond precision: 2024-08-26 21:04:50.123
         time_str = datetime.fromtimestamp(record.created).strftime('%Y-%m-%d %H:%M:%S')
-        # Add milliseconds
         milliseconds = f"{int(record.msecs):03d}"
         time_str = f"{time_str}.{milliseconds}"
 
-        # Log level (with color)
         level = f"{color}{record.levelname:<8}{reset}"
 
-        # Source file and line number: [base.py:156]
         source = f"[{record.filename}:{record.lineno}]"
 
-        # Message
         message = record.getMessage()
 
-        # Build log line
         log_line = f"{time_str} {level} {source} {message}"
 
-        # ERROR and CRITICAL levels automatically append stack trace
         if record.levelno >= logging.ERROR and record.exc_info:
             stack_trace = self.formatException(record.exc_info)
             log_line = f"{log_line}\n{stack_trace}"
 
         return log_line
-
 
 class TestLogger:
     """Test log manager"""
@@ -111,7 +98,7 @@ class TestLogger:
         log_dir: str = 'logs',
         console_level: int = logging.INFO,
         file_level: int = logging.DEBUG,
-        max_bytes: int = 50 * 1024 * 1024,  # 50MB/file
+        max_bytes: int = 50 * 1024 * 1024,
         backup_count: int = 5,
         enable_json: bool = False
     ):
@@ -131,27 +118,20 @@ class TestLogger:
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
-        # Log file paths
         self.log_file = self.log_dir / f"{test_id}.log"
         self.error_file = self.log_dir / f"{test_id}_error.log"
 
-        # Create logger
         self.logger = logging.getLogger(f"systest.{test_id}")
-        self.logger.setLevel(logging.DEBUG)  # File logger records all levels
+        self.logger.setLevel(logging.DEBUG)
 
-        # Clear existing handlers (avoid duplicates)
         self.logger.handlers.clear()
 
-        # Add console handler
         self._add_console_handler(console_level)
 
-        # Add file handler (with rotation)
         self._add_file_handler(file_level, max_bytes, backup_count)
 
-        # Add error file handler (only ERROR and above)
         self._add_error_handler(file_level, max_bytes, backup_count)
 
-        # JSON formatter (optional)
         self.json_formatter = StructuredFormatter() if enable_json else None
 
     def _add_console_handler(self, level: int):
@@ -163,7 +143,7 @@ class TestLogger:
 
     def _add_file_handler(self, level: int, max_bytes: int, backup_count: int):
         """Add file handler (with rotation)
-        
+
         文件格式：2024-08-26 21:04:50.123 - logger_name - LEVEL - [filename:lineno] - message
         ERROR 级别自动记录堆栈信息
         """
@@ -174,7 +154,6 @@ class TestLogger:
             encoding='utf-8'
         )
         file_handler.setLevel(level)
-        # Custom formatter with millisecond precision and source location
         file_handler.setFormatter(logging.Formatter(
             '%(asctime)s.%(msecs)03d - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S'
@@ -183,7 +162,7 @@ class TestLogger:
 
     def _add_error_handler(self, level: int, max_bytes: int, backup_count: int):
         """Add error file handler (only ERROR and above)
-        
+
         文件格式：2024-08-26 21:04:50.123 - logger_name - ERROR - [filename:lineno] - message
         自动记录完整堆栈信息
         """
@@ -194,7 +173,6 @@ class TestLogger:
             encoding='utf-8'
         )
         error_handler.setLevel(logging.ERROR)
-        # Custom formatter with millisecond precision and source location
         error_handler.setFormatter(logging.Formatter(
             '%(asctime)s.%(msecs)03d - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S'
@@ -215,7 +193,7 @@ class TestLogger:
 
     def error(self, msg: str, exc_info: bool = True, **kwargs):
         """ERROR level log - automatically includes stack trace
-        
+
         Args:
             msg: Error message
             exc_info: Whether to include exception info (default True for automatic stack trace)
@@ -229,19 +207,16 @@ class TestLogger:
 
     def _log(self, level: int, msg: str, **kwargs):
         """Internal log method
-        
+
         Args:
             level: Log level
             msg: Log message
             exc_info: Whether to include exception info (for ERROR level)
             **kwargs: Extra data to log
         """
-        # Extract exc_info for ERROR level stack trace
         exc_info = kwargs.pop('exc_info', None)
-        
-        # Add extra data
+
         if kwargs:
-            # Use standard logging extra parameter to pass extra data
             if exc_info is not None:
                 self.logger.log(level, msg, extra={'extra_data': kwargs}, exc_info=exc_info)
             else:
@@ -287,10 +262,7 @@ class TestLogger:
             handler.close()
             self.logger.removeHandler(handler)
 
-
-# Global logger instance cache
 _loggers: Dict[str, TestLogger] = {}
-
 
 def get_logger(
     test_id: Optional[str] = None,
@@ -315,7 +287,6 @@ def get_logger(
         _loggers[test_id] = TestLogger(test_id, log_dir, **kwargs)
 
     return _loggers[test_id]
-
 
 def close_all_loggers():
     """Close all logger instances"""

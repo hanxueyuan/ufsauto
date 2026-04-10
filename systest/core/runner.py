@@ -27,14 +27,11 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-# Performance threshold constant
-PERFORMANCE_THRESHOLD = 0.9  # Performance pass threshold (90%)
-
+PERFORMANCE_THRESHOLD = 0.9
 
 class TestAborted(Exception):
     """Test was aborted"""
     pass
-
 
 class FailStop(Exception):
     """
@@ -46,7 +43,6 @@ class FailStop(Exception):
     Typical scenarios: Device returns IO error, severe data corruption, risk in continuing.
     """
     pass
-
 
 class TestCase:
     """
@@ -74,13 +70,10 @@ class TestCase:
         self.test_dir = test_dir
         self.verbose = verbose
         self.logger = logger or logging.getLogger(__name__)
-        # Health monitoring
         self._pre_test_health = None
-        self._post_test_health = None  # Recorded before validate() in run() method
-        # Test file path (set by subclass in __init__)
+        self._post_test_health = None
         self.test_file: Optional[Path] = None
 
-        # If test directory is specified, ensure it exists
         if self.test_dir and not self.test_dir.exists():
             self.test_dir.mkdir(parents=True, exist_ok=True)
 
@@ -100,7 +93,6 @@ class TestCase:
             raise RuntimeError(f"Test directory not specified, cannot create test file: {name}")
 
         test_file = self.test_dir / f"ufs_test_{name}"
-        # Verify path is under test_dir (prevent path traversal)
         try:
             test_file.resolve().relative_to(self.test_dir.resolve())
         except ValueError:
@@ -142,7 +134,6 @@ class TestCase:
         """Pre-test setup. Return False for SKIP status."""
         self.logger.debug(f"Setup: {self.name}")
 
-        # Automatically record health baseline (for Postcondition comparison)
         try:
             from tools.ufs_utils import UFSDevice
             ufs = UFSDevice(self.device, logger=self.logger)
@@ -191,29 +182,26 @@ class TestCase:
         self.logger.info("=" * 60)
         self.logger.info("🔍 开始 Postcondition 检查（硬件健康验证）...")
         self.logger.info("=" * 60)
-        
-        # Check if health data is available
+
         if not self._pre_test_health:
             self.logger.warning("⚠️  缺少测试前健康状态数据")
             self.logger.warning("   可能原因：setup() 中健康状态采集失败，或 UFS 设备不支持健康查询")
-        
+
         if not self._post_test_health:
             self.logger.warning("⚠️  缺少测试后健康状态数据")
             self.logger.warning("   可能原因：validate() 前健康状态采集失败，或 UFS 设备不支持健康查询")
-        
+
         if not self._pre_test_health or not self._post_test_health:
             self.logger.info("⏭️  Postcondition 检查跳过：健康状态数据不完整（非致命，继续测试流程）")
             self.logger.info("=" * 60)
             return True
 
-        # Display health status comparison
         self.logger.info("📊 健康状态对比:")
         pre_status = self._pre_test_health.get('status', 'OK')
         post_status = self._post_test_health.get('status', 'OK')
         self.logger.info(f"   测试前：{pre_status}")
         self.logger.info(f"   测试后：{post_status}")
 
-        # Check health status degradation
         if pre_status == 'OK' and post_status != 'OK':
             self.logger.error(f"❌ 设备健康状态恶化：{pre_status} → {post_status}")
             self.record_failure(
@@ -225,7 +213,6 @@ class TestCase:
         else:
             self.logger.info(f"✅ 设备健康状态正常：{pre_status} → {post_status}")
 
-        # Check critical warning flag
         pre_warning = self._pre_test_health.get('critical_warning', 0)
         post_warning = self._post_test_health.get('critical_warning', 0)
         self.logger.info(f"📊 Critical Warning 对比:")
@@ -243,7 +230,6 @@ class TestCase:
         else:
             self.logger.info(f"✅ Critical Warning 状态正常：{pre_warning} → {post_warning}")
 
-        # Check pre-EOL status change
         pre_eol = self._pre_test_health.get('pre_eol_info', '0x00')
         post_eol = self._post_test_health.get('pre_eol_info', '0x00')
         self.logger.info(f"📊 Pre-EOL 状态对比:")
@@ -270,7 +256,6 @@ class TestCase:
         """Post-test cleanup"""
         self.logger.debug(f"Teardown: {self.name}")
 
-        # Auto cleanup test file
         test_file = getattr(self, 'test_file', None)
         if test_file and isinstance(test_file, Path):
             if test_file.exists():
@@ -280,12 +265,11 @@ class TestCase:
                     self.logger.debug(f"Cleaned up test file: {self.test_file} ({file_size / 1024 / 1024:.1f} MB)")
                 except Exception as e:
                     self.logger.warning(f"Test file cleanup failed: {e}")
-                    # Try to get file size and notify user
                     if self.test_file.exists():
                         try:
                             file_size = self.test_file.stat().st_size
                             self.logger.warning(f"Test file not removed: {self.test_file} ({file_size / 1024 / 1024:.1f} MB)")
-                            if file_size > 100 * 1024 * 1024:  # > 100MB
+                            if file_size > 100 * 1024 * 1024:
                                 self.logger.warning(f"File is large, please delete manually: rm {self.test_file}")
                             else:
                                 self.logger.debug(f"File is small, can delete manually: rm {self.test_file}")
@@ -296,9 +280,8 @@ class TestCase:
     def run(self) -> Dict[str, Any]:
         """Complete execution flow"""
         self.start_time = datetime.now()
-        self._failures = []  # Reset failure collector
-        
-        # Log test environment information at the beginning
+        self._failures = []
+
         self.logger.info("=" * 60)
         self.logger.info(f"Test Case: {self.name}")
         self.logger.info(f"Description: {self.description}")
@@ -307,7 +290,6 @@ class TestCase:
         self.logger.info(f"Test File: {getattr(self, 'test_file', 'Not set')}")
         self.logger.info("=" * 60)
 
-        # Register signal handler for interruption
         original_handler = signal.getsignal(signal.SIGINT)
         def _abort_handler(signum, frame):
             raise TestAborted("Test interrupted by user (SIGINT)")
@@ -315,7 +297,6 @@ class TestCase:
         try:
             signal.signal(signal.SIGINT, _abort_handler)
 
-            # Setup
             self.logger.debug("Executing setup...")
             if not self.setup():
                 self.end_time = datetime.now()
@@ -329,14 +310,11 @@ class TestCase:
                     'timestamp': self.start_time.isoformat()
                 }
 
-            # Execute
             self.logger.debug("Executing test logic...")
             result = self.execute()
 
-            # Validate
             self.logger.debug("Validating results...")
 
-            # Record post-test health status before validate (for Postcondition comparison)
             try:
                 from tools.ufs_utils import UFSDevice
                 ufs = UFSDevice(self.device, logger=self.logger)
@@ -351,11 +329,6 @@ class TestCase:
             self.end_time = datetime.now()
             duration = (self.end_time - self.start_time).total_seconds()
 
-            # Framework-level PASS/FAIL determination
-            # Rules:
-            # 1. validate returns False -> FAIL
-            # 2. Has Fail-Continue records -> FAIL
-            # 3. Otherwise -> PASS
             should_fail = False
             fail_reasons = []
 
@@ -383,7 +356,6 @@ class TestCase:
                 'timestamp': self.start_time.isoformat()
             }
 
-            # Attach Fail-Continue records
             if self._failures:
                 run_result['failures'] = self._failures
                 self.logger.info(f"  Total {len(self._failures)} Fail-Continue items")
@@ -391,7 +363,6 @@ class TestCase:
             return run_result
 
         except FailStop as e:
-            # Fail-Stop: Immediate termination, status is FAIL
             self.end_time = datetime.now()
             duration = (self.end_time - self.start_time).total_seconds()
             self.logger.error(f"Fail-Stop triggered, test terminated: {self.name} - {e}")
@@ -458,26 +429,20 @@ class TestCase:
             signal.signal(signal.SIGINT, original_handler)
             self.teardown()
 
-
 class TestRunner:
     """Test execution engine"""
 
     def __init__(self, device: str = None, test_dir: str = None, verbose: bool = False):
-        self.device_override = device  # User manually specified
-        self.test_dir_override = test_dir  # User manually specified
+        self.device_override = device
+        self.test_dir_override = test_dir
         self.verbose = verbose
         self.suites_dir = Path(__file__).parent.parent / 'suites'
         self.config_dir = Path(__file__).parent.parent / 'config'
-        self.test_dir = None  # Final determined test directory
-        self.device = None  # Final determined device path
+        self.test_dir = None
+        self.device = None
 
-        # === Production mode: Use real parameters ===
-        # Load runtime configuration
         self.runtime_config = self._load_runtime_config()
 
-        # Auto-detect environment every run to ensure config is up-to-date
-        # If results change, automatically update runtime.json
-        # Delayed import to avoid circular dependency
         import importlib.util
         spec = importlib.util.spec_from_file_location("check_env", str(Path(__file__).parent.parent / 'bin' / 'check_env.py'))
         check_env_module = importlib.util.module_from_spec(spec)
@@ -487,16 +452,13 @@ class TestRunner:
         checker.collect_storage()
         checker.collect_test_directory()
 
-        # Update runtime_config with latest detection results
         if checker.runtime_config.get('device'):
             self.runtime_config['device'] = checker.runtime_config['device']
         if checker.runtime_config.get('test_dir'):
             self.runtime_config['test_dir'] = checker.runtime_config['test_dir']
 
-        # Auto-save updated configuration after detection
         try:
             config_path = self.config_dir / 'runtime.json'
-            # Preserve other fields (system, toolchain, etc.), only update device and directory
             merged = {**self.runtime_config, **checker.runtime_config}
             merged['env_checked_at'] = checker.runtime_config.get('env_checked_at')
             with open(config_path, 'w', encoding='utf-8') as f:
@@ -506,7 +468,6 @@ class TestRunner:
         except Exception as e:
             logger.warning(f"Auto-save configuration failed: {e} (continuing with current detection)")
 
-        # Determine device path: User specified > Latest auto-detection > Auto-detect available device
         if self.device_override:
             self.device = self.device_override
             logger.info(f"Device path: {self.device} (manually specified)")
@@ -514,7 +475,6 @@ class TestRunner:
             self.device = self.runtime_config['device']
             logger.info(f"Device path: {self.device} (from config)")
         else:
-            # Auto-detect available block device
             self.device = self._auto_detect_device()
             if self.device:
                 logger.info(f"Device path: {self.device} (auto-detected)")
@@ -522,10 +482,8 @@ class TestRunner:
                 self.device = '/dev/sda'
                 logger.warning(f"Auto-detection failed, using default: {self.device}")
 
-        # Determine test directory
         self._resolve_test_dir()
 
-        # Load test suites
         self.suites = self._load_suites()
 
     def _load_runtime_config(self) -> Dict[str, Any]:
@@ -548,49 +506,41 @@ class TestRunner:
     def _auto_detect_device(self) -> Optional[str]:
         """Auto-detect available block device"""
         import os
-        
-        # Priority order: sda > vda > mmcblk0 > nvme0n1
+
         device_priority = ['sda', 'vda', 'mmcblk0', 'nvme0n1']
-        
+
         for device_name in device_priority:
             device_path = f'/dev/{device_name}'
             if os.path.exists(device_path):
                 logger.debug(f"Found available device: {device_path}")
                 return device_path
-        
-        # Fallback: try to find any block device
+
         try:
             import glob
             block_devices = glob.glob('/dev/sd*') + glob.glob('/dev/vd*') + glob.glob('/dev/mmcblk*') + glob.glob('/dev/nvme*')
             if block_devices:
-                # Filter out partitions (e.g., sda1 -> sda)
                 for device in sorted(block_devices):
                     if not device[-1].isdigit():
                         logger.debug(f"Found block device: {device}")
                         return device
         except Exception as e:
             logger.debug(f"Block device detection failed: {e}")
-        
+
         return None
 
     def _resolve_test_dir(self):
         """Determine test directory: User specified > Auto-detected > Fallback default"""
-        # Allowed test directory prefixes (safety whitelist)
         allowed_prefixes = ['/tmp', '/mapdata']
 
-        # 1) User manually specified (highest priority)
         if self.test_dir_override:
             test_dir = Path(self.test_dir_override).absolute()
-            # Verify path is within allowed directories (resolve real path, prevent symlink attacks)
             try:
                 real_path = test_dir.resolve()
-                # Verify resolved path is also within allowed directories
                 if not any(str(real_path).startswith(p) for p in allowed_prefixes):
                     logger.error(f"Test directory not within allowed paths: {test_dir} (real path: {real_path})")
                     logger.error(f"Allowed directory prefixes: {allowed_prefixes}")
                     raise RuntimeError(f"Test directory must be within: {allowed_prefixes}")
             except FileNotFoundError:
-                # Directory doesn't exist, resolve fails, create first then verify
                 try:
                     test_dir.mkdir(parents=True, exist_ok=True)
                     real_path = test_dir.resolve()
@@ -609,14 +559,12 @@ class TestRunner:
             logger.info(f"Test directory: {self.test_dir} (manually specified)")
             return
 
-        # 2) From auto-detection result
         if self.runtime_config.get("test_dir"):
             self.test_dir = Path(self.runtime_config["test_dir"]).absolute()
             self.test_dir.mkdir(parents=True, exist_ok=True)
             logger.info(f"Test directory: {self.test_dir} (auto-detected)")
             return
 
-        # 3) Fallback strategy (try in order, ensure at least one succeeds)
         fallback_dirs = [
             Path('/mapdata/ufs_test').absolute(),
             Path('/tmp/ufs_test').absolute(),
@@ -630,7 +578,6 @@ class TestRunner:
             except Exception:
                 continue
 
-        # All fallbacks failed (extremely rare)
         try:
             self.test_dir = Path('/tmp/ufs_test').absolute()
             self.test_dir.mkdir(parents=True, exist_ok=True)
@@ -641,7 +588,6 @@ class TestRunner:
             logger.critical(f"Check: df -h /tmp && ls -ld /tmp")
             raise RuntimeError(f"Cannot create any test directory: {e}")
 
-        # Check available space
         try:
             import shutil
             stat = shutil.disk_usage(self.test_dir)
@@ -676,7 +622,6 @@ class TestRunner:
         for suite_dir in self.suites_dir.iterdir():
             if suite_dir.is_dir() and not suite_dir.name.startswith('_'):
                 suite_name = suite_dir.name
-                # Support both test_*.py and t_*_*.py naming
                 test_files = list(suite_dir.glob('*.py'))
                 tests = []
                 for f in test_files:
@@ -684,7 +629,6 @@ class TestRunner:
                     if name.startswith('test_'):
                         tests.append(name.replace('test_', ''))
                     elif name.startswith('t_') and name.count('_') >= 2:
-                        # t_perf_SeqReadBurst_001.py -> seq_read_burst_001
                         tests.append(name)
                 suites[suite_name] = tests
 
@@ -706,7 +650,6 @@ class TestRunner:
         stopped = False
 
         for i, test_name in enumerate(tests, 1):
-            # If previous Fail-Stop, SKIP all subsequent cases
             if stopped:
                 logger.warning(f"[{i}/{len(tests)}] Skipping test (previous Fail-Stop): {test_name}")
                 results.append({
@@ -719,14 +662,12 @@ class TestRunner:
 
             logger.info(f"[{i}/{len(tests)}] Executing test: {test_name}")
 
-            # Dynamic import test case
             try:
                 import sys
                 suites_dir = Path(__file__).parent.parent / 'suites'
                 if str(suites_dir) not in sys.path:
                     sys.path.insert(0, str(suites_dir))
 
-                # Import test module (support test_*.py and t_*_*.py)
                 if test_name.startswith('t_'):
                     module_path = suites_dir / suite_name / f'{test_name}.py'
                 else:
@@ -736,7 +677,6 @@ class TestRunner:
                 module = importlib.util.module_from_spec(spec)
                 sys.modules[f'{suite_name}.{test_name}'] = module
                 spec.loader.exec_module(module)
-                # Find test class (priority Test, then camelCase naming)
                 test_class = getattr(module, 'Test', None)
                 if not test_class:
                     class_name = ''.join(part.capitalize() for part in test_name.split('_'))
@@ -753,7 +693,6 @@ class TestRunner:
                 result = test_instance.run()
                 results.append(result)
 
-                # Check if Fail-Stop
                 if result.get('fail_mode') == 'stop':
                     logger.error(f"  Fail-Stop triggered, subsequent tests will be skipped")
                     stopped = True
@@ -782,7 +721,6 @@ class TestRunner:
                     'duration': 0
                 })
 
-        # Suite execution summary
         total = len(results)
         passed = sum(1 for r in results if r['status'] == 'PASS')
         failed = sum(1 for r in results if r['status'] == 'FAIL')
@@ -801,7 +739,6 @@ class TestRunner:
         logger.info(f"  [ABORT]: {aborted}")
         logger.info("-" * 60)
 
-        # Show execution time for each test case
         logger.info("Test case execution times:")
         for r in results:
             duration = r.get('duration', 0)
@@ -809,7 +746,6 @@ class TestRunner:
             name = r.get('name', 'unknown')
             logger.info(f"  {name}: {duration:.2f}s [{status}]")
 
-        # Determine if suite overall passed
         if failed > 0 or errors > 0:
             suite_status = '[FAIL]'
             logger.info(f"Suite status: {suite_status} ({failed + errors} tests failed)")
@@ -826,7 +762,6 @@ class TestRunner:
 
     def run_test(self, test_name: str) -> Dict[str, Any]:
         """Execute single test"""
-        # Find test case
         for suite_name, tests in self.suites.items():
             if test_name in tests:
                 logger.info(f"Executing test: {test_name} (Suite: {suite_name})")

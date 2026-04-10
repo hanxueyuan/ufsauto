@@ -17,10 +17,8 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 
-# 延迟导入 matplotlib，避免不必要的依赖
 matplotlib = None
 plt = None
-
 
 def _ensure_matplotlib():
     """确保 matplotlib 已导入"""
@@ -29,7 +27,6 @@ def _ensure_matplotlib():
         try:
             import matplotlib
             import matplotlib.pyplot as plt
-            # 使用非交互式后端
             matplotlib.use('Agg')
             return True
         except ImportError:
@@ -37,7 +34,6 @@ def _ensure_matplotlib():
             print("   安装命令：pip install matplotlib")
             return False
     return True
-
 
 class ChartGenerator:
     """图表生成器"""
@@ -74,46 +70,38 @@ class ChartGenerator:
         import matplotlib.pyplot as plt
         import numpy as np
 
-        # 提取数据
         test_names = [t['name'] for t in test_results]
         bandwidths = [t.get('bandwidth_mbps', 0) for t in test_results]
         iops_list = [t.get('iops', 0) for t in test_results]
 
-        # 创建双 Y 轴柱状图
         fig, ax1 = plt.subplots(figsize=(12, 6))
 
         x = np.arange(len(test_names))
         width = 0.35
 
-        # 带宽柱子
         bars1 = ax1.bar(x - width/2, bandwidths, width, label='带宽 (MB/s)', color='#4CAF50')
         ax1.set_xlabel('测试用例')
         ax1.set_ylabel('带宽 (MB/s)', color='#4CAF50')
         ax1.tick_params(axis='y', labelcolor='#4CAF50')
         ax1.set_ylim(0, max(bandwidths) * 1.2 if bandwidths else 100)
 
-        # 添加目标线（如果有）
         if target_config and 'target_bandwidth_mbps' in target_config:
             target_bw = target_config['target_bandwidth_mbps']
             ax1.axhline(y=target_bw, color='red', linestyle='--', label=f'目标带宽 ({target_bw} MB/s)')
 
-        # 第二个 Y 轴 - IOPS
         ax2 = ax1.twinx()
         bars2 = ax2.bar(x + width/2, iops_list, width, label='IOPS', color='#2196F3')
         ax2.set_ylabel('IOPS', color='#2196F3')
         ax2.tick_params(axis='y', labelcolor='#2196F3')
         ax2.set_ylim(0, max(iops_list) * 1.2 if iops_list else 1000)
 
-        # 添加目标 IOPS 线（如果有）
         if target_config and 'target_iops' in target_config:
             target_iops = target_config['target_iops']
             ax2.axhline(y=target_iops, color='orange', linestyle='--', label=f'目标 IOPS ({target_iops})')
 
-        # 设置 X 轴标签
         ax1.set_xticks(x)
         ax1.set_xticklabels(test_names, rotation=45, ha='right')
 
-        # 合并两个轴的图例
         lines1, labels1 = ax1.get_legend_handles_labels()
         lines2, labels2 = ax2.get_legend_handles_labels()
         ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
@@ -121,7 +109,6 @@ class ChartGenerator:
         plt.title('性能对比：目标 vs 实际', fontsize=14, fontweight='bold')
         fig.tight_layout()
 
-        # 保存
         if filename is None:
             filename = f'performance_comparison_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
         output_path = self.output_dir / filename
@@ -162,28 +149,22 @@ class ChartGenerator:
             print("⚠️  趋势数据为空")
             return None
 
-        # 准备数据
         test_names = list(trends.keys())
         current_bw = [trends[t]['current']['bandwidth_mbps'] for t in test_names]
         hist_avg_bw = [trends[t]['history_avg']['bandwidth_mbps'] for t in test_names]
         hist_min_bw = [trends[t]['history_min']['bandwidth_mbps'] for t in test_names]
         hist_max_bw = [trends[t]['history_max']['bandwidth_mbps'] for t in test_names]
 
-        # 创建图表
         fig, ax = plt.subplots(figsize=(12, 6))
 
         x = range(len(test_names))
 
-        # 绘制历史范围（阴影区域）
         ax.fill_between(x, hist_min_bw, hist_max_bw, alpha=0.3, color='gray', label='历史范围')
 
-        # 绘制历史平均线
         ax.plot(x, hist_avg_bw, 'o--', color='blue', label='历史平均', linewidth=2, markersize=8)
 
-        # 绘制当前值
         ax.plot(x, current_bw, 's-', color='red', label='当前测试', linewidth=2, markersize=8)
 
-        # 设置标签
         ax.set_xlabel('测试用例')
         ax.set_ylabel('带宽 (MB/s)')
         ax.set_title('性能趋势对比：历史 vs 当前', fontsize=14, fontweight='bold')
@@ -194,7 +175,6 @@ class ChartGenerator:
 
         fig.tight_layout()
 
-        # 保存
         if filename is None:
             filename = f'trend_comparison_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
         output_path = self.output_dir / filename
@@ -229,13 +209,11 @@ class ChartGenerator:
 
         import matplotlib.pyplot as plt
 
-        # 统计各状态数量
         status_counts = {}
         for result in test_results:
             status = result.get('status', 'UNKNOWN')
             status_counts[status] = status_counts.get(status, 0) + 1
 
-        # 准备饼图数据
         labels = []
         sizes = []
         colors = []
@@ -254,7 +232,6 @@ class ChartGenerator:
             sizes.append(count)
             colors.append(status_colors.get(status, '#9E9E9E'))
 
-        # 创建饼图
         fig, ax = plt.subplots(figsize=(8, 8))
 
         wedges, texts, autotexts = ax.pie(
@@ -266,7 +243,6 @@ class ChartGenerator:
             explode=[0.05] * len(sizes)
         )
 
-        # 美化字体
         for autotext in autotexts:
             autotext.set_color('white')
             autotext.set_fontsize(12)
@@ -276,7 +252,6 @@ class ChartGenerator:
 
         fig.tight_layout()
 
-        # 保存
         if filename is None:
             filename = f'pass_rate_pie_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
         output_path = self.output_dir / filename
@@ -308,18 +283,15 @@ class ChartGenerator:
 
         charts = []
 
-        # 1. 性能对比柱状图
         chart1 = self.generate_performance_bar_chart(test_results, target_config)
         if chart1:
             charts.append(chart1)
 
-        # 2. 趋势折线图（如果有历史数据）
         if history_comparison and history_comparison.get('status') != 'no_history':
             chart2 = self.generate_trend_line_chart(history_comparison)
             if chart2:
                 charts.append(chart2)
 
-        # 3. 达标率饼图
         chart3 = self.generate_pass_rate_pie_chart(test_results)
         if chart3:
             charts.append(chart3)
@@ -339,7 +311,6 @@ class ChartGenerator:
             print(f"  • {chart_path}")
         print("-" * 70)
 
-
 def main():
     """主函数 - 演示用法"""
     print("图表生成模块")
@@ -347,7 +318,6 @@ def main():
 
     generator = ChartGenerator()
 
-    # 示例测试数据
     test_results = [
         {'name': 'seq_read_burst', 'bandwidth_mbps': 2150.5, 'iops': 15200, 'status': 'PASS'},
         {'name': 'seq_write_burst', 'bandwidth_mbps': 1850.3, 'iops': 14800, 'status': 'PASS'},
@@ -356,13 +326,11 @@ def main():
         {'name': 'mixed_rw', 'bandwidth_mbps': 420.8, 'iops': 88000, 'status': 'PASS'},
     ]
 
-    # 目标配置
     target_config = {
         'target_bandwidth_mbps': 2100,
         'target_iops': 15000
     }
 
-    # 示例历史对比数据
     history_comparison = {
         'trends': {
             'seq_read_burst': {
@@ -380,16 +348,13 @@ def main():
         }
     }
 
-    # 生成所有图表
     charts = generator.generate_all_charts(
         test_results=test_results,
         history_comparison=history_comparison,
         target_config=target_config
     )
 
-    # 打印结果
     generator.print_generated_charts()
-
 
 if __name__ == '__main__':
     main()

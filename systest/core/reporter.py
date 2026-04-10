@@ -14,11 +14,9 @@ from string import Template
 
 logger = logging.getLogger(__name__)
 
-
 class ReportGenerator:
     """Test report generator"""
 
-    # HTML report template (pure standard library, no external dependencies)
     HTML_TEMPLATE = Template('''<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -26,33 +24,33 @@ class ReportGenerator:
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UFS System Test Report - $test_id</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 40px; background:
         .container { max-width: 1200px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        h1 { color: #333; border-bottom: 3px solid #007bff; padding-bottom: 10px; }
-        h2 { color: #555; margin-top: 30px; }
+        h1 { color:
+        h2 { color:
         .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0; }
         .summary-card { padding: 20px; border-radius: 8px; text-align: center; }
-        .summary-card.total { background: #e3f2fd; }
-        .summary-card.passed { background: #e8f5e9; }
-        .summary-card.failed { background: #ffebee; }
+        .summary-card.total { background:
+        .summary-card.passed { background:
+        .summary-card.failed { background:
         .summary-card .value { font-size: 36px; font-weight: bold; }
-        .summary-card .label { color: #666; margin-top: 5px; }
+        .summary-card .label { color:
         .pass-rate { font-size: 24px; font-weight: bold; }
-        .pass-rate.good { color: #2e7d32; }
-        .pass-rate.bad { color: #c62828; }
+        .pass-rate.good { color:
+        .pass-rate.bad { color:
         table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background: #f8f9fa; font-weight: 600; }
-        tr:hover { background: #f8f9fa; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid
+        th { background:
+        tr:hover { background:
         .status { padding: 4px 12px; border-radius: 4px; font-weight: 500; }
-        .status.PASS { background: #e8f5e9; color: #2e7d32; }
-        .status.FAIL { background: #ffebee; color: #c62828; }
-        .status.ERROR { background: #fff3e0; color: #ef6c00; }
-        .status.DRY-RUN-PASS { background: #e8f5e9; color: #2e7d32; }
-        .failure-analysis { background: #fff3e0; padding: 20px; border-radius: 8px; margin: 20px 0; }
-        .failure-analysis h3 { color: #e65100; margin-top: 0; }
-        .metrics { font-family: monospace; background: #f8f9fa; padding: 2px 6px; border-radius: 3px; }
-        .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 14px; }
+        .status.PASS { background:
+        .status.FAIL { background:
+        .status.ERROR { background:
+        .status.DRY-RUN-PASS { background:
+        .failure-analysis { background:
+        .failure-analysis h3 { color:
+        .metrics { font-family: monospace; background:
+        .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid
     </style>
 </head>
 <body>
@@ -158,7 +156,6 @@ class ReportGenerator:
 
     def _generate_html(self, report_data: Dict[str, Any], output_path: Path) -> Path:
         """Generate HTML report"""
-        # Prepare template variables
         pass_rate = report_data['summary']['pass_rate']
 
         test_rows = []
@@ -166,12 +163,10 @@ class ReportGenerator:
 
         for result in report_data['test_cases']:
             status = result.get('status', 'UNKNOWN')
-            # DRY-RUN-PASS displayed as PASS style
             status_class = status if status in ['PASS', 'FAIL', 'ERROR', 'DRY-RUN-PASS'] else 'ERROR'
             if status_class == 'DRY-RUN-PASS':
                 status_class = 'PASS'
 
-            # Extract key metrics
             metrics = result.get('metrics', {})
             metrics_str = self._format_metrics(metrics)
 
@@ -183,17 +178,14 @@ class ReportGenerator:
             </tr>'''
             test_rows.append(row)
 
-            # Collect failures
             if status == 'FAIL':
                 failures.append(self._create_failure_analysis(result))
 
-        # Failure section
         if failures:
             failure_section = '<h2>Failure Analysis</h2>' + '\n'.join(failures)
         else:
             failure_section = ''
 
-        # Fill template
         html_content = self.HTML_TEMPLATE.substitute(
             test_id=report_data['test_id'],
             timestamp=report_data['timestamp'],
@@ -209,7 +201,6 @@ class ReportGenerator:
             gen_time=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         )
 
-        # Save file
         report_path = output_path / 'report.html'
         with open(report_path, 'w', encoding='utf-8') as f:
             f.write(html_content)
@@ -240,21 +231,19 @@ class ReportGenerator:
             else:
                 parts.append(f'{key}: {value}')
 
-        return '<br>'.join(parts[:3])  # Max 3 metrics
+        return '<br>'.join(parts[:3])
 
     def _create_failure_analysis(self, result: Dict[str, Any]) -> str:
         """Create failure analysis HTML"""
         test_name = result.get('name', 'unknown_test')
         status = result.get('status', 'UNKNOWN')
-        duration = float(result.get('duration') or 0.0)  # Handle None value
+        duration = float(result.get('duration') or 0.0)
 
-        # Collect failure details
         failures = result.get('failures', [])
         error = result.get('error', '')
         reason = result.get('reason', '')
         fail_mode = result.get('fail_mode', '')
 
-        # Build failure details list
         failure_items = []
         if error:
             failure_items.append(f'Error: {error}')
@@ -273,7 +262,6 @@ class ReportGenerator:
         if not failure_items:
             failure_items.append('See log file for detailed failure reason')
 
-        # Build suggestions list
         suggestions = []
         if 'permission' in (error + reason).lower():
             suggestions.append('Check user permissions, use sudo or join disk group')

@@ -23,7 +23,6 @@ from runner import TestCase
 from fio_wrapper import FIO, FIOConfig, FIOError
 from ufs_utils import UFSDevice
 
-
 class PerformanceTestCase(TestCase):
     """性能测试基类
 
@@ -34,17 +33,14 @@ class PerformanceTestCase(TestCase):
     - Postcondition 检查
     """
 
-    # === 子类必须定义的属性 ===
     name: str = "base_performance_test"
     description: str = "性能测试基类"
 
-    # === 性能目标（子类覆盖）===
     target_bandwidth_mbps: float = 0
     target_iops: float = 0
     max_avg_latency_us: float = float('inf')
     max_tail_latency_us: float = float('inf')
 
-    # === FIO 配置（子类覆盖）===
     fio_rw: str = 'read'
     fio_bs: str = '4k'
     fio_size: str = '1G'
@@ -52,7 +48,7 @@ class PerformanceTestCase(TestCase):
     fio_iodepth: int = 1
     fio_ramp_time: int = 0
     fio_ioengine: str = 'sync'
-    fio_rwmixread: int = 70  # 混合读写时的读百分比（仅当 fio_rw='randrw' 时使用）
+    fio_rwmixread: int = 70
 
     def __init__(self, device: str = '/dev/sda', test_dir: Path = None, verbose: bool = False, logger=None):
         super().__init__(device, test_dir, verbose, logger)
@@ -61,16 +57,13 @@ class PerformanceTestCase(TestCase):
             logger=self.logger
         )
         self.ufs = UFSDevice(device, logger=self.logger)
-        # 测试文件路径在 setup 中创建
         self.test_file: Optional[Path] = None
 
     def setup(self) -> bool:
         """通用前置条件检查"""
         self.logger.info("开始检查前置条件...")
 
-        # 1. 检查设备存在，如果不存在尝试自动检测
         if not self.ufs.exists():
-            # 尝试自动检测可用设备
             detected_device = self._auto_detect_device()
             if detected_device:
                 self.logger.info(f"设备 {self.device} 不存在，使用检测到的设备：{detected_device}")
@@ -78,17 +71,14 @@ class PerformanceTestCase(TestCase):
                 self.ufs = UFSDevice(self.device, logger=self.logger)
             else:
                 self.logger.warning(f"设备不存在：{self.device}（继续验证）")
-                # 不返回 False，继续执行（使用虚拟设备测试）
         else:
             self.logger.debug(f"📊 设备存在：{self.device}")
 
-        # 2. 检查可用空间
         if not self.ufs.check_available_space(min_gb=2.0):
             self.logger.error("可用空间不足（需要≥2GB）")
             return False
         self.logger.debug(f"📊 可用空间充足（≥2GB）")
 
-        # 3. 检查 FIO 已安装
         try:
             result = subprocess.run(['which', 'fio'], capture_output=True)
             if result.returncode != 0:
@@ -99,7 +89,6 @@ class PerformanceTestCase(TestCase):
             self.logger.error(f"检查 FIO 失败：{e}")
             return False
 
-        # 4. 检查设备权限
         try:
             import os
             if not os.access(self.device, os.R_OK | os.W_OK):
@@ -110,10 +99,8 @@ class PerformanceTestCase(TestCase):
             self.logger.error(f"检查权限失败：{e}")
             return False
 
-        # 5. 创建测试文件路径
         self.test_file = self.get_test_file_path(self.name)
 
-        # 6. 记录测试配置（详细信息）
         self.logger.info("=" * 60)
         self.logger.info("📋 测试配置详情:")
         self.logger.info("=" * 60)
@@ -146,17 +133,15 @@ class PerformanceTestCase(TestCase):
         """自动检测可用的块设备"""
         import os
         import glob
-        
-        # 优先级顺序：sda > vda > mmcblk0 > nvme0n1
+
         device_priority = ['sda', 'vda', 'mmcblk0', 'nvme0n1']
-        
+
         for device_name in device_priority:
             device_path = f'/dev/{device_name}'
             if os.path.exists(device_path):
                 self.logger.debug(f"找到可用设备：{device_path}")
                 return device_path
-        
-        # 回退：尝试查找任何块设备
+
         try:
             block_devices = glob.glob('/dev/sd*') + glob.glob('/dev/vd*') + glob.glob('/dev/mmcblk*') + glob.glob('/dev/nvme*')
             if block_devices:
@@ -166,7 +151,7 @@ class PerformanceTestCase(TestCase):
                         return device
         except Exception as e:
             self.logger.debug(f"块设备检测失败：{e}")
-        
+
         return None
 
     def execute_fio_test(self, extra_config: dict = None) -> Dict[str, Any]:
@@ -181,7 +166,6 @@ class PerformanceTestCase(TestCase):
         """
         self.logger.info(f"🚀 开始执行性能测试...")
 
-        # 构建 FIO 配置
         fio_config_dict = {
             'name': self.name,
             'filename': str(self.test_file),
@@ -195,42 +179,32 @@ class PerformanceTestCase(TestCase):
             'time_based': True,
         }
 
-        # 添加 ramp_time（如果有）
         if self.fio_ramp_time > 0:
             fio_config_dict['ramp_time'] = self.fio_ramp_time
 
-        # 添加 rwmixread（仅当 fio_rw='randrw' 时）
         if self.fio_rw == 'randrw' and self.fio_rwmixread:
             fio_config_dict['rwmixread'] = self.fio_rwmixread
 
-        # 合并额外配置
         if extra_config:
             fio_config_dict.update(extra_config)
 
         try:
-            # 执行 FIO 测试
             metrics_obj = self.fio.run(FIOConfig(**fio_config_dict))
 
-            # 转换为标准格式
             job_data = metrics_obj.raw.get('jobs', [{}])[0]
 
-            # 处理混合读写模式
             if self.fio_rw == 'randrw':
-                # 混合读写：需要合并 read 和 write 的指标
                 read_stats = job_data.get('read', {})
                 write_stats = job_data.get('write', {})
 
-                # 总 IOPS = read IOPS + write IOPS
                 read_iops = read_stats.get('iops', 0)
                 write_iops = write_stats.get('iops', 0)
                 iops = read_iops + write_iops
 
-                # 总带宽
                 read_bw = read_stats.get('bw_bytes', 0)
                 write_bw = write_stats.get('bw_bytes', 0)
                 bandwidth_mbps = (read_bw + write_bw) / (1024 * 1024)
 
-                # 加权平均延迟
                 read_lat_ns = read_stats.get('lat_ns', {})
                 write_lat_ns = write_stats.get('lat_ns', {})
                 avg_read_lat_us = read_lat_ns.get('mean', 0) / 1000
@@ -240,14 +214,12 @@ class PerformanceTestCase(TestCase):
                 else:
                     avg_latency_us = (avg_read_lat_us + avg_write_lat_us) / 2
 
-                # 尾部延迟取两者最大值
                 read_percentiles = read_lat_ns.get('percentile', {})
                 write_percentiles = write_lat_ns.get('percentile', {})
                 p99999_read = read_percentiles.get('99.999', 0) / 1000
                 p99999_write = write_percentiles.get('99.999', 0) / 1000
                 p99999_latency_us = max(p99999_read, p99999_write)
             else:
-                # 单一 IO 模式
                 io_type = 'read' if 'read' in self.fio_rw.lower() else 'write'
                 io_stats = job_data.get(io_type, {})
 
@@ -264,7 +236,6 @@ class PerformanceTestCase(TestCase):
                 'iops': iops,
                 'avg_latency_us': avg_latency_us,
                 'p99999_latency_us': p99999_latency_us,
-                # Don't include metrics_obj (not JSON serializable)
             }
 
         except FIOError as e:
@@ -294,7 +265,6 @@ class PerformanceTestCase(TestCase):
         self.logger.info("📊 性能验证结果:")
         self.logger.info("=" * 60)
 
-        # 带宽验证（量化达标比例）
         if self.target_bandwidth_mbps > 0:
             bw = metrics.get('bandwidth_mbps', 0)
             bw_ratio = (bw / self.target_bandwidth_mbps) * 100
@@ -311,7 +281,6 @@ class PerformanceTestCase(TestCase):
                     f"带宽性能显著不达标 ({bw_ratio:.1f}% < 90%)"
                 )
 
-        # IOPS 验证（量化达标比例）
         if self.target_iops > 0:
             iops_val = metrics.get('iops', 0)
             iops_ratio = (iops_val / self.target_iops) * 100
@@ -328,7 +297,6 @@ class PerformanceTestCase(TestCase):
                     f"IOPS 性能显著不达标 ({iops_ratio:.1f}% < 90%)"
                 )
 
-        # 平均延迟验证（量化超出比例）
         if self.max_avg_latency_us < float('inf'):
             lat = metrics.get('avg_latency_us', float('inf'))
             lat_ratio = (lat / self.max_avg_latency_us) * 100 if self.max_avg_latency_us > 0 else 0
@@ -343,7 +311,6 @@ class PerformanceTestCase(TestCase):
                     f"平均延迟超出限制 ({lat_ratio:.1f}% > 100%)"
                 )
 
-        # 尾部延迟验证（量化超出比例）
         if self.max_tail_latency_us < float('inf'):
             tail_lat = metrics.get('p99999_latency_us', float('inf'))
             tail_ratio = (tail_lat / self.max_tail_latency_us) * 100 if self.max_tail_latency_us > 0 else 0
@@ -360,10 +327,9 @@ class PerformanceTestCase(TestCase):
 
         self.logger.info("=" * 60)
 
-        # 执行 Postcondition 检查（硬件健康）
         self._check_postcondition()
 
-        return True  # 性能测试始终返回 True，由框架根据 failures 判断最终状态
+        return True
 
     def execute(self) -> Dict[str, Any]:
         """执行测试逻辑 - 子类通常不需要覆盖"""

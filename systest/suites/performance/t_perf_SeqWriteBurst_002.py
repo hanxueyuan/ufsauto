@@ -31,14 +31,12 @@ sys.path.insert(0, str(tools_dir))
 from runner import TestCase
 from .base import PerformanceTestCase
 
-
 class Test(PerformanceTestCase):
     """Sequential write performance test"""
 
     name = "seq_write_burst"
     description = "Sequential write performance test (Burst mode)"
 
-    # FIO 配置
     fio_rw = 'write'
     fio_bs = '128k'
     fio_size = '1G'
@@ -47,7 +45,6 @@ class Test(PerformanceTestCase):
     fio_ramp_time = 10
     fio_ioengine = 'sync'
 
-    # 性能目标
     target_bandwidth_mbps = 1650
     max_avg_latency_us = 300
     max_tail_latency_us = 8000

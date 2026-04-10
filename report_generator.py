@@ -16,7 +16,7 @@
 
 用法：
     from report_generator import ReportGenerator
-    
+
     generator = ReportGenerator()
     report_path = generator.generate_markdown(report_data, output_dir='reports')
 """
@@ -31,7 +31,6 @@ from typing import Dict, List, Any, Optional
 
 logger = logging.getLogger(__name__)
 
-
 def get_system_info() -> Dict[str, Any]:
     """获取系统信息"""
     info = {
@@ -43,17 +42,15 @@ def get_system_info() -> Dict[str, Any]:
         'hostname': platform.node(),
         'timestamp': datetime.now().isoformat()
     }
-    
-    # 获取 FIO 版本
+
     try:
         result = subprocess.run(['fio', '--version'], capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
             info['fio_version'] = result.stdout.strip()
     except Exception as e:
         info['fio_version'] = f'Error: {e}'
-    
-    return info
 
+    return info
 
 def get_hardware_info(device: str = '/dev/vda') -> Dict[str, Any]:
     """获取硬件信息"""
@@ -63,11 +60,9 @@ def get_hardware_info(device: str = '/dev/vda') -> Dict[str, Any]:
         'device_type': 'Unknown',
         'capacity': 'Unknown'
     }
-    
-    # 尝试获取设备信息
+
     if info['device_exists']:
         try:
-            # 使用 lsblk 获取设备信息
             result = subprocess.run(
                 ['lsblk', '-dnpo', 'NAME,TYPE,SIZE', device],
                 capture_output=True, text=True, timeout=5
@@ -79,8 +74,7 @@ def get_hardware_info(device: str = '/dev/vda') -> Dict[str, Any]:
                     info['capacity'] = parts[2]
         except Exception as e:
             info['device_error'] = str(e)
-    
-    # 获取磁盘容量信息
+
     try:
         result = subprocess.run(['df', '-B1', '/'], capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
@@ -88,15 +82,14 @@ def get_hardware_info(device: str = '/dev/vda') -> Dict[str, Any]:
             if len(lines) >= 2:
                 parts = lines[1].split()
                 info['root_capacity'] = {
-                    'total': int(parts[1]) / (1024**3),  # GB
+                    'total': int(parts[1]) / (1024**3),
                     'used': int(parts[2]) / (1024**3),
                     'available': int(parts[3]) / (1024**3)
                 }
     except Exception as e:
         pass
-    
-    return info
 
+    return info
 
 def get_resource_info() -> Dict[str, Any]:
     """获取系统资源信息"""
@@ -105,16 +98,14 @@ def get_resource_info() -> Dict[str, Any]:
         'memory': {},
         'disk': {}
     }
-    
-    # CPU 信息
+
     try:
         result = subprocess.run(['nproc'], capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
             info['cpu']['cores'] = int(result.stdout.strip())
     except:
         pass
-    
-    # 内存信息
+
     try:
         result = subprocess.run(['free', '-m'], capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
@@ -131,18 +122,16 @@ def get_resource_info() -> Dict[str, Any]:
                     break
     except:
         pass
-    
-    return info
 
+    return info
 
 class ReportGenerator:
     """增强版报告生成器"""
-    
+
     def __init__(self):
         self.reports_dir = Path(__file__).parent / 'reports'
         self.reports_dir.mkdir(parents=True, exist_ok=True)
-        
-        # 性能目标值（可根据实际设备调整）
+
         self.performance_targets = {
             'seq_read_burst': {'bandwidth_mbps': 500, 'iops': 10000, 'latency_us': 100},
             'seq_write_burst': {'bandwidth_mbps': 200, 'iops': 5000, 'latency_us': 200},
@@ -151,7 +140,7 @@ class ReportGenerator:
             'mixed_rw': {'bandwidth_mbps': 80, 'iops': 30000, 'latency_us': 80},
             'qos_latency': {'bandwidth_mbps': 100, 'iops': 50000, 'latency_us': 50}
         }
-    
+
     def generate_markdown(
         self,
         report_data: Dict[str, Any],
@@ -160,12 +149,12 @@ class ReportGenerator:
     ) -> str:
         """
         生成 Markdown 格式报告
-        
+
         Args:
             report_data: 报告数据
             output_dir: 输出目录
             filename: 文件名（可选）
-        
+
         Returns:
             报告文件路径
         """
@@ -173,36 +162,32 @@ class ReportGenerator:
             output_path = Path(output_dir)
         else:
             output_path = self.reports_dir
-        
+
         output_path.mkdir(parents=True, exist_ok=True)
-        
+
         if filename:
             report_file = output_path / filename
         else:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             report_file = output_path / f'report_{timestamp}.md'
-        
-        # 生成报告内容
+
         content = self._generate_markdown_content(report_data)
-        
-        # 保存文件
+
         with open(report_file, 'w', encoding='utf-8') as f:
             f.write(content)
-        
+
         logger.info(f"报告已生成：{report_file}")
         return str(report_file)
-    
+
     def _generate_markdown_content(self, report_data: Dict[str, Any]) -> str:
         """生成 Markdown 报告内容"""
         lines = []
-        
-        # 标题
+
         lines.append("# UFS Auto 测试报告\n")
         lines.append(f"**生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         lines.append(f"**测试 ID**: {report_data.get('test_id', 'N/A')}\n")
         lines.append("")
-        
-        # 1. 测试环境详细描述
+
         lines.append("## 1. 测试环境\n")
         lines.append("### 1.1 系统信息\n")
         sys_info = get_system_info()
@@ -213,8 +198,7 @@ class ReportGenerator:
         lines.append(f"- **架构**: {sys_info['architecture']}")
         lines.append(f"- **主机名**: {sys_info['hostname']}")
         lines.append("")
-        
-        # 硬件信息
+
         lines.append("### 1.2 硬件信息\n")
         hw_info = get_hardware_info(report_data.get('device', '/dev/vda'))
         lines.append(f"- **测试设备**: {hw_info['device']}")
@@ -224,8 +208,7 @@ class ReportGenerator:
             rc = hw_info['root_capacity']
             lines.append(f"- **根分区容量**: {rc['total']:.1f}GB (已用：{rc['used']:.1f}GB, 可用：{rc['available']:.1f}GB)")
         lines.append("")
-        
-        # 系统资源
+
         lines.append("### 1.3 系统资源\n")
         res_info = get_resource_info()
         if 'cpu' in res_info and 'cores' in res_info['cpu']:
@@ -234,8 +217,7 @@ class ReportGenerator:
             m = res_info['memory']
             lines.append(f"- **内存**: {m['total_mb']}MB (可用：{m['available_mb']}MB)")
         lines.append("")
-        
-        # 2. 测试方法说明
+
         lines.append("## 2. 测试方法\n")
         lines.append("### 2.1 测试模式\n")
         test_mode = report_data.get('test_mode', 'development')
@@ -243,8 +225,7 @@ class ReportGenerator:
         lines.append(f"- **测试模式**: {mode_desc}")
         lines.append(f"- **测试时长**: {report_data.get('total_duration', 0):.1f}秒")
         lines.append("")
-        
-        # 测试配置参数
+
         lines.append("### 2.2 测试配置参数\n")
         config = report_data.get('config', {})
         lines.append(f"- **块大小 (bs)**: {config.get('bs', 'N/A')}")
@@ -253,12 +234,11 @@ class ReportGenerator:
         lines.append(f"- **IO 引擎 (ioengine)**: {config.get('ioengine', 'N/A')}")
         lines.append(f"- **IO 深度 (iodepth)**: {config.get('iodepth', 'N/A')}")
         lines.append("")
-        
-        # 测试用例详情表
+
         lines.append("### 2.3 测试用例详情\n")
         lines.append("| 测试用例 | 类型 | 读写模式 | 块大小 | IO 深度 | 状态 |")
         lines.append("|---------|------|---------|--------|--------|------|")
-        
+
         test_cases = report_data.get('test_cases', [])
         for tc in test_cases:
             name = tc.get('name', 'N/A')
@@ -270,60 +250,54 @@ class ReportGenerator:
             status = "✅ 通过" if tc.get('status') == 'PASS' else f"❌ {tc.get('status', 'UNKNOWN')}"
             lines.append(f"| {name} | {ttype} | {rw} | {bs} | {iodepth} | {status} |")
         lines.append("")
-        
-        # 3. 性能对比表
+
         lines.append("## 3. 性能对比\n")
         lines.append("### 3.1 目标值 vs 实际值\n")
         lines.append("| 测试用例 | 指标 | 目标值 | 实际值 | 达标率 | 状态 |")
         lines.append("|---------|------|--------|--------|--------|------|")
-        
+
         for tc in test_cases:
             name = tc.get('name', 'N/A')
             if tc.get('status') != 'PASS':
                 lines.append(f"| {name} | - | - | - | - | ❌ 失败 |")
                 continue
-            
+
             metrics = self.performance_targets.get(name, {})
             actual_bw = tc.get('bandwidth_mbps', 0)
             actual_iops = tc.get('iops', 0)
             actual_lat = tc.get('avg_latency_us', 0)
-            
-            # 带宽对比
+
             if 'bandwidth_mbps' in metrics:
                 target = metrics['bandwidth_mbps']
                 rate = (actual_bw / target * 100) if target > 0 else 0
                 status = "✅" if rate >= 100 else "⚠️" if rate >= 80 else "❌"
                 lines.append(f"| {name} | 带宽 (MB/s) | {target} | {actual_bw:.1f} | {rate:.1f}% | {status} |")
-            
-            # IOPS 对比
+
             if 'iops' in metrics:
                 target = metrics['iops']
                 rate = (actual_iops / target * 100) if target > 0 else 0
                 status = "✅" if rate >= 100 else "⚠️" if rate >= 80 else "❌"
                 lines.append(f"| {name} | IOPS | {target} | {actual_iops:.0f} | {rate:.1f}% | {status} |")
-            
-            # 延迟对比（越低越好）
+
             if 'latency_us' in metrics:
                 target = metrics['latency_us']
                 rate = (target / actual_lat * 100) if actual_lat > 0 else 0
                 status = "✅" if actual_lat <= target else "⚠️" if actual_lat <= target * 1.2 else "❌"
                 lines.append(f"| {name} | 延迟 (μs) | ≤{target} | {actual_lat:.1f} | {rate:.1f}% | {status} |")
-        
+
         lines.append("")
-        
-        # 达标率统计
+
         total_tests = len(test_cases)
         passed_tests = sum(1 for tc in test_cases if tc.get('status') == 'PASS')
         pass_rate = (passed_tests / total_tests * 100) if total_tests > 0 else 0
         lines.append(f"**总体达标率**: {pass_rate:.1f}% ({passed_tests}/{total_tests})\n")
         lines.append("")
-        
-        # 4. 问题分析章节
+
         lines.append("## 4. 问题分析\n")
-        
+
         failed_tests = [tc for tc in test_cases if tc.get('status') != 'PASS']
         underperforming = []
-        
+
         for tc in test_cases:
             if tc.get('status') != 'PASS':
                 continue
@@ -331,7 +305,7 @@ class ReportGenerator:
             metrics = self.performance_targets.get(name, {})
             actual_bw = tc.get('bandwidth_mbps', 0)
             actual_lat = tc.get('avg_latency_us', 0)
-            
+
             if 'bandwidth_mbps' in metrics and actual_bw < metrics['bandwidth_mbps'] * 0.8:
                 underperforming.append({
                     'name': name,
@@ -342,10 +316,10 @@ class ReportGenerator:
                     'name': name,
                     'issue': f"延迟高于目标值的 120% (实际：{actual_lat:.1f}, 目标：≤{metrics['latency_us']})"
                 })
-        
+
         if failed_tests or underperforming:
             lines.append("### 4.1 未达标项目\n")
-            
+
             for tc in failed_tests:
                 name = tc.get('name', 'N/A')
                 status = tc.get('status', 'UNKNOWN')
@@ -368,7 +342,7 @@ class ReportGenerator:
                 lines.append("  - 检查设备状态：`lsblk`")
                 lines.append("  - 重新运行测试验证")
                 lines.append("")
-            
+
             for item in underperforming:
                 lines.append(f"#### {item['name']}")
                 lines.append(f"- **问题**: {item['issue']}")
@@ -383,19 +357,16 @@ class ReportGenerator:
                 lines.append("")
         else:
             lines.append("✅ 所有测试用例均达标，无需分析。\n")
-        
+
         lines.append("")
-        
-        # 5. 改进建议章节（仅在有实际建议时显示）
+
         specific_actions = []
-        
-        # 收集具体的改进建议
+
         for tc in failed_tests:
             name = tc.get('name', 'N/A')
             error = tc.get('error', '').lower()
             status = tc.get('status', 'UNKNOWN')
-            
-            # 根据具体错误类型生成建议
+
             if 'timeout' in error or 'timeout' in status.lower():
                 specific_actions.append(f"**{name}**: 检查设备响应超时 - 查看 dmesg 日志确认设备状态")
             elif 'permission' in error:
@@ -406,16 +377,14 @@ class ReportGenerator:
                 specific_actions.append(f"**{name}**: 验证设备路径是否正确 - 运行 lsblk 确认")
             elif 'fio' in error:
                 specific_actions.append(f"**{name}**: 检查 FIO 工具安装 - 运行 'which fio' 验证")
-        
-        # 性能不达标的建议
+
         for item in underperforming:
             name = item['name']
             if '带宽' in item['issue']:
                 specific_actions.append(f"**{name}**: 带宽不达标 - 检查 IO 调度器、设备队列深度")
             elif '延迟' in item['issue']:
                 specific_actions.append(f"**{name}**: 延迟过高 - 检查系统负载、CPU 频率调节")
-        
-        # 仅在有具体建议时显示改进建议章节
+
         if specific_actions:
             lines.append("## 5. 改进建议\n")
             lines.append("### 5.1 具体改进行动\n")
@@ -427,43 +396,38 @@ class ReportGenerator:
             lines.append("- 检查系统资源使用情况 (CPU/内存/IO)")
             lines.append("- 对比历史测试结果分析趋势")
             lines.append("")
-        # 如果没有具体建议，不显示改进建议章节（避免空话）
-        
-        # 结尾
+
         lines.append("---\n")
         lines.append("*报告由 UFS Auto 自动生成*\n")
-        
+
         return '\n'.join(lines)
-    
+
     def generate_json(self, report_data: Dict[str, Any], output_dir: Optional[str] = None) -> str:
         """生成 JSON 格式报告"""
         if output_dir:
             output_path = Path(output_dir)
         else:
             output_path = self.reports_dir
-        
+
         output_path.mkdir(parents=True, exist_ok=True)
-        
+
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         report_file = output_path / f'report_{timestamp}.json'
-        
-        # 增强报告数据
+
         enhanced_data = report_data.copy()
         enhanced_data['system_info'] = get_system_info()
         enhanced_data['hardware_info'] = get_hardware_info(report_data.get('device', '/dev/vda'))
         enhanced_data['resource_info'] = get_resource_info()
         enhanced_data['generated_at'] = datetime.now().isoformat()
-        
+
         with open(report_file, 'w', encoding='utf-8') as f:
             json.dump(enhanced_data, f, indent=2, ensure_ascii=False)
-        
+
         logger.info(f"JSON 报告已生成：{report_file}")
         return str(report_file)
 
-
 def main():
     """测试报告生成器"""
-    # 示例数据
     sample_data = {
         'test_id': 'Test_20260409_120000',
         'test_mode': 'development',
@@ -499,11 +463,10 @@ def main():
             }
         ]
     }
-    
+
     generator = ReportGenerator()
     report_path = generator.generate_markdown(sample_data)
     print(f"报告已生成：{report_path}")
-
 
 if __name__ == '__main__':
     main()

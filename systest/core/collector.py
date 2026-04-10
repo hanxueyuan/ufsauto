@@ -14,7 +14,6 @@ from typing import Dict, List, Any, Optional
 
 logger = logging.getLogger(__name__)
 
-
 class ResultCollector:
     """Test result collector"""
 
@@ -47,18 +46,15 @@ class ResultCollector:
         if test_id is None:
             test_id = f"SysTest_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
-        # Create test output directory
         test_dir = self.output_dir / test_id
         test_dir.mkdir(parents=True, exist_ok=True)
 
-        # Calculate summary statistics
         total = len(results)
         passed = sum(1 for r in results if r.get('status') in ['PASS', 'DRY-RUN-PASS'])
         failed = sum(1 for r in results if r.get('status') == 'FAIL')
         errors = sum(1 for r in results if r.get('status') == 'ERROR')
         pass_rate = (passed / total * 100) if total > 0 else 0
 
-        # Build report data
         report_data = {
             'test_id': test_id,
             'timestamp': datetime.now().isoformat(),
@@ -75,18 +71,15 @@ class ResultCollector:
             'metadata': metadata or {}
         }
 
-        # Save JSON results
         json_path = test_dir / 'results.json'
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(report_data, f, indent=2, ensure_ascii=False)
         logger.debug(f"Results saved: {json_path}")
 
-        # Save detailed log for each test case
         for result in results:
             if 'log_file' in result:
                 log_src = Path(result['log_file'])
                 log_size = 0
-                # Get file size in advance for error handling
                 if log_src.exists():
                     try:
                         log_size = log_src.stat().st_size
@@ -97,31 +90,26 @@ class ResultCollector:
                     if log_src.exists():
                         log_dst = test_dir / f"{result['name']}.log"
 
-                        # Large file copy progress notification
-                        if log_size > 100 * 1024 * 1024:  # > 100MB
+                        if log_size > 100 * 1024 * 1024:
                             logger.info(f"Copying large log file: {result['name']} ({log_size / 1024 / 1024:.1f} MB)")
                             logger.info(f"   Target: {log_dst}")
 
                         shutil.copy2(log_src, log_dst)
                         logger.debug(f"Log copied: {result['name']} ({log_size / 1024 / 1024:.1f} MB)")
                 except Exception as e:
-                    # Don't get file size again in error handling, use previously obtained value
-                    if log_size > 500 * 1024 * 1024:  # > 500MB
+                    if log_size > 500 * 1024 * 1024:
                         logger.warning(f"Large log file copy failed {result['name']} ({log_size / 1024 / 1024:.1f} MB): {e}")
                         logger.warning(f"File is large, copy may need more space or time")
                         logger.warning(f"Manual cleanup: rm {log_dst}")
                     else:
                         logger.warning(f"Log file copy failed {result['name']} ({log_size / 1024 / 1024:.1f} MB): {e}")
                     logger.warning(f"Recommendation: Manually copy or delete large log files to free space")
-                    # Clean up partially created files
                     if 'log_dst' in locals() and log_dst.exists():
                         try:
                             log_dst.unlink()
                         except Exception:
                             pass
-                # Continue processing other results, don't interrupt entire flow
 
-        # Save summary information
         summary_path = test_dir / 'summary.txt'
         self._save_summary(summary_path, report_data)
 

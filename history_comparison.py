@@ -23,7 +23,6 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 
-
 class HistoryComparator:
     """历史数据对比器"""
 
@@ -46,7 +45,6 @@ class HistoryComparator:
             print(f"⚠️  报告目录不存在：{self.reports_dir}")
             return []
 
-        # 查找所有 Markdown 报告文件
         report_files = sorted(
             self.reports_dir.glob('*.md'),
             key=lambda x: x.stat().st_mtime,
@@ -63,7 +61,6 @@ class HistoryComparator:
             except Exception as e:
                 print(f"⚠️  解析报告失败 {report_file}: {e}")
 
-        # 按时间排序（旧的在前）
         self.history_data.sort(key=lambda x: x.get('timestamp', ''))
 
         return self.history_data
@@ -82,7 +79,6 @@ class HistoryComparator:
             with open(report_path, 'r', encoding='utf-8') as f:
                 content = f.read()
 
-            # 提取基本信息
             data = {
                 'report_file': report_path.name,
                 'timestamp': datetime.fromtimestamp(
@@ -91,8 +87,6 @@ class HistoryComparator:
                 'test_cases': []
             }
 
-            # 简单解析 Markdown 表格中的性能数据
-            # 查找类似 "seq_read_burst | ✅ PASS | 2100.5 | 15000 | 120.5" 的行
             lines = content.split('\n')
             for line in lines:
                 if '|' in line and ('PASS' in line or 'FAIL' in line or 'WARNING' in line):
@@ -142,7 +136,6 @@ class HistoryComparator:
             'summary': {}
         }
 
-        # 按测试用例名称分组历史数据
         history_by_test = {}
         for hist_report in self.history_data:
             for test_case in hist_report.get('test_cases', []):
@@ -151,13 +144,11 @@ class HistoryComparator:
                     history_by_test[test_name] = []
                 history_by_test[test_name].append(test_case)
 
-        # 对比每个测试用例
         for current_test in current_results:
             test_name = current_test.get('name')
             if test_name in history_by_test:
                 history_list = history_by_test[test_name]
-                
-                # 计算历史平均值
+
                 hist_bw_values = [t.get('bandwidth_mbps', 0) for t in history_list if t.get('bandwidth_mbps', 0) > 0]
                 hist_iops_values = [t.get('iops', 0) for t in history_list if t.get('iops', 0) > 0]
                 hist_lat_values = [t.get('latency_us', 0) for t in history_list if t.get('latency_us', 0) > 0]
@@ -197,7 +188,6 @@ class HistoryComparator:
 
                 comparison['trends'][test_name] = trend_data
 
-        # 生成摘要
         comparison['summary'] = self._generate_summary(comparison['trends'])
 
         self.comparison_result = comparison
@@ -224,7 +214,6 @@ class HistoryComparator:
 
         for test_name, trend in trends.items():
             bw_change = trend['change_percent'].get('bandwidth_mbps', 0)
-            # 带宽提升 >5% 算改进，下降 >5% 算退化
             if bw_change > 5:
                 improved += 1
             elif bw_change < -5:
@@ -256,7 +245,6 @@ class HistoryComparator:
         if output_path is None:
             output_path = self.reports_dir / 'history_comparison.json'
 
-        # 确保目录存在
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(output_path, 'w', encoding='utf-8') as f:
@@ -300,7 +288,6 @@ class HistoryComparator:
 
         print("=" * 70)
 
-
 def main():
     """主函数 - 演示用法"""
     print("历史数据对比模块")
@@ -308,12 +295,10 @@ def main():
 
     comparator = HistoryComparator()
 
-    # 加载历史报告
     print("加载历史报告...")
     history = comparator.load_history_reports(max_reports=10)
     print(f"找到 {len(history)} 份历史报告")
 
-    # 示例当前数据（实际使用时从测试结果获取）
     current_results = [
         {
             'name': 'seq_read_burst',
@@ -329,16 +314,12 @@ def main():
         }
     ]
 
-    # 对比
     print("\n对比当前测试和历史数据...")
     comparison = comparator.compare_with_current(current_results)
 
-    # 保存
     comparator.save_comparison()
 
-    # 打印摘要
     comparator.print_summary()
-
 
 if __name__ == '__main__':
     main()

@@ -31,14 +31,12 @@ sys.path.insert(0, str(tools_dir))
 from runner import TestCase
 from .base import PerformanceTestCase
 
-
 class Test(PerformanceTestCase):
     """Mixed random read/write performance test"""
 
     name = "mixed_rw"
     description = "Mixed random read/write performance test (70% read/30% write)"
 
-    # FIO 配置
     fio_rw = 'randrw'
     fio_bs = '4k'
     fio_size = '1G'
@@ -46,9 +44,8 @@ class Test(PerformanceTestCase):
     fio_iodepth = 32
     fio_ramp_time = 10
     fio_ioengine = 'sync'
-    fio_rwmixread = 70  # 70% 读，30% 写
+    fio_rwmixread = 70
 
-    # 性能目标
-    target_iops = 150000  # 总 IOPS
+    target_iops = 150000
     max_avg_latency_us = 200
     max_tail_latency_us = 8000
