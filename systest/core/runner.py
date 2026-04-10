@@ -697,7 +697,7 @@ class TestRunner:
         if self.is_production:
             return {
                 'fio_runtime': mode_config.get('test_duration', 300),  # 5 minutes for production
-                'loop_count': mode_config.get('loop_count', 10),  # Number of iterations
+                'loop_count': 1,  # No loop by default - run once
                 'log_level': logging.INFO,
                 'report_detail': 'full',
                 'precheck_skip': False,  # Run all pre-checks
@@ -707,7 +707,7 @@ class TestRunner:
         else:
             return {
                 'fio_runtime': mode_config.get('test_duration', 60),  # 1 minute for development
-                'loop_count': mode_config.get('loop_count', 2),  # Number of iterations
+                'loop_count': 1,  # No loop by default - run once
                 'log_level': logging.DEBUG,
                 'report_detail': 'brief',
                 'precheck_skip': False,  # Run all pre-checks (same logic as production)
