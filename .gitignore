@@ -8,8 +8,8 @@ results/*.html
 config/runtime.json
 
 # 文档 (本地保留，不上传)
-docs/*.md
-!docs/README.md
+# docs/*.md
+# !docs/README.md
 
 # Python
 __pycache__/
