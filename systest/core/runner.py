@@ -679,7 +679,7 @@ class TestRunner:
             }
 
     def run_suite(self, suite_name: str, mode_params: Dict[str, Any] = None) -> List[Dict[str, Any]]:
-        """Execute test suite"""
+        """Execute test suite with mode-based loop logic"""
         if suite_name not in self.suites:
             raise ValueError(f"Unknown test suite: {suite_name}")
 
@@ -688,99 +688,123 @@ class TestRunner:
             mode_params = self.get_mode_params()
         
         mode_display = 'Production' if self.is_production else 'Development'
+        loop_count = mode_params.get('loop_count', 1)
+        
         logger.info(f"Executing test suite: {suite_name} (Mode: {mode_display})")
-        logger.info(f"  Test duration: {mode_params['fio_runtime']}s")
-        logger.info(f"  Iterations: {mode_params['iterations']}")
+        logger.info(f"  Loop count: {loop_count}")
+        logger.info(f"  Test duration per loop: {mode_params['fio_runtime']}s")
         logger.info(f"  Auto cleanup: {mode_params['auto_cleanup']}")
+        logger.info(f"  Keep files: {mode_params['keep_files']}")
 
-        results = []
+        all_results = []
         tests = self.suites[suite_name]
-        stopped = False
+        
+        # Loop logic - same for both development and production, just different count
+        for loop_idx in range(loop_count):
+            logger.info("=" * 60)
+            logger.info(f"[Loop {loop_idx + 1}/{loop_count}]")
+            logger.info("=" * 60)
+            
+            stopped = False
+            loop_results = []
 
-        for i, test_name in enumerate(tests, 1):
-            if stopped:
-                logger.warning(f"[{i}/{len(tests)}] Skipping test (previous Fail-Stop): {test_name}")
-                results.append({
-                    'name': test_name,
-                    'status': 'SKIP',
-                    'reason': 'Skipped due to previous Fail-Stop',
-                    'duration': 0
-                })
-                continue
+            for i, test_name in enumerate(tests, 1):
+                if stopped:
+                    logger.warning(f"[{i}/{len(tests)}] Skipping test (previous Fail-Stop): {test_name}")
+                    loop_results.append({
+                        'name': test_name,
+                        'status': 'SKIP',
+                        'reason': 'Skipped due to previous Fail-Stop',
+                        'duration': 0,
+                        'loop': loop_idx + 1
+                    })
+                    continue
 
-            logger.info(f"[{i}/{len(tests)}] Executing test: {test_name}")
+                logger.info(f"[{i}/{len(tests)}] Executing test: {test_name}")
 
-            try:
-                import sys
-                suites_dir = Path(__file__).parent.parent / 'suites'
-                if str(suites_dir) not in sys.path:
-                    sys.path.insert(0, str(suites_dir))
+                try:
+                    import sys
+                    suites_dir = Path(__file__).parent.parent / 'suites'
+                    if str(suites_dir) not in sys.path:
+                        sys.path.insert(0, str(suites_dir))
 
-                if test_name.startswith('t_'):
-                    module_path = suites_dir / suite_name / f'{test_name}.py'
-                else:
-                    module_path = suites_dir / suite_name / f'test_{test_name}.py'
-                import importlib.util
-                spec = importlib.util.spec_from_file_location(f'{suite_name}.{test_name}', module_path)
-                module = importlib.util.module_from_spec(spec)
-                sys.modules[f'{suite_name}.{test_name}'] = module
-                spec.loader.exec_module(module)
-                test_class = getattr(module, 'Test', None)
-                if not test_class:
-                    class_name = ''.join(part.capitalize() for part in test_name.split('_'))
-                    test_class = getattr(module, class_name, None)
-                if not test_class:
-                    raise ImportError(f"Test class not found (Test or {class_name})")
-                test_instance = test_class(
-                    device=self.device,
-                    test_dir=self.test_dir,
-                    verbose=self.verbose,
-                    logger=logger,
-                    mode=self.mode
-                )
+                    if test_name.startswith('t_'):
+                        module_path = suites_dir / suite_name / f'{test_name}.py'
+                    else:
+                        module_path = suites_dir / suite_name / f'test_{test_name}.py'
+                    import importlib.util
+                    spec = importlib.util.spec_from_file_location(f'{suite_name}.{test_name}', module_path)
+                    module = importlib.util.module_from_spec(spec)
+                    sys.modules[f'{suite_name}.{test_name}'] = module
+                    spec.loader.exec_module(module)
+                    test_class = getattr(module, 'Test', None)
+                    if not test_class:
+                        class_name = ''.join(part.capitalize() for part in test_name.split('_'))
+                        test_class = getattr(module, class_name, None)
+                    if not test_class:
+                        raise ImportError(f"Test class not found (Test or {class_name})")
+                    test_instance = test_class(
+                        device=self.device,
+                        test_dir=self.test_dir,
+                        verbose=self.verbose,
+                        logger=logger,
+                        mode=self.mode
+                    )
 
-                result = test_instance.run()
-                results.append(result)
+                    result = test_instance.run()
+                    result['loop'] = loop_idx + 1  # Add loop index to result
+                    loop_results.append(result)
 
-                if result.get('fail_mode') == 'stop':
-                    logger.error(f"  Fail-Stop triggered, subsequent tests will be skipped")
-                    stopped = True
+                    if result.get('fail_mode') == 'stop':
+                        logger.error(f"  Fail-Stop triggered, subsequent tests will be skipped")
+                        stopped = True
 
-                status_icons = {
-                    'PASS': '[PASS]', 'FAIL': '[FAIL]', 'ERROR': '[ERROR]',
-                    'SKIP': '[SKIP]', 'ABORT': '[ABORT]'
-                }
-                icon = status_icons.get(result['status'], '[UNKNOWN]')
-                logger.info(f"  {result['status']} ({result['duration']:.2f}s)")
+                    status_icons = {
+                        'PASS': '[PASS]', 'FAIL': '[FAIL]', 'ERROR': '[ERROR]',
+                        'SKIP': '[SKIP]', 'ABORT': '[ABORT]'
+                    }
+                    icon = status_icons.get(result['status'], '[UNKNOWN]')
+                    logger.info(f"  {result['status']} ({result['duration']:.2f}s)")
 
-            except ImportError as e:
-                logger.error(f"Unable to import test case {test_name}: {e}")
-                results.append({
-                    'name': test_name,
-                    'status': 'ERROR',
-                    'error': f'Import failed: {e}',
-                    'duration': 0
-                })
-            except Exception as e:
-                logger.error(f"Test execution failed {test_name}: {e}")
-                results.append({
-                    'name': test_name,
-                    'status': 'ERROR',
-                    'error': str(e),
-                    'duration': 0
-                })
+                except ImportError as e:
+                    logger.error(f"Unable to import test case {test_name}: {e}")
+                    loop_results.append({
+                        'name': test_name,
+                        'status': 'ERROR',
+                        'error': f'Import failed: {e}',
+                        'duration': 0,
+                        'loop': loop_idx + 1
+                    })
+                except Exception as e:
+                    logger.error(f"Test execution failed {test_name}: {e}")
+                    loop_results.append({
+                        'name': test_name,
+                        'status': 'ERROR',
+                        'error': str(e),
+                        'duration': 0,
+                        'loop': loop_idx + 1
+                    })
+            
+            # Add loop results to all_results
+            all_results.extend(loop_results)
+            
+            # Loop summary
+            loop_passed = sum(1 for r in loop_results if r['status'] == 'PASS')
+            loop_total = len(loop_results)
+            logger.info(f"\n[Loop {loop_idx + 1}/{loop_count}] Summary: {loop_passed}/{loop_total} passed\n")
 
-        total = len(results)
-        passed = sum(1 for r in results if r['status'] == 'PASS')
-        failed = sum(1 for r in results if r['status'] == 'FAIL')
-        errors = sum(1 for r in results if r['status'] == 'ERROR')
-        skipped = sum(1 for r in results if r['status'] == 'SKIP')
-        aborted = sum(1 for r in results if r['status'] == 'ABORT')
+        # Final summary (all loops combined)
+        total = len(all_results)
+        passed = sum(1 for r in all_results if r['status'] == 'PASS')
+        failed = sum(1 for r in all_results if r['status'] == 'FAIL')
+        errors = sum(1 for r in all_results if r['status'] == 'ERROR')
+        skipped = sum(1 for r in all_results if r['status'] == 'SKIP')
+        aborted = sum(1 for r in all_results if r['status'] == 'ABORT')
 
         logger.info("=" * 60)
-        logger.info(f"Test Suite Execution Summary: {suite_name}")
+        logger.info(f"Test Suite Execution Summary: {suite_name} ({loop_count} loops)")
         logger.info("=" * 60)
-        logger.info(f"  Total: {total} test cases")
+        logger.info(f"  Total: {total} test cases (all loops)")
         logger.info(f"  [PASS]:  {passed}")
         logger.info(f"  [FAIL]:  {failed}")
         logger.info(f"  [ERROR]: {errors}")
@@ -788,26 +812,27 @@ class TestRunner:
         logger.info(f"  [ABORT]: {aborted}")
         logger.info("-" * 60)
 
-        logger.info("Test case execution times:")
-        for r in results:
+        logger.info("Test case execution times (all loops):")
+        for r in all_results:
             duration = r.get('duration', 0)
             status = r.get('status', 'UNKNOWN')
             name = r.get('name', 'unknown')
-            logger.info(f"  {name}: {duration:.2f}s [{status}]")
+            loop_num = r.get('loop', 1)
+            logger.info(f"  {name} (loop {loop_num}): {duration:.2f}s [{status}]")
 
         if failed > 0 or errors > 0:
             suite_status = '[FAIL]'
-            logger.info(f"Suite status: {suite_status} ({failed + errors} tests failed)")
+            logger.info(f"Suite status: {suite_status} ({failed + errors} tests failed across all loops)")
         elif passed > 0:
             suite_status = '[PASS]'
-            logger.info(f"Suite status: {suite_status} (All tests passed)")
+            logger.info(f"Suite status: {suite_status} (All tests passed across all loops)")
         else:
             suite_status = '[SKIP]'
             logger.info(f"Suite status: {suite_status} (All tests skipped)")
 
         logger.info("=" * 60)
 
-        return results
+        return all_results
 
     def run_test(self, test_name: str) -> Dict[str, Any]:
         """Execute single test"""
