@@ -325,50 +325,41 @@ class EnvironmentChecker:
         except Exception:
             pass
 
-    def _get_framework_version(self):
-        """获取框架版本信息"""
-        try:
-            import subprocess
-            result = subprocess.run(['git', 'describe' , '--tags' , '--always'],
-                                    capture_output=True, text=True, timeout=5,
-                                    cwd=Path(__file__).parent.parent.parent)
-            if result.returncode == 0:
-                return result.stdout.strip()
-        except Exception:
-            pass
-        return f"dev-{datetime.now().strftime('%Y%m%d')}"
-
     def run(self):
-        print('=' * 60)
-        print('UFS SysTest 环境信息')
-        print('=' * 60)
-        print(f'框架版本：{self._get_framework_version()}')
-        print(f'模式: {"开发模式" if self.mode == "dev" else "部署模式"}')
-
         self.collect_system()
         self.collect_toolchain()
         self.collect_storage()
         self.collect_permissions()
         self.collect_test_directory()
 
-        current_cat = None
-        cat_labels = {
-            'system': '系统信息',
-            'toolchain': '工具链',
-            'storage': '存储设备',
-            'permissions': '用户权限',
-            'test_dir': '测试目录',
-        }
-        for item in self.items:
-            cat = item['category']
-            if cat != current_cat:
-                current_cat = cat
-                print(f'\n[{cat_labels.get(cat, cat)}]')
-            print(f'  {item["name"]:<15} {item["value"]}')
-
-        print()
-        print(f'共检测 {len(self.items)} 项')
+        # 输出系统信息
         print('=' * 60)
+        print('=== 系统信息 ===')
+        for item in self.items:
+            if item['category'] == 'system' and item['name'] == '操作系统':
+                print(f'操作系统：{item["value"]}')
+            elif item['category'] == 'toolchain' and item['name'] == 'Python':
+                print(f'Python: {item["value"]}')
+            elif item['category'] == 'toolchain' and item['name'] == 'FIO':
+                print(f'FIO: {item["value"]}')
+
+        # 输出测试模式
+        print('\n=== 测试模式 ===')
+        mode_display = 'Development' if self.mode == 'dev' else 'Production'
+        loop_count = 2 if self.mode == 'dev' else 10
+        duration = 60 if self.mode == 'dev' else 300
+        print(f'当前模式：{mode_display}')
+        print(f'循环次数：{loop_count}')
+        print(f'测试时长：{duration} 秒/次')
+
+        # 输出存储设备
+        print('\n=== 存储设备 ===')
+        device_path = self.runtime_config.get('device', '/dev/sda')
+        test_dir = self.runtime_config.get('test_dir', '/tmp/ufs_test')
+        print(f'设备路径：{device_path}')
+        print(f'测试目录：{test_dir}')
+
+        print('\n' + '=' * 60)
 
     def to_dict(self):
         return {
