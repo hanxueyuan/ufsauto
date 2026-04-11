@@ -172,9 +172,15 @@ class TestLogger:
 
         self.logger.handlers.clear()
 
-        self._add_console_handler(console_level)
-
-        self._add_file_handler(file_level, max_bytes, backup_count)
+        try:
+            self._add_console_handler(console_level)
+            self._add_file_handler(file_level, max_bytes, backup_count)
+        except Exception:
+            # Ensure all handlers are closed on exception
+            for handler in self.logger.handlers[:]:
+                handler.close()
+                self.logger.removeHandler(handler)
+            raise
 
         self.json_formatter = StructuredFormatter() if enable_json else None
 

@@ -233,6 +233,8 @@ class PerformanceTestCase(TestCase):
                 read_bw = read_stats.get('bw_bytes', 0)
                 write_bw = write_stats.get('bw_bytes', 0)
                 bandwidth_mbps = (read_bw + write_bw) / (1024 * 1024)
+                read_bandwidth_mbps = read_bw / (1024 * 1024)
+                write_bandwidth_mbps = write_bw / (1024 * 1024)
 
                 read_lat_ns = read_stats.get('lat_ns', {})
                 write_lat_ns = write_stats.get('lat_ns', {})
@@ -255,6 +257,9 @@ class PerformanceTestCase(TestCase):
                 bandwidth_mbps = io_stats.get('bw_bytes', 0) / (1024 * 1024)
                 iops = io_stats.get('iops', 0)
 
+                read_bandwidth_mbps = bandwidth_mbps if io_type == 'read' else 0
+                write_bandwidth_mbps = bandwidth_mbps if io_type == 'write' else 0
+
                 lat_ns = io_stats.get('lat_ns', {})
                 avg_latency_us = lat_ns.get('mean', 0) / 1000
                 percentiles = lat_ns.get('percentile', {})
@@ -262,6 +267,8 @@ class PerformanceTestCase(TestCase):
 
             return {
                 'bandwidth_mbps': bandwidth_mbps,
+                'read_bandwidth_mbps': read_bandwidth_mbps,
+                'write_bandwidth_mbps': write_bandwidth_mbps,
                 'iops': iops,
                 'avg_latency_us': avg_latency_us,
                 'p99999_latency_us': p99999_latency_us,
@@ -288,7 +295,7 @@ class PerformanceTestCase(TestCase):
                 f"执行失败：{metrics['error']}",
                 "FIO 执行失败"
             )
-            return True
+            return False
 
         self.logger.info("=" * 60)
         self.logger.info("📊 性能验证结果:")
